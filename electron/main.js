@@ -9,8 +9,19 @@
  * - Auto-updates
  */
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+// Electron store for settings
+let Store;
+try {
+  Store = require('electron-store');
+} catch (e) {
+  console.log('[Electron] electron-store not available');
+}
+
+// SQLite database (uncomment for production)
 // const Database = require('better-sqlite3');
 
 // Configuration from app.config.ts
@@ -217,10 +228,41 @@ function setupIpcHandlers() {
 
   // Backup
   ipcMain.handle('db:backup', async () => {
-    // const backupPath = path.join(app.getPath('userData'), `backup_${Date.now()}.db`);
-    // db.backup(backupPath);
-    // return backupPath;
+    const { filePath } = await dialog.showSaveDialog({
+      title: 'Sauvegarder la base de donnees',
+      defaultPath: `stock_nolimit_backup_${Date.now()}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+    if (filePath) {
+      // Export data to JSON file
+      // const data = { products: db.prepare('SELECT * FROM products').all(), ... };
+      // fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+      return filePath;
+    }
     return null;
+  });
+
+  ipcMain.handle('db:restore', async () => {
+    const { filePaths } = await dialog.showOpenDialog({
+      title: 'Restaurer la base de donnees',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      properties: ['openFile'],
+    });
+    if (filePaths && filePaths[0]) {
+      // const data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
+      // Restore data to database
+      return filePaths[0];
+    }
+    return null;
+  });
+
+  ipcMain.handle('app:getVersion', () => {
+    return APP_CONFIG.version;
+  });
+
+  ipcMain.handle('app:openExternal', async (event, url) => {
+    const { shell } = require('electron');
+    await shell.openExternal(url);
   });
 }
 

@@ -13,4 +13,22 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Electron compatibility
+  base: './',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router'],
+          ui: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+        },
+      },
+    },
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
 })
