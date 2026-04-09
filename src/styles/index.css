@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* 1. On scanne tout le projet proprement */
+@source "../../src/**/*.{ts,tsx,js,jsx}";
+@source "../../index.html";
+
+/* 2. On importe le fichier globals.css qui est dans le MÊME dossier */
+@import "./globals.css";
