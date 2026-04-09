@@ -1,19 +1,22 @@
 import { defineConfig } from 'vite'
-import path from 'path'
+import path, { resolve } from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import electron from 'vite-plugin-electron'
 
 export default defineConfig({
   plugins: [
     tailwindcss(),
     react(),
+    electron({
+      entry: './electron/main.ts',
+    }),
   ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // Electron compatibility
   base: './',
   build: {
     outDir: 'dist',
