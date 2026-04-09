@@ -1,140 +1,163 @@
 import { useState } from 'react';
-import { X, Package } from 'lucide-react';
+import { X, Package, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { db } from '../../services/database';
+import { useAuth } from '../../stores/authStore';
+import { APP_CONFIG } from '../../config/app.config';
 
 interface BulkInputModalProps {
-  product: any;
+  product: any | null;
+  allowedSites: string[];
   onClose: () => void;
 }
 
-export function BulkInputModal({ product, onClose }: BulkInputModalProps) {
-  const [site, setSite] = useState('DLA');
+export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModalProps) {
+  const { user } = useAuth();
+  const [site, setSite] = useState(allowedSites[0] || 'DLA');
   const [quantity, setQuantity] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
+  const [reason, setReason] = useState('Livraison fournisseur');
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle bulk input submission
-    console.log('Bulk input:', { product, site, quantity, expiryDate });
-    onClose();
+    const qty = parseInt(quantity);
+    if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
+    if (!product) { setError('Aucun produit sélectionné'); return; }
+
+    const result = db.createMovement({
+      type: 'in',
+      product_id: product.id,
+      from_site_id: null,
+      to_site_id: site,
+      quantity: qty,
+      reason,
+      reference: `ENT-${Date.now().toString(36).toUpperCase()}`,
+      user_id: user?.id || 1,
+    });
+
+    if ('error' in result) {
+      setError(result.error);
+    } else {
+      setIsSuccess(true);
+      setTimeout(onClose, 1200);
+    }
   };
 
+  const siteOptions = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id));
+  const currentStock = product?.stock?.[site] || 0;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#F1F5F9]">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Package className="w-5 h-5 text-[#0284C7]" />
+            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
+              <Package className="w-4 h-4 text-[#0284C7]" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Réapprovisionnement</h2>
-              <p className="text-sm text-gray-500">
-                {product ? product.name : 'Ajouter du stock'}
-              </p>
+              <h2 className="text-base font-semibold">Réapprovisionnement</h2>
+              <p className="text-xs text-gray-500">{product?.name || 'Entrée de stock'}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5">
-          {/* Site Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="site">Site de Destination</Label>
-            <Select value={site} onValueChange={setSite}>
-              <SelectTrigger id="site">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="DLA">Douala</SelectItem>
-                <SelectItem value="YDE">Yaoundé</SelectItem>
-                <SelectItem value="BAF">Bafoussam</SelectItem>
-              </SelectContent>
-            </Select>
+        {isSuccess ? (
+          <div className="px-6 py-12 text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+            <h3 className="font-semibold text-gray-900 mb-1">Stock mis à jour !</h3>
+            <p className="text-sm text-gray-500">+{quantity} unités ajoutées sur {APP_CONFIG.sites.find(s => s.id === site)?.name}</p>
           </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <span className="text-sm text-red-700">{error}</span>
+              </div>
+            )}
 
-          {/* Quantity */}
-          <div className="space-y-2">
-            <Label htmlFor="quantity">Quantité à Ajouter</Label>
-            <Input
-              id="quantity"
-              type="number"
-              placeholder="Ex: 50"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              min="1"
-              required
-              className="font-mono"
-            />
-            <p className="text-xs text-gray-500">
-              Entrez le nombre d'unités à ajouter au stock
-            </p>
-          </div>
+            <div>
+              <Label>Site de Destination</Label>
+              <Select value={site} onValueChange={setSite}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {siteOptions.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name} — stock actuel: <span className="font-mono font-bold ml-1">{product?.stock?.[s.id] || 0}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Expiry Date */}
-          <div className="space-y-2">
-            <Label htmlFor="expiry">Date d'Expiration</Label>
-            <Input
-              id="expiry"
-              type="date"
-              value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-              required
-            />
-            <p className="text-xs text-gray-500">
-              Crucial pour les produits naturels
-            </p>
-          </div>
+            <div>
+              <Label>Quantité à Ajouter</Label>
+              <div className="relative mt-1">
+                <Input
+                  type="number"
+                  placeholder="Ex: 50"
+                  value={quantity}
+                  onChange={e => { setQuantity(e.target.value); setError(''); }}
+                  min="1"
+                  required
+                  className="pr-16 font-mono"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{product?.unit || 'unité(s)'}</span>
+              </div>
+              {quantity && parseInt(quantity) > 0 && (
+                <p className="text-xs text-green-600 mt-1">
+                  Nouveau stock: {currentStock} + {quantity} = <strong>{currentStock + parseInt(quantity)}</strong>
+                </p>
+              )}
+            </div>
 
-          {/* Current Stock Info */}
-          {product && (
-            <div className="bg-gray-50 rounded-lg p-4 border border-[#F1F5F9]">
-              <div className="text-sm font-medium text-gray-700 mb-2">Stock Actuel</div>
-              <div className="grid grid-cols-3 gap-3 text-center" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">DLA</div>
-                  <div className="font-semibold">{product.stock.DLA}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">YDE</div>
-                  <div className="font-semibold">{product.stock.YDE}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">BAF</div>
-                  <div className="font-semibold">{product.stock.BAF}</div>
+            <div>
+              <Label>Motif</Label>
+              <Select value={reason} onValueChange={setReason}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Livraison fournisseur">Livraison fournisseur</SelectItem>
+                  <SelectItem value="Réapprovisionnement interne">Réapprovisionnement interne</SelectItem>
+                  <SelectItem value="Retour client">Retour client</SelectItem>
+                  <SelectItem value="Ajustement inventaire">Ajustement inventaire</SelectItem>
+                  <SelectItem value="Autre">Autre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {product && (
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <div className="text-xs font-medium text-gray-600 mb-2">Stock Actuel</div>
+                <div className="grid grid-cols-3 gap-2 text-center" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {siteOptions.map(s => (
+                    <div key={s.id}>
+                      <div className="text-[10px] text-gray-400">{s.id}</div>
+                      <div className="font-bold text-gray-900">{product.stock?.[s.id] || 0}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-            >
-              Annuler
-            </Button>
-            <Button
-              type="submit"
-              className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]"
-            >
-              Confirmer l'Ajout
-            </Button>
-          </div>
-        </form>
+            <div className="flex gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
+              <Button type="submit" className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]">Confirmer l'Entrée</Button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

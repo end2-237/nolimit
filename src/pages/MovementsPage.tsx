@@ -1,196 +1,181 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Filter, Download, ArrowUpRight, ArrowDownLeft, RefreshCw, Package } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
+import { db, Movement } from '../services/database';
+import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 
-// Mock data for movements
-const movements = [
-  { id: 1, type: 'in', product: 'Artémisia Premium', quantity: 50, from: null, to: 'DLA', date: '2026-04-09 14:30', user: 'Jean Dupont', reference: 'ENT-001' },
-  { id: 2, type: 'out', product: 'Huile de Moringa', quantity: 20, from: 'YDE', to: null, date: '2026-04-09 12:15', user: 'Marie Kamga', reference: 'SOR-042' },
-  { id: 3, type: 'transfer', product: 'Complément Baobab', quantity: 30, from: 'DLA', to: 'BAF', date: '2026-04-09 10:00', user: 'Paul Nkomo', reference: 'TRF-015' },
-  { id: 4, type: 'in', product: 'Tisane Kinkeliba', quantity: 100, from: null, to: 'YDE', date: '2026-04-08 16:45', user: 'Jean Dupont', reference: 'ENT-002' },
-  { id: 5, type: 'out', product: 'Poudre de Neem', quantity: 15, from: 'BAF', to: null, date: '2026-04-08 09:30', user: 'Marie Kamga', reference: 'SOR-043' },
-  { id: 6, type: 'adjustment', product: 'Spiruline Premium', quantity: -5, from: 'DLA', to: 'DLA', date: '2026-04-07 11:20', user: 'Admin', reference: 'ADJ-003' },
-  { id: 7, type: 'transfer', product: 'Huile de Karité Bio', quantity: 40, from: 'YDE', to: 'DLA', date: '2026-04-07 08:00', user: 'Paul Nkomo', reference: 'TRF-016' },
-  { id: 8, type: 'in', product: 'Gingembre Séché', quantity: 80, from: null, to: 'BAF', date: '2026-04-06 15:00', user: 'Jean Dupont', reference: 'ENT-003' },
-];
-
-const typeConfig = {
+const typeConfig: Record<string, { label: string; icon: any; color: string; iconColor: string }> = {
   in: { label: 'Entrée', icon: ArrowDownLeft, color: 'bg-green-100 text-green-700', iconColor: 'text-green-600' },
   out: { label: 'Sortie', icon: ArrowUpRight, color: 'bg-red-100 text-red-700', iconColor: 'text-red-600' },
   transfer: { label: 'Transfert', icon: RefreshCw, color: 'bg-blue-100 text-blue-700', iconColor: 'text-blue-600' },
   adjustment: { label: 'Ajustement', icon: Package, color: 'bg-orange-100 text-orange-700', iconColor: 'text-orange-600' },
 };
 
-export function MovementsPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [siteFilter, setSiteFilter] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<string>('week');
+function exportToCSV(movements: Movement[]) {
+  const headers = ['ID', 'Type', 'Produit', 'Quantité', 'De', 'Vers', 'Motif', 'Référence', 'Utilisateur', 'Date'];
+  const rows = movements.map(m => [
+    m.id,
+    typeConfig[m.type]?.label || m.type,
+    m.product_name || '',
+    m.quantity,
+    m.from_site_id || '',
+    m.to_site_id || '',
+    m.reason,
+    m.reference,
+    m.user_name || '',
+    new Date(m.created_at).toLocaleString('fr-FR'),
+  ]);
 
-  const filteredMovements = movements.filter(m => {
-    const matchesSearch = m.product.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         m.reference.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === 'all' || m.type === typeFilter;
-    return matchesSearch && matchesType;
+  const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mouvements_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function MovementsPage() {
+  const { getAllowedSites, hasPermission } = useAuth();
+  const allowedSites = getAllowedSites();
+
+  const [movements, setMovements] = useState<Movement[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [siteFilter, setSiteFilter] = useState('all');
+
+  useEffect(() => {
+    const all = db.getMovements({ site_id: siteFilter === 'all' ? undefined : siteFilter });
+    setMovements(all);
+  }, [siteFilter]);
+
+  const filtered = movements.filter(m => {
+    const matchSearch = !searchQuery || (m.product_name || '').toLowerCase().includes(searchQuery.toLowerCase()) || m.reference.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchType = typeFilter === 'all' || m.type === typeFilter;
+    return matchSearch && matchType;
   });
+
+  const counts = { in: 0, out: 0, transfer: 0, adjustment: 0 };
+  movements.forEach(m => { if (m.type in counts) (counts as any)[m.type]++; });
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="border-b border-[#F1F5F9] bg-white px-8 py-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="border-b border-[#F1F5F9] bg-white px-6 py-4">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Mouvements de Stock</h1>
-            <p className="text-gray-500 text-sm mt-1">Historique de tous les mouvements d&apos;inventaire</p>
+            <h1 className="text-xl font-bold text-gray-900">Mouvements de Stock</h1>
+            <p className="text-gray-500 text-sm">{filtered.length} mouvement(s) affiché(s)</p>
           </div>
-          <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-2" />
-            Exporter
-          </Button>
+          {hasPermission('export') && (
+            <Button variant="outline" size="sm" onClick={() => exportToCSV(filtered)} disabled={filtered.length === 0}>
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              Exporter CSV
+            </Button>
+          )}
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Rechercher par produit ou référence..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+        {/* Stats */}
+        <div className="flex items-center gap-6 mb-4">
+          {Object.entries(counts).map(([type, count]) => {
+            const cfg = typeConfig[type];
+            return (
+              <div key={type} className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full ${type === 'in' ? 'bg-green-500' : type === 'out' ? 'bg-red-500' : type === 'transfer' ? 'bg-blue-500' : 'bg-orange-500'}`} />
+                <span className="text-xs text-gray-600">{cfg.label}: <strong>{count}</strong></span>
+              </div>
+            );
+          })}
+        </div>
 
+        <div className="flex gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <Input placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 h-9 text-sm" />
+          </div>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[160px]">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder="Type" />
+            <SelectTrigger className="w-[150px] h-9 text-sm">
+              <Filter className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les types</SelectItem>
-              <SelectItem value="in">Entrées</SelectItem>
-              <SelectItem value="out">Sorties</SelectItem>
-              <SelectItem value="transfer">Transferts</SelectItem>
-              <SelectItem value="adjustment">Ajustements</SelectItem>
+              {Object.entries(typeConfig).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
             </SelectContent>
           </Select>
-
           <Select value={siteFilter} onValueChange={setSiteFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Site" />
+            <SelectTrigger className="w-[150px] h-9 text-sm">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les sites</SelectItem>
-              {APP_CONFIG.sites.map(site => (
-                <SelectItem key={site.id} value={site.id}>{site.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Période" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Aujourd&apos;hui</SelectItem>
-              <SelectItem value="week">Cette semaine</SelectItem>
-              <SelectItem value="month">Ce mois</SelectItem>
-              <SelectItem value="quarter">Ce trimestre</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Stats Summary */}
-      <div className="px-8 py-4 bg-gray-50 border-b border-[#F1F5F9]">
-        <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500" />
-            <span className="text-sm text-gray-600">Entrées: <strong>230</strong></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
-            <span className="text-sm text-gray-600">Sorties: <strong>185</strong></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500" />
-            <span className="text-sm text-gray-600">Transferts: <strong>42</strong></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-orange-500" />
-            <span className="text-sm text-gray-600">Ajustements: <strong>8</strong></span>
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="flex-1 overflow-auto px-8 py-6">
-        <div className="border border-[#F1F5F9] rounded-lg overflow-hidden bg-white">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-[#F1F5F9]">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Type</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Référence</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Produit</th>
-                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase">Quantité</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Origine / Destination</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Date</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Utilisateur</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredMovements.map((movement) => {
-                const config = typeConfig[movement.type as keyof typeof typeConfig];
-                const Icon = config.icon;
-                
-                return (
-                  <tr key={movement.id} className="border-b border-[#F1F5F9] hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <Badge className={config.color}>
-                        <Icon className={`w-3 h-3 mr-1 ${config.iconColor}`} />
-                        {config.label}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-mono text-sm text-gray-600">{movement.reference}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-medium text-gray-900">{movement.product}</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`font-mono font-semibold ${movement.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {movement.quantity > 0 ? '+' : ''}{movement.quantity}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      {movement.type === 'transfer' ? (
-                        <span className="text-sm text-gray-600">
-                          {movement.from} → {movement.to}
-                        </span>
-                      ) : movement.type === 'in' ? (
-                        <span className="text-sm text-gray-600">→ {movement.to}</span>
-                      ) : movement.type === 'out' ? (
-                        <span className="text-sm text-gray-600">{movement.from} →</span>
-                      ) : (
-                        <span className="text-sm text-gray-600">{movement.from}</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-600">{movement.date}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-600">{movement.user}</span>
-                    </td>
-                  </tr>
-                );
+              {allowedSites.map(sid => {
+                const s = APP_CONFIG.sites.find(s => s.id === sid);
+                return s ? <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem> : null;
               })}
-            </tbody>
-          </table>
+            </SelectContent>
+          </Select>
         </div>
+      </div>
+
+      <div className="flex-1 overflow-auto px-6 py-4">
+        {filtered.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            <RefreshCw className="w-10 h-10 mx-auto mb-3 opacity-20" />
+            <p className="text-sm">Aucun mouvement trouvé</p>
+            <p className="text-xs mt-1">Les mouvements apparaîtront ici après entrées/sorties/transferts</p>
+          </div>
+        ) : (
+          <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-[#E2E8F0]">
+                  {['Type', 'Référence', 'Produit', 'Qté', 'Origine / Destination', 'Motif', 'Date', 'Utilisateur'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(m => {
+                  const cfg = typeConfig[m.type] || typeConfig.adjustment;
+                  const Icon = cfg.icon;
+                  return (
+                    <tr key={m.id} className="border-b border-[#F1F5F9] hover:bg-gray-50">
+                      <td className="px-4 py-2.5">
+                        <Badge className={`text-xs ${cfg.color}`}>
+                          <Icon className={`w-2.5 h-2.5 mr-1 ${cfg.iconColor}`} />
+                          {cfg.label}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{m.reference}</td>
+                      <td className="px-4 py-2.5 font-medium">{m.product_name}</td>
+                      <td className="px-4 py-2.5 font-mono font-semibold">
+                        <span className={m.type === 'out' ? 'text-red-600' : 'text-green-600'}>
+                          {m.type === 'out' ? '-' : '+'}{m.quantity}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-600 text-xs">
+                        {m.type === 'transfer' ? `${m.from_site_id} → ${m.to_site_id}` :
+                          m.type === 'in' ? `→ ${m.to_site_id}` :
+                          m.type === 'out' ? `${m.from_site_id} →` :
+                          m.from_site_id || '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-500 text-xs max-w-[150px] truncate">{m.reason}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-500">
+                        {new Date(m.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-gray-500">{m.user_name}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

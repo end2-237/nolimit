@@ -1,363 +1,274 @@
-import { useState } from 'react';
-import { Search, Plus, RefreshCw, TrendingUp } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Plus, RefreshCw, TrendingUp, Package, AlertTriangle, Edit2, Trash2, ArrowUpDown } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
+import { db } from '../../services/database';
+import { useAuth } from '../../stores/authStore';
+import { APP_CONFIG } from '../../config/app.config';
 import { BulkInputModal } from './BulkInputModal';
 import { TransferModal } from './TransferModal';
-import { MovementHistoryPanel } from './MovementHistoryPanel';
+import { ProductFormModal } from './ProductFormModal';
 
-// Mock data
-const products = [
-  {
-    id: 1,
-    name: 'Artémisia Premium',
-    category: 'Plante',
-    sku: 'ART-001',
-    stock: { DLA: 150, YDE: 85, BAF: 45 },
-    threshold: 50,
-    lastDelivery: '2026-04-05',
-    expiryDate: '2026-10-15',
-  },
-  {
-    id: 2,
-    name: 'Huile de Moringa',
-    category: 'Huile',
-    sku: 'MOR-002',
-    stock: { DLA: 200, YDE: 120, BAF: 95 },
-    threshold: 80,
-    lastDelivery: '2026-04-08',
-    expiryDate: '2027-01-20',
-  },
-  {
-    id: 3,
-    name: 'Complément Baobab',
-    category: 'Complément',
-    sku: 'BAO-003',
-    stock: { DLA: 30, YDE: 15, BAF: 8 },
-    threshold: 40,
-    lastDelivery: '2026-03-28',
-    expiryDate: '2026-08-30',
-  },
-  {
-    id: 4,
-    name: 'Tisane Kinkeliba',
-    category: 'Plante',
-    sku: 'KIN-004',
-    stock: { DLA: 180, YDE: 140, BAF: 110 },
-    threshold: 60,
-    lastDelivery: '2026-04-07',
-    expiryDate: '2026-12-15',
-  },
-  {
-    id: 5,
-    name: 'Poudre de Neem',
-    category: 'Complément',
-    sku: 'NEE-005',
-    stock: { DLA: 25, YDE: 18, BAF: 12 },
-    threshold: 30,
-    lastDelivery: '2026-04-01',
-    expiryDate: '2026-07-10',
-  },
-  {
-    id: 6,
-    name: 'Huile de Karité Bio',
-    category: 'Huile',
-    sku: 'KAR-006',
-    stock: { DLA: 95, YDE: 75, BAF: 60 },
-    threshold: 50,
-    lastDelivery: '2026-04-06',
-    expiryDate: '2027-02-28',
-  },
-  {
-    id: 7,
-    name: 'Gingembre Séché',
-    category: 'Plante',
-    sku: 'GIN-007',
-    stock: { DLA: 120, YDE: 90, BAF: 55 },
-    threshold: 70,
-    lastDelivery: '2026-04-04',
-    expiryDate: '2026-11-20',
-  },
-  {
-    id: 8,
-    name: 'Spiruline Premium',
-    category: 'Complément',
-    sku: 'SPI-008',
-    stock: { DLA: 65, YDE: 48, BAF: 32 },
-    threshold: 45,
-    lastDelivery: '2026-04-03',
-    expiryDate: '2026-09-15',
-  },
-];
-
-const categoryColors = {
+const categoryColors: Record<string, string> = {
   Plante: 'bg-green-100 text-green-700',
   Huile: 'bg-amber-100 text-amber-700',
   Complément: 'bg-blue-100 text-blue-700',
+  Cosmétique: 'bg-pink-100 text-pink-700',
+  Alimentaire: 'bg-orange-100 text-orange-700',
 };
 
 export function InventoryDashboard() {
-  const [selectedSite, setSelectedSite] = useState<'all' | 'DLA' | 'YDE' | 'BAF'>('all');
+  const { getAllowedSites, hasPermission } = useAuth();
+  const allowedSites = getAllowedSites();
+
+  const [selectedSite, setSelectedSite] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showBulkInput, setShowBulkInput] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null);
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0 });
+  const [sortField, setSortField] = useState<string>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  // Calculate KPIs
-  const totalValue = products.reduce((sum, p) => {
-    const totalStock = p.stock.DLA + p.stock.YDE + p.stock.BAF;
-    return sum + totalStock * 15; // Assuming avg price of 15 per unit
-  }, 0);
+  const load = useCallback(() => {
+    const siteFilter = selectedSite === 'all' ? undefined : selectedSite;
+    const prods = db.getStocksGroupedByProduct(allowedSites);
+    setProducts(prods);
+    setStats(db.getDashboardStats(allowedSites));
+  }, [selectedSite, allowedSites]);
 
-  const alertCount = products.filter(p => {
-    const total = p.stock.DLA + p.stock.YDE + p.stock.BAF;
-    return total < p.threshold;
-  }).length;
+  useEffect(() => { load(); }, [load]);
 
-  const todayMovements = 12; // Mock data
+  const filteredSites = allowedSites.filter(sid => selectedSite === 'all' || sid === selectedSite);
 
-  // Filter products
-  const filteredProducts = products.filter(p => {
-    const matchesSearch = searchQuery === '' || 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    return matchesSearch;
-  });
+  const filteredProducts = products
+    .filter(p => {
+      const matchSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchSearch;
+    })
+    .sort((a, b) => {
+      let va = a[sortField], vb = b[sortField];
+      if (sortField === 'totalStock') { va = a.totalStock; vb = b.totalStock; }
+      if (sortDir === 'asc') return va > vb ? 1 : -1;
+      return va < vb ? 1 : -1;
+    });
 
-  const getStockStatus = (product: typeof products[0]) => {
-    const total = product.stock.DLA + product.stock.YDE + product.stock.BAF;
-    const percentage = (total / (product.threshold * 3)) * 100;
-    
-    if (total < product.threshold) return { color: 'bg-red-500', status: 'Critique', percentage: Math.min(percentage, 100) };
-    if (total < product.threshold * 1.5) return { color: 'bg-orange-500', status: 'Alerte', percentage: Math.min(percentage, 100) };
-    return { color: 'bg-[#0284C7]', status: 'Suffisant', percentage: Math.min(percentage, 100) };
+  const getStockStatus = (product: any) => {
+    const siteIds = selectedSite === 'all' ? allowedSites : [selectedSite];
+    const total = siteIds.reduce((sum: number, s: string) => sum + (product.stock[s] || 0), 0);
+    const pct = total / (product.threshold * siteIds.length);
+    if (pct < 0.3) return { color: 'bg-red-500', label: 'Critique', pct: Math.min(pct * 100, 100) };
+    if (pct < 1) return { color: 'bg-orange-500', label: 'Alerte', pct: Math.min(pct * 100, 100) };
+    return { color: 'bg-[#0284C7]', label: 'OK', pct: Math.min(pct * 100, 100) };
   };
+
+  const handleDeleteProduct = (id: number) => {
+    if (!confirm('Supprimer ce produit et tout son stock ?')) return;
+    db.deleteProduct(id);
+    load();
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
+  };
+
+  const totalValue = filteredSites.reduce((sum, siteId) => {
+    return sum + products.reduce((s, p) => s + (p.stock[siteId] || 0) * p.price, 0);
+  }, 0);
 
   return (
     <div className="h-full flex flex-col">
       {/* Header & KPIs */}
       <div className="border-b border-[#F1F5F9] bg-white">
-        <div className="px-8 py-6">
-          {/* Top Row: Site Selector & KPIs */}
-          <div className="flex items-center justify-between mb-6">
-            {/* Site Selector */}
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-gray-700">Site:</label>
-              <Select value={selectedSite} onValueChange={(value: any) => setSelectedSite(value)}>
-                <SelectTrigger className="w-[200px]">
+        <div className="px-6 py-4">
+          {/* Top Row */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-600">Site:</label>
+              <Select value={selectedSite} onValueChange={setSelectedSite}>
+                <SelectTrigger className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les Sites</SelectItem>
-                  <SelectItem value="DLA">Douala</SelectItem>
-                  <SelectItem value="YDE">Yaoundé</SelectItem>
-                  <SelectItem value="BAF">Bafoussam</SelectItem>
+                  {allowedSites.map(sid => {
+                    const s = APP_CONFIG.sites.find(s => s.id === sid);
+                    return s ? <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem> : null;
+                  })}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowHistory(true)}
-              >
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Historique
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowTransfer(true)}
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Transfert
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setShowBulkInput(true)}
-                className="bg-[#0284C7] hover:bg-[#0369A1]"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Réappro. Masse
-              </Button>
+              {hasPermission('create') && (
+                <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)}>
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                  Transfert
+                </Button>
+              )}
+              {hasPermission('create') && (
+                <Button size="sm" onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
+                  className="bg-[#0284C7] hover:bg-[#0369A1]">
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                  Nouveau Produit
+                </Button>
+              )}
             </div>
           </div>
 
           {/* KPI Cards */}
-          <div className="grid grid-cols-4 gap-6">
-            {/* Total Stock Value */}
-            <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-lg border border-[#F1F5F9]">
-              <div className="text-sm text-gray-600 mb-1">Valeur Totale du Stock</div>
-              <div className="text-3xl font-bold text-[#0284C7]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {totalValue.toLocaleString()} XAF
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-xl border border-blue-100">
+              <div className="text-xs text-gray-500 mb-0.5">Valeur du Stock</div>
+              <div className="text-2xl font-bold text-[#0284C7]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                {totalValue.toLocaleString('fr-FR')}
               </div>
+              <div className="text-xs text-gray-400">XAF</div>
             </div>
-
-            {/* Alerts */}
-            <div className="bg-gradient-to-br from-orange-50 to-white p-6 rounded-lg border border-[#F1F5F9]">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-sm text-gray-600">Alertes Rupture</div>
+            <div className="bg-gradient-to-br from-orange-50 to-white p-4 rounded-xl border border-orange-100">
+              <div className="text-xs text-gray-500 mb-0.5">Alertes Actives</div>
+              <div className="text-2xl font-bold text-orange-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                {stats.alertCount}
               </div>
-              <div className="text-3xl font-bold text-orange-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {alertCount}
-              </div>
+              <div className="text-xs text-gray-400">{stats.criticalProducts} critique(s)</div>
             </div>
-
-            {/* Today's Movements */}
-            <div className="bg-gradient-to-br from-green-50 to-white p-6 rounded-lg border border-[#F1F5F9]">
-              <div className="text-sm text-gray-600 mb-1">Mouvements du Jour</div>
-              <div className="text-3xl font-bold text-green-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {todayMovements}
+            <div className="bg-gradient-to-br from-green-50 to-white p-4 rounded-xl border border-green-100">
+              <div className="text-xs text-gray-500 mb-0.5">Mouvements Aujourd'hui</div>
+              <div className="text-2xl font-bold text-green-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                {stats.todayMovements}
               </div>
+              <div className="text-xs text-gray-400">opérations</div>
             </div>
-
-            {/* Total Products */}
-            <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-lg border border-[#F1F5F9]">
-              <div className="text-sm text-gray-600 mb-1">Produits Actifs</div>
-              <div className="text-3xl font-bold text-purple-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {products.length}
+            <div className="bg-gradient-to-br from-purple-50 to-white p-4 rounded-xl border border-purple-100">
+              <div className="text-xs text-gray-500 mb-0.5">Produits Actifs</div>
+              <div className="text-2xl font-bold text-purple-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                {stats.totalProducts}
               </div>
+              <div className="text-xs text-gray-400">références</div>
             </div>
           </div>
 
-          {/* Search Bar */}
-          <div className="mt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Rechercher par nom, catégorie ou SKU..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-11"
-              />
-            </div>
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Rechercher par nom, SKU ou catégorie..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9 h-9"
+            />
           </div>
         </div>
       </div>
 
-      {/* Data Table */}
-      <div className="flex-1 overflow-auto px-8 py-6">
-        <div className="border border-[#F1F5F9] rounded-lg overflow-hidden bg-white">
+      {/* Table */}
+      <div className="flex-1 overflow-auto px-6 py-4">
+        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-[#F1F5F9]">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Désignation
+              <tr className="bg-gray-50 border-b border-[#E2E8F0]">
+                <th className="px-4 py-3 text-left">
+                  <button onClick={() => handleSort('name')} className="flex items-center gap-1 text-xs font-semibold text-gray-600 uppercase hover:text-gray-900">
+                    Désignation <ArrowUpDown className="w-3 h-3" />
+                  </button>
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Catégorie
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Catégorie</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                  {selectedSite === 'all' ? 'Stock par Site' : `Stock - ${APP_CONFIG.sites.find(s => s.id === selectedSite)?.name}`}
                 </th>
-                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Quantité par Site
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Statut
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Dernier Arrivage
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Actions
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Dernier Arrivage</th>
+                {hasPermission('create') && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => {
+              {filteredProducts.length === 0 && (
+                <tr><td colSpan={6} className="text-center py-12 text-gray-400">
+                  <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  Aucun produit trouvé
+                </td></tr>
+              )}
+              {filteredProducts.map(product => {
                 const status = getStockStatus(product);
-                
-                return (
-                  <tr
-                    key={product.id}
-                    className="border-b border-[#F1F5F9] hover:bg-gray-50 transition-colors group"
-                    style={{ height: '48px' }}
-                  >
-                    {/* Designation */}
-                    <td className="px-6 py-3">
-                      <div>
-                        <div className="font-semibold text-gray-900">{product.name}</div>
-                        <div className="text-xs text-gray-500">{product.sku}</div>
-                      </div>
-                    </td>
+                const displaySites = selectedSite === 'all' ? allowedSites : [selectedSite];
 
-                    {/* Category */}
-                    <td className="px-6 py-3">
-                      <Badge className={categoryColors[product.category as keyof typeof categoryColors]}>
+                return (
+                  <tr key={product.id} className="border-b border-[#F1F5F9] hover:bg-gray-50 transition-colors group">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-gray-900 text-sm">{product.name}</div>
+                      <div className="text-xs text-gray-400 font-mono">{product.sku}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge className={`text-xs ${categoryColors[product.category] || 'bg-gray-100 text-gray-700'}`}>
                         {product.category}
                       </Badge>
                     </td>
-
-                    {/* Quantity per Site */}
-                    <td className="px-6 py-3">
-                      <div className="flex items-center justify-center gap-4" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500 mb-1">DLA</div>
-                          <div className="font-semibold text-gray-900">{product.stock.DLA}</div>
-                        </div>
-                        <div className="w-px h-8 bg-gray-200" />
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500 mb-1">YDE</div>
-                          <div className="font-semibold text-gray-900">{product.stock.YDE}</div>
-                        </div>
-                        <div className="w-px h-8 bg-gray-200" />
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500 mb-1">BAF</div>
-                          <div className="font-semibold text-gray-900">{product.stock.BAF}</div>
-                        </div>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-3" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                        {displaySites.map((sid, i) => (
+                          <div key={sid} className="text-center">
+                            {displaySites.length > 1 && <div className="text-[10px] text-gray-400 mb-0.5">{sid}</div>}
+                            <div className={`font-semibold text-sm ${(product.stock[sid] || 0) < product.threshold * 0.3 ? 'text-red-600' : (product.stock[sid] || 0) < product.threshold ? 'text-orange-500' : 'text-gray-900'}`}>
+                              {product.stock[sid] || 0}
+                            </div>
+                            {displaySites.length > 1 && i < displaySites.length - 1 && <div className="hidden" />}
+                          </div>
+                        ))}
+                        {displaySites.length > 1 && (
+                          <>
+                            <div className="w-px h-6 bg-gray-200" />
+                            <div className="text-center">
+                              <div className="text-[10px] text-gray-400 mb-0.5">Total</div>
+                              <div className="font-bold text-sm text-gray-900">
+                                {displaySites.reduce((s, sid) => s + (product.stock[sid] || 0), 0)}
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </td>
-
-                    {/* Status Gauge */}
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1">
-                          <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden" style={{ width: '120px' }}>
-                            <div
-                              className={`h-full ${status.color} transition-all duration-300`}
-                              style={{ width: `${status.percentage}%` }}
-                            />
-                          </div>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div className={`h-full ${status.color} transition-all`} style={{ width: `${status.pct}%` }} />
                         </div>
-                        <span className="text-xs font-medium text-gray-600 min-w-[70px]">
-                          {status.status}
+                        <span className={`text-xs font-medium ${status.label === 'Critique' ? 'text-red-600' : status.label === 'Alerte' ? 'text-orange-500' : 'text-gray-500'}`}>
+                          {status.label}
                         </span>
                       </div>
                     </td>
-
-                    {/* Last Delivery */}
-                    <td className="px-6 py-3">
-                      <div className="text-sm text-gray-600">
-                        {new Date(product.lastDelivery).toLocaleDateString('fr-FR', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
-                      </div>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {product.lastDelivery ? new Date(product.lastDelivery).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                     </td>
-
-                    {/* Actions */}
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 text-[#0284C7] hover:bg-blue-50"
-                          onClick={() => {
-                            setSelectedProduct(product);
-                            setShowBulkInput(true);
-                          }}
-                        >
-                          Ajuster
-                        </Button>
-                      </div>
-                    </td>
+                    {hasPermission('create') && (
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-[#0284C7] hover:bg-blue-50"
+                            onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}>
+                            <Plus className="w-3.5 h-3.5 mr-1" />
+                            Réappro.
+                          </Button>
+                          {hasPermission('edit') && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-500 hover:text-gray-900"
+                              onClick={() => { setEditingProduct(product); setShowProductForm(true); }}>
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          {hasPermission('delete') && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => handleDeleteProduct(product.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -370,23 +281,21 @@ export function InventoryDashboard() {
       {showBulkInput && (
         <BulkInputModal
           product={selectedProduct}
-          onClose={() => {
-            setShowBulkInput(false);
-            setSelectedProduct(null);
-          }}
+          allowedSites={allowedSites}
+          onClose={() => { setShowBulkInput(false); setSelectedProduct(null); load(); }}
         />
       )}
-
       {showTransfer && (
         <TransferModal
           products={products}
-          onClose={() => setShowTransfer(false)}
+          allowedSites={allowedSites}
+          onClose={() => { setShowTransfer(false); load(); }}
         />
       )}
-
-      {showHistory && (
-        <MovementHistoryPanel
-          onClose={() => setShowHistory(false)}
+      {showProductForm && (
+        <ProductFormModal
+          product={editingProduct}
+          onClose={() => { setShowProductForm(false); setEditingProduct(null); load(); }}
         />
       )}
     </div>
