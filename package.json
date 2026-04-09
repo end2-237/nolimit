@@ -1,11 +1,18 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "stock-no-limit",
+  "productName": "Stock No Limit",
   "private": true,
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "description": "Application de gestion de stock multi-sites",
+  "author": "No Limit Enterprise",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
+    "dev": "vite",
     "build": "vite build",
-    "dev": "vite"
+    "electron:dev": "concurrently \"vite\" \"electron .\"",
+    "electron:build": "vite build && electron-builder",
+    "electron:pack": "electron-builder --dir"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -43,6 +50,7 @@
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "3.6.0",
+    "electron": "^41.2.0",
     "embla-carousel-react": "8.6.0",
     "input-otp": "1.4.2",
     "lucide-react": "0.487.0",
@@ -66,13 +74,13 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "4.0.0",
+    "@tailwindcss/vite": "^4.1.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "4.7.0",
     "autoprefixer": "^10.4.27",
     "postcss": "^8.5.9",
-    "tailwindcss": "4.0.0",
+    "tailwindcss": "^4.1.0",
     "vite": "6.3.5"
   },
   "peerDependencies": {
