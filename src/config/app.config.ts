@@ -8,7 +8,7 @@ export const APP_CONFIG = {
     website: 'https://nolimit.cm',
     email: 'contact@nolimit.cm',
     phone: '+237 6XX XXX XXX',
-    logo: '/nol.png',
+    logo: '../../public/icons/nol.png',
   },
   branding: {
     primaryColor: '#16a34a',

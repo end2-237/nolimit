@@ -48,7 +48,7 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
         <div className="h-14 flex items-center px-3 gap-2 border-b border-green-800/40">
           <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 bg-green-600/30">
             <img
-              src="/nol.png"
+              src={APP_CONFIG.company.logo}
               alt="Logo"
               className="w-7 h-7 object-contain"
               onError={(e) => {

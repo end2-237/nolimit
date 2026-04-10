@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { APP_CONFIG } from '../config/app.config';
-
 export function SplashScreen({ onComplete }: { onComplete: () => void }) {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Initialisation...');
@@ -30,12 +29,12 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
     <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #052e16 0%, #14532d 100%)' }}>
       <div className="text-center">
         {/* Logo cercle vert */}
-        <div className="w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, #16a34a, #166534)' }}>
+        <div className="w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6 overflow-hidden"
+          style={{ }}>
           <img
-            src="/nol.png"
+            src={APP_CONFIG.company.logo}
             alt="Logo"
-            className="w-16 h-16 object-contain"
+            className="w-full h-full object-contain"
             onError={(e) => {
               // Fallback SVG logo si image absente
               const target = e.currentTarget as HTMLImageElement;

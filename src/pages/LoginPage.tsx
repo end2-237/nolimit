@@ -41,12 +41,11 @@ export function LoginPage() {
 
         <div className="relative z-10 text-center">
           {/* Logo */}
-          <div className="w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl overflow-hidden"
-            style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+          <div className="w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-8 overflow-hidden">
             <img
-              src="/nol.png"
+              src={APP_CONFIG.company.logo}
               alt="Logo"
-              className="w-16 h-16 object-contain"
+              className="w-full h-full object-contain"
               onError={(e) => {
                 const t = e.currentTarget as HTMLImageElement;
                 t.style.display = 'none';
