@@ -46,13 +46,42 @@ function CloudSyncPanel() {
   };
 
   const syncNow = async () => {
+    if (!form.url || !form.apiKey) {
+      notifService.send('Erreur', 'URL ou Clé API manquante', 'error', 'cloud');
+      return;
+    }
+  
     setSyncing(true);
-    await new Promise(r => setTimeout(r, 1500));
-    const now = new Date().toISOString();
-    setLastSync(now);
-    localStorage.setItem('snl_cloud_config', JSON.stringify({ ...form, lastSync: now }));
-    setSyncing(false);
-    notifService.send('Synchronisation réussie', 'Données synchronisées avec le cloud', 'success', 'cloud');
+    try {
+      // 1. Récupérer les données locales
+      const localData = localStorage.getItem('snl_db_v2');
+      
+      // 2. Envoyer au serveur
+      const response = await fetch(form.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-KEY': form.apiKey, // Sécurité
+        },
+        body: JSON.stringify({
+          data: JSON.parse(localData || '{}'),
+          timestamp: new Date().toISOString(),
+          siteId: 'MAIN-DLA', // Identifiant de la source
+        }),
+      });
+  
+      if (!response.ok) throw new Error('Échec du serveur');
+  
+      // 3. Mettre à jour l'UI en cas de succès
+      const now = new Date().toISOString();
+      setLastSync(now);
+      localStorage.setItem('snl_cloud_config', JSON.stringify({ ...form, lastSync: now }));
+      notifService.send('Synchronisation réussie', 'Données sauvegardées sur le cloud', 'success', 'cloud');
+    } catch (error) {
+      notifService.send('Erreur Sync', 'Impossible de joindre le serveur cloud', 'error', 'cloud');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   return (
