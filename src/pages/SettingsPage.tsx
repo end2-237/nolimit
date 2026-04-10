@@ -93,7 +93,7 @@ function CloudSyncPanel() {
 
     const confirmSync = confirm(
       "SYNCHRONISATION ENTRANTE\n\n" +
-      "Attention : Cette action va REMPLACER toute votre base de données locale par celle du Cloud.\n\n" +
+      "Attention : Cette action va REMPLACER toute votre base de données locale par celle du Cloud.\n" +
       "Voulez-vous continuer ?"
     );
     if (!confirmSync) return;
