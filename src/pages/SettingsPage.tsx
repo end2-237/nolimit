@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Database, RefreshCw, AlertTriangle, CheckCircle,
   Download, Upload, Cloud, CloudOff, Building2, Plus, Trash2,
   Edit2, X, Save, Calendar, Bell, Shield, Clock, Globe, HardDrive,
-  Lock, Unlock, ChevronDown, ChevronRight, Eye, EyeOff
+  Lock, Unlock, ChevronDown, ChevronRight, Eye, EyeOff,
+  Zap
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -27,138 +28,205 @@ interface Site {
   phone?: string;
 }
 
-// ─── Cloud Sync Panel ─────────────────────────────────────────────────────────
 
 function CloudSyncPanel() {
   const [cloudConfig, setCloudConfig] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('snl_cloud_config') || '{}'); } catch { return {}; }
+    try {
+      const saved = localStorage.getItem('snl_cloud_config');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
   });
+
   const [expanded, setExpanded] = useState(false);
-  const [form, setForm] = useState({ url: cloudConfig.url || '', apiKey: cloudConfig.apiKey || '', autoSync: cloudConfig.autoSync || false, syncInterval: cloudConfig.syncInterval || 'daily' });
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(cloudConfig.lastSync || null);
-
-  const save = () => {
-    const conf = { ...form, lastSync };
-    localStorage.setItem('snl_cloud_config', JSON.stringify(conf));
-    setCloudConfig(conf);
-    notifService.send('Configuration sauvegardée', 'Paramètres de synchronisation cloud mis à jour', 'success', 'settings');
-  };
-
-  const syncNow = async () => {
-    if (!form.url || !form.apiKey) {
-      notifService.send('Erreur', 'URL ou Clé API manquante', 'error', 'cloud');
-      return;
-    }
   
+  const [form, setForm] = useState({
+    url: cloudConfig.url || 'https://eetra-awux.vercel.app/api/sync',
+    apiKey: cloudConfig.apiKey || '',
+    autoSync: cloudConfig.autoSync || false,
+    syncInterval: cloudConfig.syncInterval || 'daily', 
+    siteId: cloudConfig.siteId || 'DLA-01'
+  });
+
+  // --- SAUVEGARDE SUR LE CLOUD (ENREGISTRER) ---
+  const handleSaveToCloud = async () => {
+    if (!form.url || !form.apiKey) return;
     setSyncing(true);
+
     try {
-      // 1. Récupérer les données locales
-      const localData = localStorage.getItem('snl_db_v2');
-      
-      // 2. Envoyer au serveur
-      const response = await fetch(form.url, {
+      // Sauvegarde locale de la config d'abord
+      localStorage.setItem('snl_cloud_config', JSON.stringify({ ...form, lastSync }));
+
+      const localDataRaw = localStorage.getItem('snl_db_v2');
+      const dataPayload = localDataRaw ? JSON.parse(localDataRaw) : {};
+
+      const response = await fetch(form.url.trim(), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-KEY': form.apiKey, // Sécurité
-        },
+        mode: 'cors', 
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': form.apiKey.trim() },
         body: JSON.stringify({
-          data: JSON.parse(localData || '{}'),
-          timestamp: new Date().toISOString(),
-          siteId: 'MAIN-DLA', // Identifiant de la source
+          siteId: form.siteId,
+          data: dataPayload,
+          timestamp: new Date().toISOString()
         }),
       });
-  
-      if (!response.ok) throw new Error('Échec du serveur');
-  
-      // 3. Mettre à jour l'UI en cas de succès
+
+      if (!response.ok) throw new Error("Échec de l'envoi");
+      
       const now = new Date().toISOString();
       setLastSync(now);
       localStorage.setItem('snl_cloud_config', JSON.stringify({ ...form, lastSync: now }));
-      notifService.send('Synchronisation réussie', 'Données sauvegardées sur le cloud', 'success', 'cloud');
-    } catch (error) {
-      notifService.send('Erreur Sync', 'Impossible de joindre le serveur cloud', 'error', 'cloud');
+      
+      notifService.send('Cloud', 'Application sauvegardée sur le Cloud', 'success', 'cloud');
+    } catch (e: any) {
+      notifService.send('Erreur', e.message, 'error', 'cloud');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // --- RESTAURATION DEPUIS LE CLOUD (SYNCHRONISER) ---
+  // --- RESTAURATION DEPUIS LE CLOUD (SYNCHRONISER) ---
+  const handleRestoreFromCloud = async () => {
+    if (!form.url || !form.apiKey) return;
+
+    const confirmSync = confirm(
+      "SYNCHRONISATION ENTRANTE\n\n" +
+      "Attention : Cette action va REMPLACER toute votre base de données locale par celle du Cloud.\n\n" +
+      "Voulez-vous continuer ?"
+    );
+    if (!confirmSync) return;
+
+    setSyncing(true);
+    try {
+      const res = await fetch(`${form.url.trim()}?siteId=${form.siteId}`, {
+        method: 'GET',
+        mode: 'cors',
+        headers: { 'X-API-KEY': form.apiKey.trim() },
+      });
+      
+      const cloud = await res.json();
+
+      if (cloud.data) {
+        // 1. Sauvegarde de sécurité (Backup automatique avant écrasement)
+        const currentData = localStorage.getItem('snl_db_v2');
+        if (currentData) {
+            localStorage.setItem(`snl_backup_pre_sync_${Date.now()}`, currentData);
+        }
+
+        // 2. Remplacement dans le localStorage
+        const stringifiedData = JSON.stringify(cloud.data);
+        localStorage.setItem('snl_db_v2', stringifiedData);
+        
+        // 3. Mise à jour de l'état de config
+        const now = cloud.timestamp || new Date().toISOString();
+        setLastSync(now);
+        localStorage.setItem('snl_cloud_config', JSON.stringify({ ...form, lastSync: now }));
+
+        // 4. CHARGEMENT DANS L'APP (Service Database)
+        // On force le service DB à recharger son cache interne s'il en a un
+        if (db && typeof (db as any).init === 'function') {
+           await (db as any).init(); 
+        }
+
+        notifService.send('Cloud', 'Données récupérées et chargées avec succès', 'success', 'cloud');
+
+        // 5. RECHARGEMENT DE L'UI
+        // Si ton app utilise un Store (Zustand/Redux), il faudrait trigger une action reload.
+        // Sinon, le reload est la méthode la plus sûre pour réinitialiser tous les contextes.
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+
+      } else {
+        notifService.send('Cloud', 'Le serveur a renvoyé une base vide', 'info', 'cloud');
+      }
+    } catch (e: any) {
+      notifService.send('Erreur', "Échec de la récupération des données", 'error', 'cloud');
     } finally {
       setSyncing(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+    <Card className="border-indigo-100 shadow-md overflow-hidden">
+      <CardHeader onClick={() => setExpanded(!expanded)} className="cursor-pointer hover:bg-slate-50 transition-colors">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Cloud className="w-4 h-4 text-blue-600" />
+            <div className="p-2 bg-indigo-600 rounded-lg shadow-md shadow-indigo-100">
+              <Cloud className="w-4 h-4 text-white" />
             </div>
             <div>
-              <CardTitle className="text-sm">Synchronisation & Sauvegarde Cloud</CardTitle>
-              <CardDescription className="text-xs">Planifiez des synchronisations automatiques</CardDescription>
+              <CardTitle className="text-sm font-bold">Gestion Cloud Sync</CardTitle>
+              <CardDescription className="text-[10px] font-bold text-slate-500 uppercase">ID Terminal: {form.siteId}</CardDescription>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {lastSync && <span className="text-xs text-gray-400">Dernière sync: {new Date(lastSync).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
-            {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+            {lastSync && <Badge variant="outline" className="text-[9px] text-indigo-600 border-indigo-200 bg-indigo-50">Dernière sync : {new Date(lastSync).toLocaleTimeString()}</Badge>}
+            {expanded ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
           </div>
         </div>
       </CardHeader>
+
       {expanded && (
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-xs">URL du serveur cloud</Label>
-              <Input className="mt-1 text-sm" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} placeholder="https://api.nolimit.cm/sync" />
+        <CardContent className="space-y-4 pt-4 border-t bg-white">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">Identifiant Site</Label>
+              <Input value={form.siteId} onChange={e => setForm({...form, siteId: e.target.value.toUpperCase()})} />
             </div>
-            <div>
-              <Label className="text-xs">Clé API</Label>
-              <Input className="mt-1 text-sm" type="password" value={form.apiKey} onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))} placeholder="••••••••••" />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, autoSync: !f.autoSync }))}
-                className={`relative w-8 h-4 rounded-full transition-colors ${form.autoSync ? 'bg-blue-600' : 'bg-gray-300'}`}
-              >
-                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${form.autoSync ? 'translate-x-4' : 'translate-x-0.5'}`} />
-              </button>
-              <Label className="text-xs">Synchronisation automatique</Label>
-            </div>
-            {form.autoSync && (
-              <select
-                value={form.syncInterval}
-                onChange={e => setForm(f => ({ ...f, syncInterval: e.target.value }))}
-                className="text-xs border border-gray-200 rounded-lg px-2 py-1"
-              >
-                <option value="hourly">Toutes les heures</option>
-                <option value="daily">Quotidienne</option>
-                <option value="weekly">Hebdomadaire</option>
+            <div className="space-y-1">
+              <Label className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">Fréquence Auto</Label>
+              <select className="w-full h-9 border rounded-md px-2 text-sm" value={form.syncInterval} onChange={e => setForm({...form, syncInterval: e.target.value})}>
+                <option value="daily">Chaque jour</option>
+                <option value="weekly">Chaque semaine</option>
+                <option value="monthly">Chaque mois</option>
               </select>
-            )}
+            </div>
           </div>
 
-          <div className="flex gap-2 pt-2 border-t border-gray-100">
-            <Button size="sm" variant="outline" onClick={save}>
-              <Save className="w-3.5 h-3.5 mr-1.5" />
-              Sauvegarder config
+          <div className="space-y-1">
+            <Label className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">API URL</Label>
+            <Input value={form.url} onChange={e => setForm({...form, url: e.target.value})} className="text-xs font-mono bg-slate-50" />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">X-API-KEY</Label>
+            <Input type="password" value={form.apiKey} onChange={e => setForm({...form, apiKey: e.target.value})} />
+          </div>
+
+          <div className="flex flex-col gap-2 pt-2">
+            {/* BOUTON SAUVEGARDER (PUSH) */}
+            <Button 
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 shadow-sm" 
+                onClick={() => handleSaveToCloud()} 
+                disabled={syncing}
+            >
+              {syncing ? <RefreshCw className="animate-spin w-4 h-4 mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+              Sauvegarder l'app sur le Cloud
             </Button>
-            <Button size="sm" onClick={syncNow} disabled={syncing || !form.url} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {syncing ? (
-                <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1.5" />Sync en cours...</>
-              ) : (
-                <><RefreshCw className="w-3.5 h-3.5 mr-1.5" />Synchroniser maintenant</>
-              )}
+            
+            {/* BOUTON SYNCHRONISER (PULL & REPLACE) */}
+            <Button 
+                variant="outline" 
+                className="w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold h-10" 
+                onClick={() => handleRestoreFromCloud()} 
+                disabled={syncing}
+            >
+              {syncing ? <RefreshCw className="animate-spin w-4 h-4 mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+              Synchroniser depuis le Cloud
             </Button>
           </div>
+          
+          <p className="text-[9px] text-center text-slate-400 italic">
+            Note : La synchronisation remplace intégralement vos données locales.
+          </p>
         </CardContent>
       )}
     </Card>
   );
 }
-
 // ─── Sites Manager ────────────────────────────────────────────────────────────
 
 function SitesManager() {
