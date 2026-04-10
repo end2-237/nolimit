@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Package, Lock, User, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, AlertCircle } from 'lucide-react';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 
@@ -13,31 +13,25 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
-      setError('Veuillez remplir tous les champs');
-      return;
-    }
+    if (!username || !password) { setError('Veuillez remplir tous les champs'); return; }
     setIsLoading(true);
     setError('');
-    await new Promise(r => setTimeout(r, 600)); // UX feedback
+    await new Promise(r => setTimeout(r, 600));
     const result = login(username, password);
     setIsLoading(false);
-    if (!result.success) {
-      setError(result.error || 'Connexion échouée');
-    }
+    if (!result.success) setError(result.error || 'Connexion échouée');
   };
 
   const demoAccounts = [
-    { username: 'admin', password: 'admin123', role: 'Administrateur', color: '#DC2626' },
-    { username: 'jean.kamga', password: 'manager123', role: 'Manager (DLA + YDE)', color: '#0284C7' },
-    { username: 'marie.nkolo', password: 'operator123', role: 'Opérateur (DLA)', color: '#059669' },
+    { username: 'admin', password: 'admin123', role: 'Administrateur', color: '#dc2626' },
+    { username: 'jean.kamga', password: 'manager123', role: 'Manager (DLA + YDE)', color: '#16a34a' },
+    { username: 'marie.nkolo', password: 'operator123', role: 'Opérateur (DLA)', color: '#0891b2' },
   ];
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0e2240 50%, #0a1628 100%)' }}>
+    <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg, #052e16 0%, #14532d 50%, #052e16 100%)' }}>
       {/* Left Panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center p-12 relative overflow-hidden">
-        {/* Background pattern */}
         <div className="absolute inset-0 opacity-5">
           {Array.from({ length: 20 }).map((_, i) => (
             <div key={i} className="absolute rounded-full border border-white"
@@ -47,20 +41,33 @@ export function LoginPage() {
 
         <div className="relative z-10 text-center">
           {/* Logo */}
-          <div className="w-24 h-24 bg-[#0284C7] rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-blue-900/50">
-            <svg viewBox="0 0 64 64" className="w-14 h-14" fill="none">
-              <path d="M32 8L56 20L32 32L8 20L32 8Z" fill="#38BDF8"/>
-              <path d="M32 32L56 20V44L32 56V32Z" fill="#0284C7"/>
-              <path d="M32 32L8 20V44L32 56V32Z" fill="#0369A1"/>
-              <path d="M32 16L40 24H36V36H28V24H24L32 16Z" fill="white"/>
-            </svg>
+          <div className="w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+            <img
+              src="/nol.png"
+              alt="Logo"
+              className="w-16 h-16 object-contain"
+              onError={(e) => {
+                const t = e.currentTarget as HTMLImageElement;
+                t.style.display = 'none';
+                const parent = t.parentElement;
+                if (parent) {
+                  parent.innerHTML = `<svg viewBox="0 0 64 64" width="56" height="56" fill="none">
+                    <path d="M32 8L56 20L32 32L8 20L32 8Z" fill="#4ade80"/>
+                    <path d="M32 32L56 20V44L32 56V32Z" fill="#16a34a"/>
+                    <path d="M32 32L8 20V44L32 56V32Z" fill="#15803d"/>
+                    <path d="M32 16L40 24H36V36H28V24H24L32 16Z" fill="white"/>
+                  </svg>`;
+                }
+              }}
+            />
           </div>
 
           <h1 className="text-5xl font-bold text-white mb-3" style={{ fontFamily: 'Georgia, serif', letterSpacing: '-0.02em' }}>
             {APP_CONFIG.name}
           </h1>
-          <p className="text-blue-300 text-lg mb-2">Système de Gestion de Stock Multi-Sites</p>
-          <p className="text-blue-400/60 text-sm">{APP_CONFIG.company.name}</p>
+          <p className="text-green-300 text-lg mb-2">Système de Gestion de Stock Multi-Sites</p>
+          <p className="text-green-400/60 text-sm">{APP_CONFIG.company.name}</p>
 
           <div className="mt-12 grid grid-cols-3 gap-6">
             {[
@@ -71,20 +78,22 @@ export function LoginPage() {
               <div key={stat.label} className="bg-white/5 rounded-2xl p-4 border border-white/10">
                 <div className="text-2xl mb-1">{stat.icon}</div>
                 <div className="text-white font-bold text-xl">{stat.value}</div>
-                <div className="text-blue-300/70 text-xs">{stat.label}</div>
+                <div className="text-green-300/70 text-xs">{stat.label}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
+      {/* Right Panel */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <div className="w-10 h-10 bg-[#0284C7] rounded-xl flex items-center justify-center">
-              <Package className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}>
+              <img src="/nol.png" alt="Logo" className="w-8 h-8 object-contain"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             </div>
             <span className="text-white font-bold text-xl">{APP_CONFIG.name}</span>
           </div>
@@ -110,7 +119,7 @@ export function LoginPage() {
                     value={username}
                     onChange={e => setUsername(e.target.value)}
                     placeholder="ex: admin"
-                    className="w-full bg-white/10 border border-white/20 rounded-xl px-10 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#0284C7] focus:ring-1 focus:ring-[#0284C7] transition-colors text-sm"
+                    className="w-full bg-white/10 border border-white/20 rounded-xl px-10 py-3 text-white placeholder-white/30 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 transition-colors text-sm"
                     autoComplete="username"
                   />
                 </div>
@@ -125,11 +134,11 @@ export function LoginPage() {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-white/10 border border-white/20 rounded-xl px-10 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#0284C7] focus:ring-1 focus:ring-[#0284C7] transition-colors text-sm"
+                    className="w-full bg-white/10 border border-white/20 rounded-xl px-10 py-3 text-white placeholder-white/30 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 transition-colors text-sm"
                     autoComplete="current-password"
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -138,7 +147,8 @@ export function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-[#0284C7] hover:bg-[#0369A1] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-900/30"
+                className="w-full disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm flex items-center justify-center gap-2 shadow-lg"
+                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
               >
                 {isLoading ? (
                   <>

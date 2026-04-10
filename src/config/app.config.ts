@@ -8,25 +8,23 @@ export const APP_CONFIG = {
     website: 'https://nolimit.cm',
     email: 'contact@nolimit.cm',
     phone: '+237 6XX XXX XXX',
-    logo: '../../public/nol.png', 
-    // logoSquare: '../public/logo-square.png',
-    // favicon: '../public/favicon.ico',
+    logo: '/nol.png',
   },
   branding: {
-    primaryColor: '#059669',      // Vert Émeraude Médical
-    secondaryColor: '#064E3B',    // Vert Forêt Profond
-    accentColor: '#34D399',       // Vert Menthe
+    primaryColor: '#16a34a',
+    secondaryColor: '#14532d',
+    accentColor: '#4ade80',
   },
   sites: [
-    { id: 'DLA', name: 'Douala', shortName: 'DLA', color: '#059669' }, // Vert Médical
-    { id: 'YDE', name: 'Yaoundé', shortName: 'YDE', color: '#10B981' }, // Vert Émeraude
-    { id: 'BAF', name: 'Bafoussam', shortName: 'BAF', color: '#064E3B' }, // Vert Foncé
+    { id: 'DLA', name: 'Douala', shortName: 'DLA', color: '#16a34a' },
+    { id: 'YDE', name: 'Yaoundé', shortName: 'YDE', color: '#0891b2' },
+    { id: 'BAF', name: 'Bafoussam', shortName: 'BAF', color: '#7c3aed' },
   ],
   categories: [
     { id: 'plante', name: 'Plante', color: 'bg-emerald-100 text-emerald-700' },
-    { id: 'huile', name: 'Huile', color: 'bg-teal-100 text-teal-700' },
+    { id: 'huile', name: 'Huile', color: 'bg-amber-100 text-amber-700' },
     { id: 'complement', name: 'Complément', color: 'bg-cyan-100 text-cyan-700' },
-    { id: 'cosmetique', name: 'Cosmétique', color: 'bg-rose-100 text-rose-700' },
+    { id: 'cosmetique', name: 'Cosmétique', color: 'bg-pink-100 text-pink-700' },
     { id: 'alimentaire', name: 'Alimentaire', color: 'bg-lime-100 text-lime-700' },
   ],
   settings: {

@@ -27,15 +27,41 @@ export function SplashScreen({ onComplete }: { onComplete: () => void }) {
   }, [onComplete]);
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0a1628 0%, #0e2240 100%)' }}>
+    <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #052e16 0%, #14532d 100%)' }}>
       <div className="text-center">
-        <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
-         <img src={APP_CONFIG.company.logo}/>
+        {/* Logo cercle vert */}
+        <div className="w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, #16a34a, #166534)' }}>
+          <img
+            src="/nol.png"
+            alt="Logo"
+            className="w-16 h-16 object-contain"
+            onError={(e) => {
+              // Fallback SVG logo si image absente
+              const target = e.currentTarget as HTMLImageElement;
+              target.style.display = 'none';
+              const svg = document.createElement('div');
+              svg.innerHTML = `<svg viewBox="0 0 64 64" width="56" height="56" fill="none">
+                <path d="M32 8L56 20L32 32L8 20L32 8Z" fill="#4ade80"/>
+                <path d="M32 32L56 20V44L32 56V32Z" fill="#16a34a"/>
+                <path d="M32 32L8 20V44L32 56V32Z" fill="#15803d"/>
+                <path d="M32 16L40 24H36V36H28V24H24L32 16Z" fill="white"/>
+              </svg>`;
+              target.parentElement?.appendChild(svg.firstElementChild!);
+            }}
+          />
         </div>
-        <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: 'Georgia, serif' }}>{APP_CONFIG.name}</h1>
-        <p className="text-blue-300/70 text-sm mb-8">{APP_CONFIG.description}</p>
+
+        <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+          {APP_CONFIG.name}
+        </h1>
+        <p className="text-green-300/70 text-sm mb-8">{APP_CONFIG.description}</p>
+
         <div className="w-64 h-1 bg-white/10 rounded-full mx-auto mb-3 overflow-hidden">
-          <div className="h-full bg-[#38BDF8] rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+          <div
+            className="h-full rounded-full transition-all duration-300"
+            style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #4ade80, #22c55e)' }}
+          />
         </div>
         <p className="text-white/50 text-xs">{status}</p>
         <p className="text-white/20 text-xs mt-6">{APP_CONFIG.company.name} · v{APP_CONFIG.version}</p>

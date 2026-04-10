@@ -21,7 +21,6 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   const handleNavigationClick = (pageId: string) => {
     if (!isExpanded) {
       setIsExpanded(true);
-      // Delay the page change to allow expansion animation
       setTimeout(() => onPageChange(pageId), 150);
     } else {
       onPageChange(pageId);
