@@ -2,6 +2,8 @@ import { ipcMain, Notification, dialog, app, shell, BrowserWindow, Menu } from "
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
+import https from "node:https";
+import http from "node:http";
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow = null;
 function createWindow() {
@@ -11,7 +13,6 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: "#f0fdf4",
-    // Retire la barre de menu native
     autoHideMenuBar: true,
     frame: true,
     webPreferences: {
@@ -33,10 +34,95 @@ function createWindow() {
 }
 function getIconPath() {
   const base = path.join(__dirname$1, "../public/icons");
-  if (process.platform === "win32") return path.join(base, "icon.ico");
-  if (process.platform === "darwin") return path.join(base, "icon.icns");
-  return path.join(base, "logo.svg");
+  if (process.platform === "win32") return path.join(base, "nol.png");
+  if (process.platform === "darwin") return path.join(base, "nol.png");
+  return path.join(base, "nol.png");
 }
+function nodeHttpRequest(options) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(options.url);
+    const isHttps = url.protocol === "https:";
+    const lib = isHttps ? https : http;
+    const reqOptions = {
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      method: options.method,
+      headers: {
+        ...options.headers,
+        ...options.body ? { "Content-Length": Buffer.byteLength(options.body).toString() } : {}
+      },
+      // Accepte les certificats auto-signés en dev
+      rejectUnauthorized: false
+    };
+    const req = lib.request(reqOptions, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => resolve({ status: res.statusCode || 0, data }));
+    });
+    req.on("error", (err) => reject(err));
+    req.setTimeout(3e4, () => {
+      req.destroy();
+      reject(new Error("Timeout (30s)"));
+    });
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
+ipcMain.handle("cloud:push", async (_event, {
+  url,
+  apiKey,
+  siteId,
+  data
+}) => {
+  try {
+    const body = JSON.stringify({
+      siteId,
+      data,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      version: 3
+    });
+    const result = await nodeHttpRequest({
+      url,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-KEY": apiKey
+      },
+      body
+    });
+    if (result.status < 200 || result.status >= 300) {
+      return { success: false, error: `HTTP ${result.status}: ${result.data}` };
+    }
+    return { success: true, response: result.data };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+ipcMain.handle("cloud:pull", async (_event, {
+  url,
+  apiKey,
+  siteId
+}) => {
+  try {
+    const fullUrl = `${url}?siteId=${encodeURIComponent(siteId)}`;
+    const result = await nodeHttpRequest({
+      url: fullUrl,
+      method: "GET",
+      headers: {
+        "X-API-KEY": apiKey
+      }
+    });
+    if (result.status < 200 || result.status >= 300) {
+      return { success: false, error: `HTTP ${result.status}: ${result.data}` };
+    }
+    return { success: true, data: result.data };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 ipcMain.handle("notify", (_event, { title, body, urgency }) => {
   if (Notification.isSupported()) {
     const n = new Notification({
@@ -44,7 +130,6 @@ ipcMain.handle("notify", (_event, { title, body, urgency }) => {
       body,
       icon: getIconPath(),
       urgency: urgency || "normal",
-      // Toast notification style on Windows
       timeoutType: "default"
     });
     n.show();

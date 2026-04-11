@@ -9,6 +9,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SplashScreen } from './components/SplashScreen';
+import { DBLoader } from './components/DBLoader';
 import { db } from './services/database';
 import { ProductsPage } from './pages/ProductsPage';
 import { notifService } from './services/notifications';
@@ -20,13 +21,11 @@ function AppInner() {
   const [alertCount, setAlertCount] = useState(0);
   const schedulerStarted = useRef(false);
 
-  // Splash
   useEffect(() => {
     const t = setTimeout(() => setShowSplash(false), 1800);
     return () => clearTimeout(t);
   }, []);
 
-  // Alert count live
   useEffect(() => {
     const refresh = () => setAlertCount(db.getAlerts(false).length);
     refresh();
@@ -34,45 +33,29 @@ function AppInner() {
     return () => clearInterval(t);
   }, [user]);
 
-  // Start scheduler when user is logged in
   useEffect(() => {
     if (!user || schedulerStarted.current) return;
     schedulerStarted.current = true;
 
-    // Check for alert notifications on login
     const alerts = db.getAlerts(false);
     if (alerts.length > 0) {
       const critical = alerts.filter(a => a.type === 'critical_stock').length;
       if (critical > 0) {
-        notifService.send(
-          `⚠️ ${critical} alerte(s) critique(s)`,
-          `Des produits sont en stock critique. Vérifiez les alertes.`,
-          'warning',
-          'system'
-        );
-      } else if (alerts.length > 0) {
-        notifService.send(
-          `${alerts.length} alerte(s) en attente`,
-          `Vous avez des alertes non lues dans l'application.`,
-          'info',
-          'system'
-        );
+        notifService.send(`⚠️ ${critical} alerte(s) critique(s)`, `Des produits sont en stock critique. Vérifiez les alertes.`, 'warning', 'system');
       }
     }
 
-    // Start scheduled tasks
     notifService.startScheduler({
-      onBackup: () => {
-        const data = localStorage.getItem('snl_db_v2') || '{}';
+      onBackup: async () => {
+        const data = await db.exportDatabase();
         const key = `snl_backup_${Date.now()}`;
         const backups = JSON.parse(localStorage.getItem('snl_backups_list') || '[]');
         backups.push({ key, date: new Date().toISOString(), size: new Blob([data]).size });
-        if (backups.length > 10) { const old = backups.shift(); try { localStorage.removeItem(old.key); } catch {} }
+        if (backups.length > 10) backups.shift();
         localStorage.setItem(key, data);
         localStorage.setItem('snl_backups_list', JSON.stringify(backups));
       },
-      onReport: () => {
-        // Auto-export CSV
+      onReport: async () => {
         const products = db.getProductsForExport();
         const headers = ['SKU', 'Produit', 'Stock Total', 'Valeur'];
         const rows = products.map(p => [p.sku, p.name, p.totalStock, p.totalStock * p.price]);
@@ -80,21 +63,13 @@ function AppInner() {
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `rapport_auto_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        a.href = url; a.download = `rapport_auto_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
       },
       onRestock: (config) => {
         const product = config?.product_name;
-        notifService.send(
-          'Rappel Réapprovisionnement',
-          product ? `Il est temps de réapprovisionner: ${product}` : 'Vérifiez vos niveaux de stock.',
-          'warning',
-          'scheduler'
-        );
+        notifService.send('Rappel Réapprovisionnement', product ? `Il est temps de réapprovisionner: ${product}` : 'Vérifiez vos niveaux de stock.', 'warning', 'scheduler');
       },
       onSync: () => {
         const cfg = JSON.parse(localStorage.getItem('snl_cloud_config') || '{}');
@@ -138,8 +113,10 @@ function AppInner() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppInner />
-    </AuthProvider>
+    <DBLoader>
+      <AuthProvider>
+        <AppInner />
+      </AuthProvider>
+    </DBLoader>
   );
 }

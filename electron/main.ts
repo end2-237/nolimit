@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, Notification, Menu, dialog, shell } from '
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import https from 'node:https';
+import http from 'node:http';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -14,7 +16,6 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: '#f0fdf4',
-    // Retire la barre de menu native
     autoHideMenuBar: true,
     frame: true,
     webPreferences: {
@@ -25,7 +26,6 @@ function createWindow() {
     title: 'Stock No Limit',
   });
 
-  // Retire complètement le menu natif (File, Edit, View...)
   Menu.setApplicationMenu(null);
 
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -34,19 +34,116 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 function getIconPath(): string {
   const base = path.join(__dirname, '../public/icons');
-  if (process.platform === 'win32') return path.join(base, 'icon.ico');
-  if (process.platform === 'darwin') return path.join(base, 'icon.icns');
-  return path.join(base, 'logo.svg');
+  if (process.platform === 'win32') return path.join(base, 'nol.png');
+  if (process.platform === 'darwin') return path.join(base, 'nol.png');
+  return path.join(base, 'nol.png');
 }
 
-// ─── IPC: Notifications natives Windows ─────────────────────────────────────
+// ─── Helper: HTTP request via Node.js (pas de CORS) ─────────────────────────
+
+function nodeHttpRequest(options: {
+  url: string;
+  method: 'GET' | 'POST';
+  headers: Record<string, string>;
+  body?: string;
+}): Promise<{ status: number; data: string }> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(options.url);
+    const isHttps = url.protocol === 'https:';
+    const lib = isHttps ? https : http;
+
+    const reqOptions = {
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      method: options.method,
+      headers: {
+        ...options.headers,
+        ...(options.body ? { 'Content-Length': Buffer.byteLength(options.body).toString() } : {}),
+      },
+      // Accepte les certificats auto-signés en dev
+      rejectUnauthorized: false,
+    };
+
+    const req = lib.request(reqOptions, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode || 0, data }));
+    });
+
+    req.on('error', (err) => reject(err));
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout (30s)')); });
+
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
+
+// ─── IPC: Cloud Sync (POST - Push) ──────────────────────────────────────────
+
+ipcMain.handle('cloud:push', async (_event, {
+  url, apiKey, siteId, data
+}: { url: string; apiKey: string; siteId: string; data: any }) => {
+  try {
+    const body = JSON.stringify({
+      siteId,
+      data,
+      timestamp: new Date().toISOString(),
+      version: 3,
+    });
+
+    const result = await nodeHttpRequest({
+      url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-KEY': apiKey,
+      },
+      body,
+    });
+
+    if (result.status < 200 || result.status >= 300) {
+      return { success: false, error: `HTTP ${result.status}: ${result.data}` };
+    }
+
+    return { success: true, response: result.data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ─── IPC: Cloud Sync (GET - Pull) ───────────────────────────────────────────
+
+ipcMain.handle('cloud:pull', async (_event, {
+  url, apiKey, siteId
+}: { url: string; apiKey: string; siteId: string }) => {
+  try {
+    const fullUrl = `${url}?siteId=${encodeURIComponent(siteId)}`;
+
+    const result = await nodeHttpRequest({
+      url: fullUrl,
+      method: 'GET',
+      headers: {
+        'X-API-KEY': apiKey,
+      },
+    });
+
+    if (result.status < 200 || result.status >= 300) {
+      return { success: false, error: `HTTP ${result.status}: ${result.data}` };
+    }
+
+    return { success: true, data: result.data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ─── IPC: Notifications ──────────────────────────────────────────────────────
 
 ipcMain.handle('notify', (_event, { title, body, urgency }: { title: string; body: string; urgency?: string }) => {
   if (Notification.isSupported()) {
@@ -55,19 +152,16 @@ ipcMain.handle('notify', (_event, { title, body, urgency }: { title: string; bod
       body,
       icon: getIconPath(),
       urgency: (urgency as any) || 'normal',
-      // Toast notification style on Windows
       timeoutType: 'default',
     });
     n.show();
-    n.on('click', () => {
-      mainWindow?.focus();
-    });
+    n.on('click', () => { mainWindow?.focus(); });
     return { success: true };
   }
   return { success: false };
 });
 
-// ─── IPC: Export/Import SQLite ────────────────────────────────────────────────
+// ─── IPC: DB Export/Import ───────────────────────────────────────────────────
 
 ipcMain.handle('db:export', async (_event, { data }: { data: string }) => {
   const result = await dialog.showSaveDialog(mainWindow!, {
@@ -106,11 +200,11 @@ ipcMain.handle('db:backup-path', async (_event, { data }: { data: string }) => {
   return { success: true, path: filepath };
 });
 
+// ─── IPC: App actions ────────────────────────────────────────────────────────
+
 ipcMain.handle('shell:open-path', (_event, { path: filePath }: { path: string }) => {
   shell.showItemInFolder(filePath);
 });
-
-// ─── IPC: App actions ─────────────────────────────────────────────────────────
 
 ipcMain.handle('app:minimize', () => mainWindow?.minimize());
 ipcMain.handle('app:maximize', () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, RefreshCw, TrendingUp, Package, AlertTriangle, Edit2, Trash2, ArrowUpDown } from 'lucide-react';
+import { Search, Plus, RefreshCw, TrendingUp, Package, AlertTriangle, Edit2, Trash2, ArrowUpDown, Truck } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { db } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
 import { APP_CONFIG } from '../../config/app.config';
-import { BulkInputModal } from './BulkInputModal';
+import { BulkInputModal, TransportDamageModal } from './BulkInputModal';
 import { TransferModal } from './TransferModal';
 import { ProductFormModal } from './ProductFormModal';
 
@@ -28,6 +28,7 @@ export function InventoryDashboard() {
   const [showBulkInput, setShowBulkInput] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
+  const [showTransportDamage, setShowTransportDamage] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -36,21 +37,17 @@ export function InventoryDashboard() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const load = useCallback(() => {
-    const siteFilter = selectedSite === 'all' ? undefined : selectedSite;
     const prods = db.getStocksGroupedByProduct(allowedSites);
     setProducts(prods);
     setStats(db.getDashboardStats(allowedSites));
-  }, [selectedSite, allowedSites]);
+  }, [selectedSite, allowedSites.join(',')]);
 
   useEffect(() => { load(); }, [load]);
 
   const filteredSites = allowedSites.filter(sid => selectedSite === 'all' || sid === selectedSite);
 
   const filteredProducts = products
-    .filter(p => {
-      const matchSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchSearch;
-    })
+    .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
       let va = a[sortField], vb = b[sortField];
       if (sortField === 'totalStock') { va = a.totalStock; vb = b.totalStock; }
@@ -68,7 +65,7 @@ export function InventoryDashboard() {
   };
 
   const handleDeleteProduct = (id: number) => {
-    if (!confirm('Supprimer ce produit et tout son stock ?')) return;
+    if (!confirm('Supprimer ce produit ?')) return;
     db.deleteProduct(id);
     load();
   };
@@ -84,17 +81,13 @@ export function InventoryDashboard() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header & KPIs */}
       <div className="border-b border-[#F1F5F9] bg-white">
         <div className="px-6 py-4">
-          {/* Top Row */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <label className="text-sm font-medium text-gray-600">Site:</label>
               <Select value={selectedSite} onValueChange={setSelectedSite}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les Sites</SelectItem>
                   {allowedSites.map(sid => {
@@ -107,17 +100,19 @@ export function InventoryDashboard() {
 
             <div className="flex items-center gap-2">
               {hasPermission('create') && (
-                <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)}>
-                  <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                  Transfert
-                </Button>
-              )}
-              {hasPermission('create') && (
-                <Button size="sm" onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
-                  className="bg-[#0284C7] hover:bg-[#0369A1]">
-                  <Plus className="w-3.5 h-3.5 mr-1.5" />
-                  Nouveau Produit
-                </Button>
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)}>
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Transfert
+                  </Button>
+                  <Button variant="outline" size="sm" className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                    onClick={() => { setSelectedProduct(null); setShowTransportDamage(true); }}>
+                    <Truck className="w-3.5 h-3.5 mr-1.5" /> Dégât transport
+                  </Button>
+                  <Button size="sm" onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
+                    className="bg-[#0284C7] hover:bg-[#0369A1]">
+                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Nouveau Produit
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -154,11 +149,10 @@ export function InventoryDashboard() {
             </div>
           </div>
 
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
-              placeholder="Rechercher par nom, SKU ou catégorie..."
+              placeholder="Rechercher par nom, SKU..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="pl-9 h-9"
@@ -167,7 +161,6 @@ export function InventoryDashboard() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="flex-1 overflow-auto px-6 py-4">
         <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
           <table className="w-full">
@@ -180,7 +173,7 @@ export function InventoryDashboard() {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Catégorie</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
-                  {selectedSite === 'all' ? 'Stock par Site' : `Stock - ${APP_CONFIG.sites.find(s => s.id === selectedSite)?.name}`}
+                  {selectedSite === 'all' ? 'Stock par Site' : `Stock — ${APP_CONFIG.sites.find(s => s.id === selectedSite)?.name}`}
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Dernier Arrivage</th>
@@ -217,7 +210,6 @@ export function InventoryDashboard() {
                             <div className={`font-semibold text-sm ${(product.stock[sid] || 0) < product.threshold * 0.3 ? 'text-red-600' : (product.stock[sid] || 0) < product.threshold ? 'text-orange-500' : 'text-gray-900'}`}>
                               {product.stock[sid] || 0}
                             </div>
-                            {displaySites.length > 1 && i < displaySites.length - 1 && <div className="hidden" />}
                           </div>
                         ))}
                         {displaySites.length > 1 && (
@@ -251,8 +243,12 @@ export function InventoryDashboard() {
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-[#0284C7] hover:bg-blue-50"
                             onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}>
-                            <Plus className="w-3.5 h-3.5 mr-1" />
-                            Réappro.
+                            <Plus className="w-3.5 h-3.5 mr-1" /> Réappro.
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-orange-600 hover:bg-orange-50"
+                            onClick={() => { setSelectedProduct(product); setShowTransportDamage(true); }}
+                            title="Déclarer un dégât transport">
+                            <Truck className="w-3.5 h-3.5" />
                           </Button>
                           {hasPermission('edit') && (
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-500 hover:text-gray-900"
@@ -277,12 +273,18 @@ export function InventoryDashboard() {
         </div>
       </div>
 
-      {/* Modals */}
       {showBulkInput && (
         <BulkInputModal
           product={selectedProduct}
           allowedSites={allowedSites}
           onClose={() => { setShowBulkInput(false); setSelectedProduct(null); load(); }}
+        />
+      )}
+      {showTransportDamage && (
+        <TransportDamageModal
+          product={selectedProduct}
+          allowedSites={allowedSites}
+          onClose={() => { setShowTransportDamage(false); setSelectedProduct(null); load(); }}
         />
       )}
       {showTransfer && (
