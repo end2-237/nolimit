@@ -15,7 +15,7 @@ function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 700,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#14532d',
     autoHideMenuBar: true,
     frame: true,
     webPreferences: {
@@ -38,10 +38,16 @@ function createWindow() {
 }
 
 function getIconPath(): string {
-  const base = path.join(__dirname, '../public/icons');
-  if (process.platform === 'win32') return path.join(base, 'nol.png');
-  if (process.platform === 'darwin') return path.join(base, 'nol.png');
-  return path.join(base, 'nol.png');
+  // En dev, on utilise le dossier public
+  // En prod, l'icône est souvent copiée à la racine du dossier de l'app ou dans dist
+  if (app.isPackaged) {
+    // Une fois packagé, le chemin dépend de où electron-builder place les fichiers
+    return path.join(process.resourcesPath, 'app.asar/dist/icons/nol.png'); 
+    // OU plus simple si tu l'as mis dans les assets Vite :
+    return path.join(__dirname, '../dist/icons/nol.png');
+  }
+  
+  return path.join(__dirname, '../public/icons/nol.png');
 }
 
 // ─── Helper: HTTP request via Node.js (pas de CORS) ─────────────────────────

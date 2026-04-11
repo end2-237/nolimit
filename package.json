@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder",
+    "electron:build": "vite build && electron-builder -c.npmRebuild=false",
     "electron:pack": "electron-builder --dir",
     "electron:preview": "vite build && electron ."
   },
@@ -76,6 +76,7 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "@tailwindcss/vite": "^4.1.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
@@ -107,5 +108,51 @@
     "overrides": {
       "vite": "6.3.5"
     }
+  },
+  "build": {
+    "appId": "com.nolimitstock.app",
+    "productName": "No Limit Stock",
+    "copyright": "Copyright © 2026 No Limit Enterprise",
+    "directories": {
+      "output": "release/${version}",
+      "buildResources": "assets"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "No Limit Stock",
+      "installerIcon": "public/icons/icon.ico",
+      "uninstallerIcon": "public/icons/icon.ico",
+      "runAfterFinish": true
+    },
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "node_modules/better-sqlite3/",
+        "to": "node_modules/better-sqlite3/",
+        "filter": [
+          "build/Release/*.node"
+        ]
+      }
+    ]
   }
 }

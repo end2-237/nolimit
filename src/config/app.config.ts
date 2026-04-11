@@ -1,14 +1,15 @@
+import logoUrl from '../../public/icons/nol.png';
 export const APP_CONFIG = {
   name: 'Stock No Limit',
   shortName: 'SNL',
-  version: '2.0.0',
+  version: '1.0.0',
   description: 'Système de gestion de stock multi-sites',
   company: {
     name: 'No Limit Enterprise',
     website: 'https://nolimit.cm',
     email: 'contact@nolimit.cm',
     phone: '+237 6XX XXX XXX',
-    logo: '../../public/icons/nol.png',
+    logo: logoUrl,
   },
   branding: {
     primaryColor: '#16a34a',
