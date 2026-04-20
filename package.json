@@ -2,7 +2,7 @@
   "name": "no-limit-stock",
   "productName": "No Limit Stock",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Application de gestion de stock multi-sites",
   "author": "No Limit Enterprise",
   "type": "module",

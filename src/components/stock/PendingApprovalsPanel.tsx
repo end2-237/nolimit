@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle, XCircle, Package, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Package, RefreshCw, ArrowDownLeft, ArrowUpRight, User, DollarSign } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -21,12 +21,17 @@ export function PendingApprovalsPanel() {
     return () => clearInterval(t);
   }, []);
 
-  if (!hasPermission('edit') && user?.role !== 'admin' && user?.role !== 'manager') return null;
+  // Only admin and manager see this panel
+  if (user?.role !== 'admin' && user?.role !== 'manager') return null;
   if (pending.length === 0) return null;
 
   const handleApprove = (id: number) => {
     if (!user) return;
-    db.approveMovement(id, user.id);
+    const result = db.approveMovement(id, user.id);
+    if (!result) {
+      // Was rejected due to insufficient stock — refresh to show rejection
+      alert('Mouvement refusé automatiquement : stock insuffisant au moment de la validation.');
+    }
     load();
   };
 
@@ -39,79 +44,103 @@ export function PendingApprovalsPanel() {
     load();
   };
 
+  const pendingIn = pending.filter(m => m.type === 'pending_in');
+  const pendingOut = pending.filter(m => m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending'));
+
   return (
     <div className="border-l-4 border-orange-400 bg-orange-50 rounded-xl overflow-hidden mb-4">
       <div className="flex items-center gap-3 px-4 py-3 bg-orange-100 border-b border-orange-200">
-        <Clock className="w-4 h-4 text-orange-600 flex-shrink-0" />
+        <Clock className="w-4 h-4 text-orange-600 flex-shrink-0 animate-pulse" />
         <div className="flex-1">
-          <h3 className="text-sm font-semibold text-orange-800">Demandes en attente d'approbation</h3>
-          <p className="text-xs text-orange-600">{pending.length} demande(s) nécessitent votre validation</p>
+          <h3 className="text-sm font-semibold text-orange-800">
+            {pending.length} demande(s) en attente de validation
+          </h3>
+          <p className="text-xs text-orange-600">
+            {pendingIn.length > 0 && `${pendingIn.length} entrée(s)`}
+            {pendingIn.length > 0 && pendingOut.length > 0 && ' · '}
+            {pendingOut.length > 0 && `${pendingOut.length} vente(s)/sortie(s)`}
+          </p>
         </div>
         <button onClick={load} className="text-orange-500 hover:text-orange-700 transition-colors">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="divide-y divide-orange-200">
+      <div className="divide-y divide-orange-100 max-h-64 overflow-y-auto">
         {pending.map(m => {
-          const site = APP_CONFIG.sites.find(s => s.id === (m.to_site_id || m.from_site_id));
+          const isOut = m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending');
+          const site = APP_CONFIG.sites.find(s => s.id === (isOut ? m.from_site_id : m.to_site_id));
+          const product = db.getProductById(m.product_id);
+          const estimatedCA = isOut && product ? m.quantity * product.price : 0;
+          const currentStock = product ? (db.getStocksGroupedByProduct().find(p => p.id === m.product_id)?.stock?.[m.from_site_id || ''] || 0) : 0;
+          const stockOk = !isOut || currentStock >= m.quantity;
+
           return (
             <div key={m.id} className="px-4 py-3">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-orange-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Package className="w-4 h-4 text-orange-700" />
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isOut ? 'bg-red-100' : 'bg-green-100'}`}>
+                  {isOut ? <ArrowUpRight className="w-4 h-4 text-red-600" /> : <ArrowDownLeft className="w-4 h-4 text-green-600" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-gray-900 text-sm">{m.product_name}</span>
-                    <Badge className="bg-orange-100 text-orange-700 text-[10px]">Entrée demandée</Badge>
+                    <Badge className={isOut ? 'bg-red-100 text-red-700 text-[10px]' : 'bg-green-100 text-green-700 text-[10px]'}>
+                      {isOut ? 'Vente demandée' : 'Entrée demandée'}
+                    </Badge>
                     {site && <Badge variant="outline" className="text-[10px]">{site.name}</Badge>}
+                    {!stockOk && (
+                      <Badge className="bg-red-100 text-red-700 text-[10px]">⚠️ Stock insuffisant</Badge>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
-                    <span className="font-mono font-bold text-orange-700">+{m.quantity} unités</span>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600 flex-wrap">
+                    <span className={`font-mono font-bold ${isOut ? 'text-red-600' : 'text-green-600'}`}>
+                      {isOut ? '-' : '+'}{m.quantity} {product?.unit || 'unités'}
+                    </span>
+                    {isOut && estimatedCA > 0 && (
+                      <span className="flex items-center gap-0.5 text-green-700 font-semibold">
+                        <DollarSign className="w-3 h-3" />{estimatedCA.toLocaleString('fr-FR')} XAF
+                      </span>
+                    )}
+                    {isOut && product && (
+                      <span className="text-gray-400">stock actuel: <strong>{currentStock}</strong></span>
+                    )}
                     <span>·</span>
-                    <span>{m.reason}</span>
-                    <span>·</span>
-                    <span className="text-gray-400">par {m.user_name}</span>
+                    <span className="text-gray-400 truncate max-w-[120px]">{m.reason}</span>
                   </div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">
-                    Réf: {m.reference} · {new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+                    <User className="w-3 h-3" />
+                    <span className="font-medium text-gray-600">{m.user_name}</span>
+                    <span>·</span>
+                    <span>Réf: {m.reference}</span>
+                    <span>·</span>
+                    <span>{new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
 
                   {rejectingId === m.id && (
                     <div className="mt-2 flex gap-2">
-                      <Input
-                        className="h-7 text-xs flex-1"
-                        placeholder="Raison du refus..."
+                      <Input className="h-7 text-xs flex-1" placeholder="Raison du refus..."
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
-                        autoFocus
-                      />
-                      <Button size="sm" className="h-7 bg-red-600 hover:bg-red-700 text-white text-xs px-2" onClick={() => handleReject(m.id)}>
-                        Confirmer le refus
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setRejectingId(null)}>
-                        Annuler
-                      </Button>
+                        autoFocus />
+                      <Button size="sm" className="h-7 bg-red-600 hover:bg-red-700 text-white text-xs px-2"
+                        onClick={() => handleReject(m.id)}>Confirmer refus</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs px-2"
+                        onClick={() => setRejectingId(null)}>Annuler</Button>
                     </div>
                   )}
                 </div>
 
                 {rejectingId !== m.id && (
                   <div className="flex gap-1.5 flex-shrink-0">
-                    <Button
-                      size="sm"
-                      className="h-7 bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 gap-1"
+                    <Button size="sm"
+                      className={`h-7 text-white text-xs px-2.5 gap-1 ${stockOk ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}
                       onClick={() => handleApprove(m.id)}
-                    >
-                      <CheckCircle className="w-3 h-3" /> Approuver
+                      title={!stockOk ? 'Stock insuffisant — peut être refusé automatiquement' : ''}>
+                      <CheckCircle className="w-3 h-3" /> Valider
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
+                    <Button size="sm" variant="outline"
                       className="h-7 border-red-200 text-red-600 hover:bg-red-50 text-xs px-2.5 gap-1"
-                      onClick={() => setRejectingId(m.id)}
-                    >
+                      onClick={() => setRejectingId(m.id)}>
                       <XCircle className="w-3 h-3" /> Refuser
                     </Button>
                   </div>

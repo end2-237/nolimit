@@ -56,7 +56,7 @@ export function Analytics() {
     deviceId: selectedDevice,
     timestamp: `${String(i).padStart(2, '0')}:00`,
     kvah: 45 + Math.random() * 20,
-    billing: (45 + Math.random() * 20) * 8.5, // ₹8.5 per unit
+    billing: (45 + Math.random() * 20) * 8.5, 
     kva: 42 + Math.random() * 18,
     kw: 38 + Math.random() * 15,
     kwh: 35 + Math.random() * 25,

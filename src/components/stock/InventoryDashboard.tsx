@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, RefreshCw, Package, AlertTriangle, Edit2, Trash2, ArrowUpDown, Truck, Clock } from 'lucide-react';
+import { Search, Plus, RefreshCw, Package, AlertTriangle, Edit2, Trash2, ArrowUpDown, Truck, Clock, ShoppingCart } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { db } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
 import { APP_CONFIG } from '../../config/app.config';
-import { BulkInputModal, TransportDamageModal } from './BulkInputModal';
+import { BulkInputModal, StockOutModal, TransportDamageModal } from './BulkInputModal';
 import { TransferModal } from './TransferModal';
 import { ProductFormModal } from './ProductFormModal';
 import { PendingApprovalsPanel } from './PendingApprovalsPanel';
@@ -33,12 +33,14 @@ function getCategoryLabel(id: string): string {
 }
 
 export function InventoryDashboard() {
-  const { getAllowedSites, hasPermission } = useAuth();
+  const { getAllowedSites, hasPermission, user } = useAuth();
   const allowedSites = getAllowedSites();
+  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
 
   const [selectedSite, setSelectedSite] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showBulkInput, setShowBulkInput] = useState(false);
+  const [showStockOut, setShowStockOut] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showTransportDamage, setShowTransportDamage] = useState(false);
@@ -120,7 +122,7 @@ export function InventoryDashboard() {
                   <Button variant="outline" size="sm"
                     className="border-orange-300 text-orange-700 hover:bg-orange-50"
                     onClick={() => { setSelectedProduct(null); setShowTransportDamage(true); }}>
-                    <Truck className="w-3.5 h-3.5 mr-1.5" /> Dégât transport
+                    <Truck className="w-3.5 h-3.5 mr-1.5" /> Déclarer perte
                   </Button>
                   <Button size="sm"
                     onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
@@ -149,28 +151,34 @@ export function InventoryDashboard() {
               <div className="text-xs text-gray-400">{stats.criticalProducts} critique(s)</div>
             </div>
             <div className="bg-gradient-to-br from-green-50 to-white p-4 rounded-xl border border-green-100">
-              <div className="text-xs text-gray-500 mb-0.5">Mouvements Aujourd'hui</div>
+              <div className="text-xs text-gray-500 mb-0.5">Mouvements Auj.</div>
               <div className="text-xl font-bold text-green-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {stats.todayMovements}
               </div>
-              <div className="text-xs text-gray-400">opérations</div>
+              <div className="text-xs text-gray-400">confirmés</div>
             </div>
             <div className="bg-gradient-to-br from-purple-50 to-white p-4 rounded-xl border border-purple-100">
-              <div className="text-xs text-gray-500 mb-0.5">Produits Actifs</div>
+              <div className="text-xs text-gray-500 mb-0.5">Produits</div>
               <div className="text-xl font-bold text-purple-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {stats.totalProducts}
               </div>
               <div className="text-xs text-gray-400">références</div>
             </div>
-            {stats.pendingCount > 0 && (
+            {stats.pendingCount > 0 ? (
               <div className="bg-gradient-to-br from-yellow-50 to-white p-4 rounded-xl border border-yellow-200 animate-pulse">
                 <div className="text-xs text-gray-500 mb-0.5">En attente</div>
                 <div className="text-xl font-bold text-yellow-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   {stats.pendingCount}
                 </div>
                 <div className="text-xs text-yellow-600 flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> approbation
+                  <Clock className="w-3 h-3" /> à valider
                 </div>
+              </div>
+            ) : (
+              <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-100">
+                <div className="text-xs text-gray-500 mb-0.5">En attente</div>
+                <div className="text-xl font-bold text-gray-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>0</div>
+                <div className="text-xs text-gray-400">tout validé ✓</div>
               </div>
             )}
           </div>
@@ -188,8 +196,8 @@ export function InventoryDashboard() {
       </div>
 
       <div className="flex-1 overflow-auto px-6 py-4">
-        {/* Pending approvals panel at the top */}
-        <PendingApprovalsPanel />
+        {/* Pending approvals panel at top — only for admin/manager */}
+        {isAdmin && <PendingApprovalsPanel />}
 
         {filteredProducts.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
@@ -295,13 +303,22 @@ export function InventoryDashboard() {
                       {hasPermission('create') && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Entry */}
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-[#0284C7] hover:bg-blue-50"
-                              onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}>
+                              onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}
+                              title="Soumettre une entrée">
                               <Plus className="w-3.5 h-3.5 mr-1" /> Entrée
                             </Button>
+                            {/* Sale/Exit */}
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-red-600 hover:bg-red-50"
+                              onClick={() => { setSelectedProduct(product); setShowStockOut(true); }}
+                              title="Soumettre une vente">
+                              <ShoppingCart className="w-3.5 h-3.5 mr-1" /> Vente
+                            </Button>
+                            {/* Damage */}
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-orange-600 hover:bg-orange-50"
                               onClick={() => { setSelectedProduct(product); setShowTransportDamage(true); }}
-                              title="Dégât transport">
+                              title="Déclarer une perte">
                               <Truck className="w-3.5 h-3.5" />
                             </Button>
                             {hasPermission('edit') && (
@@ -329,11 +346,19 @@ export function InventoryDashboard() {
         )}
       </div>
 
+      {/* Modals */}
       {showBulkInput && (
         <BulkInputModal
           product={selectedProduct}
           allowedSites={allowedSites}
           onClose={() => { setShowBulkInput(false); setSelectedProduct(null); load(); }}
+        />
+      )}
+      {showStockOut && (
+        <StockOutModal
+          product={selectedProduct}
+          allowedSites={allowedSites}
+          onClose={() => { setShowStockOut(false); setSelectedProduct(null); load(); }}
         />
       )}
       {showTransportDamage && (
