@@ -43,6 +43,7 @@ function StockOutModal({ product, allowedSites, onClose }: { product: any; allow
       reason,
       reference: `SRT-${Date.now().toString(36).toUpperCase()}`,
       user_id: user?.id || 1,
+      status: 'confirmed'
     });
 
     if ('error' in result) {

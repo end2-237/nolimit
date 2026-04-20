@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Package, AlertCircle, CheckCircle, Truck, Clock, ArrowUpRight, ArrowDownLeft, ShoppingCart, DollarSign } from 'lucide-react';
+import { X, Package, AlertCircle, CheckCircle, Truck, Clock, ArrowUpRight, ArrowDownLeft, ShoppingCart } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -7,6 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { db } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
 import { APP_CONFIG } from '../../config/app.config';
+
+// ─── Helper : sites actifs ────────────────────────────────────────────────────
+
+function getActiveSiteOptions(allowedSites: string[]) {
+  const activeSites = db.getSites();
+  return activeSites.filter(s => allowedSites.includes(s.id));
+}
 
 // ─── Bulk Input Modal (Entrée de stock) ──────────────────────────────────────
 
@@ -18,14 +25,14 @@ interface BulkInputModalProps {
 
 export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModalProps) {
   const { user, hasPermission } = useAuth();
-  const [site, setSite] = useState(allowedSites[0] || 'DLA');
+  const siteOptions = getActiveSiteOptions(allowedSites);
+  const [site, setSite] = useState(siteOptions[0]?.id || allowedSites[0] || 'DLA');
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('Livraison fournisseur');
   const [isSuccess, setIsSuccess] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState('');
 
-  // Operators always create pending requests; admin/manager can confirm directly
   const canConfirmDirectly = user?.role === 'admin' || user?.role === 'manager';
 
   const handleSubmit = (e: React.FormEvent, forcePending = false) => {
@@ -57,7 +64,6 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
     }
   };
 
-  const siteOptions = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id));
   const currentStock = product?.stock?.[site] || 0;
 
   return (
@@ -95,7 +101,7 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
             <p className="text-sm text-gray-500">
               {isPending
                 ? `Demande de +${quantity} unités en attente d'approbation`
-                : `+${quantity} unités ajoutées sur ${APP_CONFIG.sites.find(s => s.id === site)?.name}`}
+                : `+${quantity} unités ajoutées sur ${siteOptions.find(s => s.id === site)?.name}`}
             </p>
           </div>
         ) : (
@@ -153,10 +159,10 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
               </Select>
             </div>
 
-            {product && (
+            {product && siteOptions.length > 0 && (
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <div className="text-xs font-medium text-gray-600 mb-2">Stock Actuel</div>
-                <div className="grid grid-cols-3 gap-2 text-center" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                <div className="grid gap-2 text-center" style={{ gridTemplateColumns: `repeat(${siteOptions.length}, 1fr)`, fontFamily: 'JetBrains Mono, monospace' }}>
                   {siteOptions.map(s => (
                     <div key={s.id}>
                       <div className="text-[10px] text-gray-400">{s.id}</div>
@@ -194,7 +200,6 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
 }
 
 // ─── Stock Out / Sale Modal ───────────────────────────────────────────────────
-// Toutes les sorties passent par validation admin (même pour admin, soumission recommandée)
 
 interface StockOutModalProps {
   product: any | null;
@@ -204,7 +209,8 @@ interface StockOutModalProps {
 
 export function StockOutModal({ product, allowedSites, onClose }: StockOutModalProps) {
   const { user } = useAuth();
-  const [site, setSite] = useState(allowedSites[0] || 'DLA');
+  const siteOptions = getActiveSiteOptions(allowedSites);
+  const [site, setSite] = useState(siteOptions[0]?.id || allowedSites[0] || 'DLA');
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('Vente client');
   const [isSuccess, setIsSuccess] = useState(false);
@@ -213,7 +219,6 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
 
   const canConfirmDirectly = user?.role === 'admin' || user?.role === 'manager';
   const availableStock = product?.stock?.[site] || 0;
-  const siteOptions = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id));
   const estimatedCA = product && parseInt(quantity) > 0 ? parseInt(quantity) * product.price : 0;
 
   const handleSubmit = (e: React.FormEvent, forcePending = false) => {
@@ -222,12 +227,11 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
     if (!product) { setError('Aucun produit sélectionné'); return; }
 
-    // For direct confirm only (admin bypasses the pending check)
     const isPendingMode = !canConfirmDirectly || forcePending;
 
-    // Check stock only for direct confirmation
+    // Vérification stock uniquement pour confirmation directe
     if (!isPendingMode && qty > availableStock) {
-      setError(`Stock insuffisant: ${availableStock} disponible(s) sur ${APP_CONFIG.sites.find(s => s.id === site)?.name}`);
+      setError(`Stock insuffisant: ${availableStock} disponible(s) sur ${siteOptions.find(s => s.id === site)?.name}`);
       return;
     }
 
@@ -268,7 +272,6 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
 
-        {/* Always show pending notice for operators */}
         {!canConfirmDirectly && (
           <div className="mx-6 mt-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">
             <strong>ℹ️ Mode opérateur :</strong> Votre demande de vente sera soumise à validation. Le stock ne sera débité qu'après approbation.
@@ -285,8 +288,8 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
             </h3>
             <p className="text-sm text-gray-500">
               {isPending
-                ? `Vente de ${quantity} unités en attente de validation admin`
-                : `-${quantity} unités de ${APP_CONFIG.sites.find(s => s.id === site)?.name}`}
+                ? `Vente de ${quantity} unités en attente de validation`
+                : `-${quantity} unités de ${siteOptions.find(s => s.id === site)?.name}`}
             </p>
             {!isPending && estimatedCA > 0 && (
               <p className="text-sm font-semibold text-green-600 mt-1">
@@ -329,7 +332,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{product?.unit || 'unité(s)'}</span>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Stock actuel sur {APP_CONFIG.sites.find(s => s.id === site)?.name}: <strong className="font-mono">{availableStock}</strong>
+                Stock actuel sur {siteOptions.find(s => s.id === site)?.name}: <strong className="font-mono">{availableStock}</strong>
               </p>
               {quantity && parseInt(quantity) > 0 && (
                 <div className="mt-1 space-y-0.5">
@@ -398,7 +401,8 @@ interface TransportDamageModalProps {
 
 export function TransportDamageModal({ product, allowedSites, onClose }: TransportDamageModalProps) {
   const { user } = useAuth();
-  const [site, setSite] = useState(allowedSites[0] || 'DLA');
+  const siteOptions = getActiveSiteOptions(allowedSites);
+  const [site, setSite] = useState(siteOptions[0]?.id || allowedSites[0] || 'DLA');
   const [quantity, setQuantity] = useState('');
   const [damageDetails, setDamageDetails] = useState('');
   const [transportRef, setTransportRef] = useState('');
@@ -407,7 +411,6 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
   const [error, setError] = useState('');
 
   const canConfirmDirectly = user?.role === 'admin' || user?.role === 'manager';
-  const siteOptions = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id));
   const availableStock = product?.stock?.[site] || 0;
 
   const handleSubmit = (e: React.FormEvent, forcePending = false) => {
@@ -418,7 +421,6 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
 
     const isPendingMode = !canConfirmDirectly || forcePending;
 
-    // Only check stock if confirming directly
     if (!isPendingMode && qty > availableStock) {
       setError(`Stock insuffisant: ${availableStock} disponible(s)`);
       return;

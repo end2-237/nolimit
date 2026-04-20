@@ -2,8 +2,9 @@
  * Service base de données - IndexedDB
  * - App démarre VIDE (aucun produit/stock pré-rempli)
  * - Mode démo disponible dans les paramètres
- * - Mouvements en attente d'approbation
- * - Génération automatique de SKU
+ * - Mouvements en attente d'approbation (pending_in / pending_out)
+ * - Le stock ne bouge QUE sur validation admin
+ * - Sites dynamiques (configurable depuis les paramètres)
  */
 
 import { APP_CONFIG } from '../config/app.config';
@@ -29,7 +30,7 @@ export interface Product {
   name: string;
   sku: string;
   category: string;
-  sub_type?: string;       // For Test/Matériel sub-types
+  sub_type?: string;
   description: string;
   unit: string;
   price: number;
@@ -52,7 +53,7 @@ export interface Stock {
 
 export interface Movement {
   id: number;
-  type: 'in' | 'out' | 'transfer' | 'adjustment' | 'transport_damage' | 'pending_in';
+  type: 'in' | 'out' | 'transfer' | 'adjustment' | 'transport_damage' | 'pending_in' | 'pending_out';
   status: 'confirmed' | 'pending' | 'approved' | 'rejected';
   product_id: number;
   product_name?: string;
@@ -101,6 +102,19 @@ export interface StockWithProduct extends Stock {
   product_unit: string;
   product_price: number;
   product_threshold: number;
+}
+
+// ─── Sites helper (supporte les sites dynamiques depuis localStorage) ─────────
+
+export function getActiveSites(): { id: string; name: string; shortName: string; color: string }[] {
+  try {
+    const saved = localStorage.getItem('snl_custom_sites');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return APP_CONFIG.sites.map(s => ({ ...s }));
 }
 
 // ─── SimpleHash ───────────────────────────────────────────────────────────────
@@ -156,7 +170,7 @@ export function generateSKU(category: string, name: string, existingSkus: string
 // ─── IndexedDB Manager ────────────────────────────────────────────────────────
 
 const DB_NAME = 'SNLDatabase';
-const DB_VERSION = 4; // Bumped for schema changes (status field, sub_type)
+const DB_VERSION = 5;
 const STORES = ['users', 'products', 'stocks', 'movements', 'alerts', 'reports', 'meta'];
 
 class IDBManager {
@@ -321,7 +335,6 @@ class DatabaseService {
     return arr.length === 0 ? 1 : Math.max(...arr.map(x => x.id)) + 1;
   }
 
-  // Ensure at least one admin exists — NO products are created
   private async _ensureAdminUser(): Promise<void> {
     const hasAdmin = this.cache.users.some(u => u.role === 'admin' && u.is_active);
     if (!hasAdmin) {
@@ -342,9 +355,54 @@ class DatabaseService {
     }
   }
 
+  // ─── Sites dynamiques ────────────────────────────────────────────────────────
+
+  /**
+   * Retourne les sites actifs (depuis localStorage si configurés, sinon APP_CONFIG)
+   * Utilisé partout dans l'app pour être cohérent avec les paramètres
+   */
+  getSites() {
+    return getActiveSites();
+  }
+
+  /**
+   * Appelé quand on ajoute/supprime un site dans les paramètres.
+   * Crée les entrées de stock manquantes pour tous les produits existants.
+   */
+  async syncSitesWithStocks(): Promise<void> {
+    const sites = this.getSites();
+    const newStocks: Stock[] = [];
+
+    for (const product of this.cache.products) {
+      for (const site of sites) {
+        const exists = this.cache.stocks.find(
+          s => s.product_id === product.id && s.site_id === site.id
+        );
+        if (!exists) {
+          const stock: Stock = {
+            id: this.nextId([...this.cache.stocks, ...newStocks]),
+            product_id: product.id,
+            site_id: site.id,
+            quantity: 0,
+            last_delivery: null,
+            updated_at: this.now(),
+          };
+          newStocks.push(stock);
+        }
+      }
+    }
+
+    if (newStocks.length > 0) {
+      await idb.putBulk('stocks', newStocks);
+      this.cache.stocks.push(...newStocks);
+    }
+  }
+
   // ─── Demo Data ───────────────────────────────────────────────────────────────
 
   async loadDemoData(): Promise<void> {
+    const sites = this.getSites();
+
     const demoProducts = [
       { name: 'Artémisia Premium', category: 'plante', description: 'Plante médicinale anti-paludique', unit: 'sachet', price: 2500, threshold: 50, expiry_date: '2026-10-15', quantities: [150, 85, 45] },
       { name: 'Huile de Moringa', category: 'huile', description: 'Huile naturelle de moringa bio', unit: 'flacon', price: 4500, threshold: 80, expiry_date: '2027-01-20', quantities: [200, 120, 95] },
@@ -382,7 +440,7 @@ class DatabaseService {
 
     const stocks: Stock[] = [];
     products.forEach((product, i) => {
-      APP_CONFIG.sites.forEach((site, si) => {
+      sites.forEach((site, si) => {
         stocks.push({
           id: this.nextId([...this.cache.stocks, ...stocks]),
           product_id: product.id,
@@ -399,10 +457,10 @@ class DatabaseService {
     this.cache.products.push(...products);
     this.cache.stocks.push(...stocks);
 
-    // Also create demo users
     const demoUsers = [
-      { username: 'jean.kamga', password: 'manager123', full_name: 'Jean Kamga', email: 'jean@nolimit.cm', role: 'manager' as const, site_ids: JSON.stringify(['DLA', 'YDE']) },
-      { username: 'marie.nkolo', password: 'operator123', full_name: 'Marie Nkolo', email: 'marie@nolimit.cm', role: 'operator' as const, site_ids: JSON.stringify(['DLA']) },
+      { username: 'jean.kamga', password: 'manager123', full_name: 'Jean Kamga', email: 'jean@nolimit.cm', role: 'manager' as const, site_ids: JSON.stringify(sites.slice(0, 2).map(s => s.id)) },
+      { username: 'marie.nkolo', password: 'operator123', full_name: 'Marie Nkolo', email: 'marie@nolimit.cm', role: 'operator' as const, site_ids: JSON.stringify([sites[0]?.id || 'DLA']) },
+      { username: 'ngono', password: 'ngono123', full_name: 'Ngono Patricia', email: 'ngono@nolimit.cm', role: 'operator' as const, site_ids: JSON.stringify([sites[1]?.id || 'YDE']) },
     ];
     for (const u of demoUsers) {
       if (!this.cache.users.find(ex => ex.username === u.username)) {
@@ -462,7 +520,6 @@ class DatabaseService {
   }
 
   deleteUser(id: number): boolean {
-    // Never delete the last admin
     const admins = this.cache.users.filter(u => u.role === 'admin' && u.is_active);
     const target = this.cache.users.find(u => u.id === id);
     if (target?.role === 'admin' && admins.length <= 1) return false;
@@ -487,7 +544,6 @@ class DatabaseService {
   }
 
   createProduct(data: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Product {
-    // Auto-generate SKU if not provided or empty
     const sku = data.sku && data.sku.trim()
       ? data.sku.trim().toUpperCase()
       : generateSKU(data.category, data.name, this.getExistingSkus());
@@ -502,7 +558,9 @@ class DatabaseService {
     this.cache.products.push(product);
     idb.put('products', product);
 
-    APP_CONFIG.sites.forEach(site => {
+    // Crée les stocks pour TOUS les sites actifs (pas seulement APP_CONFIG)
+    const sites = this.getSites();
+    sites.forEach(site => {
       const stock: Stock = {
         id: this.nextId(this.cache.stocks),
         product_id: product.id,
@@ -539,9 +597,14 @@ class DatabaseService {
   // ─── Stocks ───────────────────────────────────────────────────────────────────
 
   getStocksGroupedByProduct(allowedSites?: string[]): any[] {
+    // Utilise les sites actifs dynamiques si pas de filtre spécifié
+    const activeSites = this.getSites().map(s => s.id);
+    const sites = allowedSites
+      ? allowedSites.filter(s => activeSites.includes(s))
+      : activeSites;
+
     return this.cache.products.map(product => {
       const stocks: Record<string, number> = {};
-      const sites = allowedSites || APP_CONFIG.sites.map(s => s.id);
       sites.forEach(siteId => {
         const s = this.cache.stocks.find(s => s.product_id === product.id && s.site_id === siteId);
         stocks[siteId] = s?.quantity || 0;
@@ -574,12 +637,14 @@ class DatabaseService {
     limit?: number;
     date_from?: string;
     date_to?: string;
+    user_id?: number;
   }): Movement[] {
     let result = [...this.cache.movements].reverse();
     if (filters?.type) result = result.filter(m => m.type === filters.type);
     if (filters?.status) result = result.filter(m => m.status === filters.status);
     if (filters?.site_id) result = result.filter(m => m.from_site_id === filters.site_id || m.to_site_id === filters.site_id);
     if (filters?.product_id) result = result.filter(m => m.product_id === filters.product_id);
+    if (filters?.user_id) result = result.filter(m => m.user_id === filters.user_id);
     if (filters?.date_from) result = result.filter(m => m.created_at >= filters.date_from!);
     if (filters?.date_to) {
       const end = filters.date_to + 'T23:59:59';
@@ -599,12 +664,22 @@ class DatabaseService {
   }
 
   /**
-   * createMovement — if type is 'pending_in', stock is NOT updated until approved
+   * createMovement
+   *
+   * RÈGLE PRINCIPALE :
+   * - status 'confirmed' : stock mis à jour immédiatement (admin/manager direct)
+   * - status 'pending' : stock NON modifié, attend validation
+   *
+   * Types de mouvements pending :
+   * - pending_in  : demande d'entrée
+   * - pending_out : demande de sortie / vente
    */
   createMovement(data: Omit<Movement, 'id' | 'created_at'>): Movement | { error: string } {
-    // For confirmed out/transfer/damage — check stock
+    // Vérification stock uniquement pour les mouvements confirmés directs
     if (data.status === 'confirmed' && (data.type === 'out' || data.type === 'transfer' || data.type === 'transport_damage')) {
-      const fromStock = this.cache.stocks.find(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
+      const fromStock = this.cache.stocks.find(
+        s => s.product_id === data.product_id && s.site_id === data.from_site_id
+      );
       if (!fromStock || fromStock.quantity < data.quantity) {
         return { error: `Stock insuffisant. Disponible: ${fromStock?.quantity || 0}` };
       }
@@ -616,19 +691,25 @@ class DatabaseService {
       created_at: this.now(),
     };
 
-    // Only update stocks for confirmed movements
     if (data.status === 'confirmed') {
+      // Appliquer immédiatement au stock
       this._applyMovementToStock(movement);
     } else if (data.status === 'pending') {
-      // Create a pending_approval alert
+      // Créer une alerte de validation
       const product = this.cache.products.find(p => p.id === data.product_id);
       if (product) {
+        const isOut = data.type === 'pending_out' || data.type === 'out';
+        const user = this.cache.users.find(u => u.id === data.user_id);
+        const sites = this.getSites();
+        const siteName = sites.find(s => s.id === (data.from_site_id || data.to_site_id))?.name || '';
         const alert: Alert = {
           id: this.nextId(this.cache.alerts),
           type: 'pending_approval',
           product_id: data.product_id,
           site_id: data.to_site_id || data.from_site_id,
-          message: `Demande d'entrée de ${data.quantity} ${product.name} en attente d'approbation`,
+          message: isOut
+            ? `Sortie de ${data.quantity} × ${product.name} demandée par ${user?.full_name || 'Opérateur'} (${siteName})`
+            : `Entrée de ${data.quantity} × ${product.name} demandée par ${user?.full_name || 'Opérateur'} (${siteName})`,
           is_read: false,
           created_at: this.now(),
         };
@@ -642,27 +723,54 @@ class DatabaseService {
     return movement;
   }
 
+  /**
+   * approveMovement
+   *
+   * FIX CRITIQUE : Conversion pending_out → out AVANT _applyMovementToStock
+   * pour que la réduction de stock soit bien appliquée.
+   * Le CA est calculé sur les mouvements type='out' && status='approved'
+   */
   approveMovement(movementId: number, approverId: number): boolean {
     const idx = this.cache.movements.findIndex(m => m.id === movementId);
     if (idx === -1) return false;
     const m = this.cache.movements[idx];
     if (m.status !== 'pending') return false;
 
+    // Vérification stock pour les sorties (pending_out)
+    if (m.type === 'pending_out' || m.type === 'out') {
+      const fromStock = this.cache.stocks.find(
+        s => s.product_id === m.product_id && s.site_id === m.from_site_id
+      );
+      if (!fromStock || fromStock.quantity < m.quantity) {
+        // Rejet automatique si stock insuffisant
+        m.status = 'rejected';
+        m.approved_by = approverId;
+        m.approved_at = this.now();
+        m.rejection_reason = `Stock insuffisant lors de la validation : ${fromStock?.quantity || 0} disponible(s)`;
+        idb.put('movements', m);
+        this._removeAlertForMovement(m);
+        return false;
+      }
+    }
+
+    // IMPORTANT : convertir le type AVANT d'appliquer au stock
+    if (m.type === 'pending_in') m.type = 'in';
+    if (m.type === 'pending_out') m.type = 'out';
+
+    // Marquer comme approuvé
     m.status = 'approved';
     m.approved_by = approverId;
     m.approved_at = this.now();
-    // Convert pending_in → in
-    if (m.type === 'pending_in') m.type = 'in';
 
+    // Appliquer au stock maintenant que le type est correct ('in' ou 'out')
     this._applyMovementToStock(m);
+
+    // Sauvegarder
     idb.put('movements', m);
 
-    // Remove the pending alert
-    const alertIdx = this.cache.alerts.findIndex(a => a.type === 'pending_approval' && a.product_id === m.product_id);
-    if (alertIdx !== -1) {
-      idb.delete('alerts', this.cache.alerts[alertIdx].id);
-      this.cache.alerts.splice(alertIdx, 1);
-    }
+    // Supprimer l'alerte pending
+    this._removeAlertForMovement(m);
+
     return true;
   }
 
@@ -678,17 +786,30 @@ class DatabaseService {
     m.rejection_reason = reason;
     idb.put('movements', m);
 
-    const alertIdx = this.cache.alerts.findIndex(a => a.type === 'pending_approval' && a.product_id === m.product_id);
-    if (alertIdx !== -1) {
-      idb.delete('alerts', this.cache.alerts[alertIdx].id);
-      this.cache.alerts.splice(alertIdx, 1);
-    }
+    this._removeAlertForMovement(m);
     return true;
+  }
+
+  private _removeAlertForMovement(m: Movement): void {
+    // Supprime toutes les alertes pending_approval pour ce produit/site
+    const toRemove = this.cache.alerts.filter(
+      a => a.type === 'pending_approval' &&
+           a.product_id === m.product_id &&
+           (a.site_id === m.from_site_id || a.site_id === m.to_site_id)
+    );
+    toRemove.forEach(a => {
+      idb.delete('alerts', a.id);
+    });
+    this.cache.alerts = this.cache.alerts.filter(
+      a => !toRemove.find(r => r.id === a.id)
+    );
   }
 
   private _applyMovementToStock(m: Movement) {
     if (m.type === 'in' && m.to_site_id) {
-      const idx = this.cache.stocks.findIndex(s => s.product_id === m.product_id && s.site_id === m.to_site_id);
+      const idx = this.cache.stocks.findIndex(
+        s => s.product_id === m.product_id && s.site_id === m.to_site_id
+      );
       if (idx !== -1) {
         this.cache.stocks[idx].quantity += m.quantity;
         this.cache.stocks[idx].last_delivery = m.created_at.split('T')[0];
@@ -696,7 +817,9 @@ class DatabaseService {
         idb.put('stocks', this.cache.stocks[idx]);
       }
     } else if ((m.type === 'out' || m.type === 'transport_damage') && m.from_site_id) {
-      const idx = this.cache.stocks.findIndex(s => s.product_id === m.product_id && s.site_id === m.from_site_id);
+      const idx = this.cache.stocks.findIndex(
+        s => s.product_id === m.product_id && s.site_id === m.from_site_id
+      );
       if (idx !== -1) {
         this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - m.quantity);
         this.cache.stocks[idx].updated_at = this.now();
@@ -704,12 +827,24 @@ class DatabaseService {
       }
     } else if (m.type === 'transfer') {
       if (m.from_site_id) {
-        const fi = this.cache.stocks.findIndex(s => s.product_id === m.product_id && s.site_id === m.from_site_id);
-        if (fi !== -1) { this.cache.stocks[fi].quantity -= m.quantity; idb.put('stocks', this.cache.stocks[fi]); }
+        const fi = this.cache.stocks.findIndex(
+          s => s.product_id === m.product_id && s.site_id === m.from_site_id
+        );
+        if (fi !== -1) {
+          this.cache.stocks[fi].quantity = Math.max(0, this.cache.stocks[fi].quantity - m.quantity);
+          this.cache.stocks[fi].updated_at = this.now();
+          idb.put('stocks', this.cache.stocks[fi]);
+        }
       }
       if (m.to_site_id) {
-        const ti = this.cache.stocks.findIndex(s => s.product_id === m.product_id && s.site_id === m.to_site_id);
-        if (ti !== -1) { this.cache.stocks[ti].quantity += m.quantity; idb.put('stocks', this.cache.stocks[ti]); }
+        const ti = this.cache.stocks.findIndex(
+          s => s.product_id === m.product_id && s.site_id === m.to_site_id
+        );
+        if (ti !== -1) {
+          this.cache.stocks[ti].quantity += m.quantity;
+          this.cache.stocks[ti].updated_at = this.now();
+          idb.put('stocks', this.cache.stocks[ti]);
+        }
       }
     }
 
@@ -730,7 +865,10 @@ class DatabaseService {
 
   markAlertRead(id: number): void {
     const idx = this.cache.alerts.findIndex(a => a.id === id);
-    if (idx !== -1) { this.cache.alerts[idx].is_read = true; idb.put('alerts', this.cache.alerts[idx]); }
+    if (idx !== -1) {
+      this.cache.alerts[idx].is_read = true;
+      idb.put('alerts', this.cache.alerts[idx]);
+    }
   }
 
   markAllAlertsRead(): void {
@@ -739,7 +877,28 @@ class DatabaseService {
 
   dismissAlert(id: number): void {
     const idx = this.cache.alerts.findIndex(a => a.id === id);
-    if (idx !== -1) { this.cache.alerts.splice(idx, 1); idb.delete('alerts', id); }
+    if (idx !== -1) {
+      this.cache.alerts.splice(idx, 1);
+      idb.delete('alerts', id);
+    }
+  }
+
+  /**
+   * Crée une alerte in-app (appelé par le service de notifications pour les tâches planifiées)
+   */
+  createAlert(data: { type: Alert['type']; product_id?: number; site_id?: string; message: string }): Alert {
+    const alert: Alert = {
+      id: this.nextId(this.cache.alerts),
+      type: data.type,
+      product_id: data.product_id || 0,
+      site_id: data.site_id || null,
+      message: data.message,
+      is_read: false,
+      created_at: this.now(),
+    };
+    this.cache.alerts.push(alert);
+    idb.put('alerts', alert);
+    return alert;
   }
 
   private _checkAlerts(productId: number, siteId: string): void {
@@ -748,17 +907,19 @@ class DatabaseService {
     const stock = this.cache.stocks.find(s => s.product_id === productId && s.site_id === siteId);
     if (!stock) return;
 
-    const totalStock = this.cache.stocks.filter(s => s.product_id === productId).reduce((sum, s) => sum + s.quantity, 0);
+    const totalStock = this.cache.stocks
+      .filter(s => s.product_id === productId)
+      .reduce((sum, s) => sum + s.quantity, 0);
 
-    // Remove old stock alerts for this product/site
-    const toRemove = this.cache.alerts.filter(a =>
-      a.product_id === productId && a.site_id === siteId &&
-      (a.type === 'low_stock' || a.type === 'critical_stock')
+    // Supprimer les anciennes alertes stock pour ce produit/site
+    const toRemove = this.cache.alerts.filter(
+      a => a.product_id === productId &&
+           a.site_id === siteId &&
+           (a.type === 'low_stock' || a.type === 'critical_stock')
     );
-    toRemove.forEach(a => { idb.delete('alerts', a.id); });
-    this.cache.alerts = this.cache.alerts.filter(a =>
-      !(a.product_id === productId && a.site_id === siteId &&
-        (a.type === 'low_stock' || a.type === 'critical_stock'))
+    toRemove.forEach(a => idb.delete('alerts', a.id));
+    this.cache.alerts = this.cache.alerts.filter(
+      a => !toRemove.find(r => r.id === a.id)
     );
 
     if (totalStock < product.threshold * 0.3) {
@@ -805,13 +966,20 @@ class DatabaseService {
 
   deleteReport(id: number): void {
     const idx = this.cache.reports.findIndex(r => r.id === id);
-    if (idx !== -1) { this.cache.reports.splice(idx, 1); idb.delete('reports', id); }
+    if (idx !== -1) {
+      this.cache.reports.splice(idx, 1);
+      idb.delete('reports', id);
+    }
   }
 
   // ─── Stats ────────────────────────────────────────────────────────────────────
 
   getDashboardStats(allowedSites?: string[]) {
-    const sites = allowedSites || APP_CONFIG.sites.map(s => s.id);
+    const activeSiteIds = this.getSites().map(s => s.id);
+    const sites = allowedSites
+      ? allowedSites.filter(s => activeSiteIds.includes(s))
+      : activeSiteIds;
+
     const stocks = this.cache.stocks.filter(s => sites.includes(s.site_id));
 
     const totalValue = stocks.reduce((sum, s) => {
@@ -820,21 +988,33 @@ class DatabaseService {
     }, 0);
 
     const today = new Date().toISOString().split('T')[0];
-    const todayMovements = this.cache.movements.filter(m => m.created_at.startsWith(today) && m.status === 'confirmed').length;
+    // Compte les mouvements confirmés ET approuvés d'aujourd'hui
+    const todayMovements = this.cache.movements.filter(
+      m => m.created_at.startsWith(today) &&
+           (m.status === 'confirmed' || m.status === 'approved')
+    ).length;
+
     const alertCount = this.cache.alerts.filter(a => !a.is_read).length;
     const pendingCount = this.cache.movements.filter(m => m.status === 'pending').length;
+
     const criticalProducts = this.cache.products.filter(p => {
-      const total = this.cache.stocks.filter(s => s.product_id === p.id && sites.includes(s.site_id)).reduce((sum, s) => sum + s.quantity, 0);
+      const total = this.cache.stocks
+        .filter(s => s.product_id === p.id && sites.includes(s.site_id))
+        .reduce((sum, s) => sum + s.quantity, 0);
       return total < p.threshold;
     }).length;
 
     return { totalProducts: this.cache.products.length, totalValue, todayMovements, alertCount, criticalProducts, pendingCount };
   }
 
-  // ─── Sales Reporting ──────────────────────────────────────────────────────────
+  // ─── Sales Reporting (inclut status 'approved' en plus de 'confirmed') ────────
 
   getSalesReport(dateFrom: string, dateTo: string, siteId?: string) {
-    const outMovements = this.getMovements({ type: 'out', status: 'confirmed', date_from: dateFrom, date_to: dateTo, site_id: siteId });
+    // FIX : inclure les mouvements 'approved' (anciennement pending_out validés)
+    const allMovements = this.getMovements({ date_from: dateFrom, date_to: dateTo, site_id: siteId });
+    const outMovements = allMovements.filter(
+      m => m.type === 'out' && (m.status === 'confirmed' || m.status === 'approved')
+    );
 
     const byProductMap: Record<number, { name: string; sku: string; qty: number; ca: number }> = {};
     const byDateMap: Record<string, { qty: number; ca: number }> = {};
@@ -843,10 +1023,15 @@ class DatabaseService {
     outMovements.forEach(m => {
       const p = this.cache.products.find(p => p.id === m.product_id);
       const ca = m.quantity * (p?.price || 0);
-      totalQty += m.quantity; totalCA += ca;
-      if (!byProductMap[m.product_id]) byProductMap[m.product_id] = { name: p?.name || '', sku: p?.sku || '', qty: 0, ca: 0 };
+      totalQty += m.quantity;
+      totalCA += ca;
+
+      if (!byProductMap[m.product_id]) {
+        byProductMap[m.product_id] = { name: p?.name || '', sku: p?.sku || '', qty: 0, ca: 0 };
+      }
       byProductMap[m.product_id].qty += m.quantity;
       byProductMap[m.product_id].ca += ca;
+
       const date = m.created_at.split('T')[0];
       if (!byDateMap[date]) byDateMap[date] = { qty: 0, ca: 0 };
       byDateMap[date].qty += m.quantity;
@@ -854,22 +1039,34 @@ class DatabaseService {
     });
 
     return {
-      movements: outMovements, totalQty, totalCA,
+      movements: outMovements,
+      totalQty,
+      totalCA,
       byProduct: Object.values(byProductMap).sort((a, b) => b.ca - a.ca),
-      byDate: Object.entries(byDateMap).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v })),
+      byDate: Object.entries(byDateMap)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, v]) => ({ date, ...v })),
     };
   }
 
   getDamageReport(dateFrom: string, dateTo: string, siteId?: string) {
-    const dmgMovements = this.getMovements({ type: 'transport_damage', date_from: dateFrom, date_to: dateTo, site_id: siteId });
+    const dmgMovements = this.getMovements({
+      type: 'transport_damage',
+      date_from: dateFrom,
+      date_to: dateTo,
+      site_id: siteId,
+    });
     const byProductMap: Record<number, { name: string; sku: string; qty: number; loss: number }> = {};
     let totalQty = 0, totalLoss = 0;
 
     dmgMovements.forEach(m => {
       const p = this.cache.products.find(p => p.id === m.product_id);
       const loss = m.quantity * (p?.price || 0);
-      totalQty += m.quantity; totalLoss += loss;
-      if (!byProductMap[m.product_id]) byProductMap[m.product_id] = { name: p?.name || '', sku: p?.sku || '', qty: 0, loss: 0 };
+      totalQty += m.quantity;
+      totalLoss += loss;
+      if (!byProductMap[m.product_id]) {
+        byProductMap[m.product_id] = { name: p?.name || '', sku: p?.sku || '', qty: 0, loss: 0 };
+      }
       byProductMap[m.product_id].qty += m.quantity;
       byProductMap[m.product_id].loss += loss;
     });
@@ -881,14 +1078,23 @@ class DatabaseService {
 
   async exportDatabase(): Promise<string> {
     const data = await idb.exportAll();
+    // Inclure également la config des sites personnalisés
+    const customSites = localStorage.getItem('snl_custom_sites');
+    if (customSites) {
+      (data as any)._custom_sites = JSON.parse(customSites);
+    }
     return JSON.stringify(data);
   }
 
   async importDatabase(jsonStr: string): Promise<void> {
     const data = JSON.parse(jsonStr);
+    // Restaurer les sites personnalisés si présents
+    if (data._custom_sites) {
+      localStorage.setItem('snl_custom_sites', JSON.stringify(data._custom_sites));
+      delete data._custom_sites;
+    }
     await idb.importAll(data);
     await this._loadCache();
-    // Ensure admin still exists after import
     await this._ensureAdminUser();
   }
 

@@ -12,6 +12,9 @@ const PROFILE_PERMISSIONS: Record<string, PermissionKey[]> = {
   viewer: ['view'],
 };
 
+// Clé de session — on stocke UNIQUEMENT l'ID utilisateur, PAS la dernière page
+const SESSION_KEY = 'snl_user_id';
+
 interface AuthContextType {
   user: (User & { permissions?: string }) | null;
   login: (username: string, password: string) => { success: boolean; error?: string };
@@ -31,23 +34,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const restore = async () => {
-      const savedUserId = sessionStorage.getItem('snl_user_id');
+      const savedUserId = sessionStorage.getItem(SESSION_KEY);
       if (savedUserId) {
-        // Wait for db to be ready
         await db.init();
         const u = db.getUserById(parseInt(savedUserId));
         if (u && u.is_active) {
           setUser(u as any);
         } else {
-          // User no longer exists (after reset) — clear session
-          sessionStorage.removeItem('snl_user_id');
+          // Utilisateur supprimé ou désactivé — nettoyer la session
+          sessionStorage.removeItem(SESSION_KEY);
         }
       }
       setIsLoading(false);
     };
     restore();
 
-    // Request notification permission
+    // Demander la permission de notification
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
@@ -57,21 +59,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const u = db.authenticate(username, password);
     if (u) {
       setUser(u as any);
-      sessionStorage.setItem('snl_user_id', u.id.toString());
+      // Stocker UNIQUEMENT l'ID — pas de page mémorisée
+      sessionStorage.setItem(SESSION_KEY, u.id.toString());
       return { success: true };
     }
-    return { success: false, error: 'Identifiants incorrects. Vérifiez votre nom d\'utilisateur et mot de passe.' };
+    return {
+      success: false,
+      error: "Identifiants incorrects. Vérifiez votre nom d'utilisateur et mot de passe.",
+    };
   };
 
   const logout = () => {
+    // Nettoyer la session entièrement
+    sessionStorage.removeItem(SESSION_KEY);
+    // Réinitialiser l'état — l'app affichera LoginPage
     setUser(null);
-    sessionStorage.removeItem('snl_user_id');
+    // Pas de navigation forcée ici, App.tsx gère ça via `!user`
   };
 
   const getAllowedSites = (): string[] => {
     if (!user) return [];
-    if (user.site_ids === '*') return APP_CONFIG.sites.map(s => s.id);
-    try { return JSON.parse(user.site_ids); } catch { return []; }
+    // Sites actifs dynamiques (depuis paramètres ou APP_CONFIG)
+    const activeSites = db.getSites().map(s => s.id);
+    if (user.site_ids === '*') return activeSites;
+    try {
+      const userSites = JSON.parse(user.site_ids) as string[];
+      // Ne retourner que les sites qui existent encore
+      return userSites.filter(sid => activeSites.includes(sid));
+    } catch {
+      return [];
+    }
   };
 
   const canAccessSite = (siteId: string): boolean => getAllowedSites().includes(siteId);

@@ -34,8 +34,11 @@ function getCategoryLabel(id: string): string {
 
 export function InventoryDashboard() {
   const { getAllowedSites, hasPermission, user } = useAuth();
-  const allowedSites = getAllowedSites();
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+
+  // Sites actifs (dynamiques)
+  const activeSites = db.getSites();
+  const allowedSites = getAllowedSites().filter(sid => activeSites.find(s => s.id === sid));
 
   const [selectedSite, setSelectedSite] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,9 +58,18 @@ export function InventoryDashboard() {
     const prods = db.getStocksGroupedByProduct(allowedSites);
     setProducts(prods);
     setStats(db.getDashboardStats(allowedSites));
-  }, [selectedSite, allowedSites.join(',')]);
+  }, [allowedSites.join(',')]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Écouter l'événement de mise à jour du stock (après validation d'une demande)
+  useEffect(() => {
+    const handler = () => load();
+    window.addEventListener('snl:stock-updated', handler);
+    return () => window.removeEventListener('snl:stock-updated', handler);
+  }, [load]);
 
   const filteredSites = allowedSites.filter(sid => selectedSite === 'all' || sid === selectedSite);
 
@@ -94,6 +106,9 @@ export function InventoryDashboard() {
     return sum + products.reduce((s, p) => s + (p.stock[siteId] || 0) * p.price, 0);
   }, 0);
 
+  // Site options pour le sélecteur
+  const siteSelectOptions = activeSites.filter(s => allowedSites.includes(s.id));
+
   return (
     <div className="h-full flex flex-col">
       <div className="border-b border-[#F1F5F9] bg-white">
@@ -105,10 +120,9 @@ export function InventoryDashboard() {
                 <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les Sites</SelectItem>
-                  {allowedSites.map(sid => {
-                    const s = APP_CONFIG.sites.find(s => s.id === sid);
-                    return s ? <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem> : null;
-                  })}
+                  {siteSelectOptions.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -196,7 +210,7 @@ export function InventoryDashboard() {
       </div>
 
       <div className="flex-1 overflow-auto px-6 py-4">
-        {/* Pending approvals panel at top — only for admin/manager */}
+        {/* Pending approvals panel — seulement admin/manager */}
         {isAdmin && <PendingApprovalsPanel />}
 
         {filteredProducts.length === 0 ? (
@@ -227,7 +241,9 @@ export function InventoryDashboard() {
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Catégorie</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
-                    {selectedSite === 'all' ? 'Stock par Site' : `Stock — ${APP_CONFIG.sites.find(s => s.id === selectedSite)?.name}`}
+                    {selectedSite === 'all'
+                      ? 'Stock par Site'
+                      : `Stock — ${activeSites.find(s => s.id === selectedSite)?.name}`}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Dernier Arrivage</th>
@@ -303,19 +319,19 @@ export function InventoryDashboard() {
                       {hasPermission('create') && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {/* Entry */}
+                            {/* Entrée */}
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-[#0284C7] hover:bg-blue-50"
                               onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}
                               title="Soumettre une entrée">
                               <Plus className="w-3.5 h-3.5 mr-1" /> Entrée
                             </Button>
-                            {/* Sale/Exit */}
+                            {/* Vente/Sortie — toujours via le modal de vente (pending pour opérateurs) */}
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-red-600 hover:bg-red-50"
                               onClick={() => { setSelectedProduct(product); setShowStockOut(true); }}
                               title="Soumettre une vente">
                               <ShoppingCart className="w-3.5 h-3.5 mr-1" /> Vente
                             </Button>
-                            {/* Damage */}
+                            {/* Perte */}
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-orange-600 hover:bg-orange-50"
                               onClick={() => { setSelectedProduct(product); setShowTransportDamage(true); }}
                               title="Déclarer une perte">

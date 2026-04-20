@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle, XCircle, Package, RefreshCw, ArrowDownLeft, ArrowUpRight, User, DollarSign } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, ArrowDownLeft, ArrowUpRight, RefreshCw, User, DollarSign } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { db, Movement } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
-import { APP_CONFIG } from '../../config/app.config';
 
 export function PendingApprovalsPanel() {
   const { user, hasPermission } = useAuth();
@@ -21,7 +20,7 @@ export function PendingApprovalsPanel() {
     return () => clearInterval(t);
   }, []);
 
-  // Only admin and manager see this panel
+  // Seuls admin et manager voient ce panel
   if (user?.role !== 'admin' && user?.role !== 'manager') return null;
   if (pending.length === 0) return null;
 
@@ -29,10 +28,11 @@ export function PendingApprovalsPanel() {
     if (!user) return;
     const result = db.approveMovement(id, user.id);
     if (!result) {
-      // Was rejected due to insufficient stock — refresh to show rejection
       alert('Mouvement refusé automatiquement : stock insuffisant au moment de la validation.');
     }
     load();
+    // Force le rechargement de la page pour actualiser stock + CA
+    window.dispatchEvent(new CustomEvent('snl:stock-updated'));
   };
 
   const handleReject = (id: number) => {
@@ -42,9 +42,10 @@ export function PendingApprovalsPanel() {
     setRejectingId(null);
     setRejectReason(r => { const next = { ...r }; delete next[id]; return next; });
     load();
+    window.dispatchEvent(new CustomEvent('snl:stock-updated'));
   };
 
-  const pendingIn = pending.filter(m => m.type === 'pending_in');
+  const pendingIn = pending.filter(m => m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending'));
   const pendingOut = pending.filter(m => m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending'));
 
   return (
@@ -69,17 +70,23 @@ export function PendingApprovalsPanel() {
       <div className="divide-y divide-orange-100 max-h-64 overflow-y-auto">
         {pending.map(m => {
           const isOut = m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending');
-          const site = APP_CONFIG.sites.find(s => s.id === (isOut ? m.from_site_id : m.to_site_id));
+          const isIn = m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending');
+          const sites = db.getSites();
+          const site = sites.find(s => s.id === (isOut ? m.from_site_id : m.to_site_id));
           const product = db.getProductById(m.product_id);
           const estimatedCA = isOut && product ? m.quantity * product.price : 0;
-          const currentStock = product ? (db.getStocksGroupedByProduct().find(p => p.id === m.product_id)?.stock?.[m.from_site_id || ''] || 0) : 0;
+          const currentStock = product
+            ? (db.getStocksGroupedByProduct().find(p => p.id === m.product_id)?.stock?.[m.from_site_id || ''] || 0)
+            : 0;
           const stockOk = !isOut || currentStock >= m.quantity;
 
           return (
             <div key={m.id} className="px-4 py-3">
               <div className="flex items-start gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isOut ? 'bg-red-100' : 'bg-green-100'}`}>
-                  {isOut ? <ArrowUpRight className="w-4 h-4 text-red-600" /> : <ArrowDownLeft className="w-4 h-4 text-green-600" />}
+                  {isOut
+                    ? <ArrowUpRight className="w-4 h-4 text-red-600" />
+                    : <ArrowDownLeft className="w-4 h-4 text-green-600" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
