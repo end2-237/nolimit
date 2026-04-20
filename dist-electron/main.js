@@ -1,118 +1,147 @@
-import { ipcMain as i, Notification as m, dialog as y, app as c, shell as x, BrowserWindow as b, Menu as I } from "electron";
-import u from "node:path";
-import { fileURLToPath as T } from "node:url";
-import h from "node:fs";
-import E from "node:https";
-import v from "node:http";
-const S = u.dirname(T(import.meta.url));
-let e = null;
-function g() {
-  e = new b({
+import { ipcMain, Notification, dialog, app, shell, BrowserWindow, Menu } from "electron";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import fs from "node:fs";
+import https from "node:https";
+import http from "node:http";
+const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
+let mainWindow = null;
+function createWindow() {
+  mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: "#14532d",
-    autoHideMenuBar: !0,
-    frame: !0,
+    autoHideMenuBar: true,
+    frame: true,
     webPreferences: {
-      nodeIntegration: !0,
-      contextIsolation: !1
+      nodeIntegration: true,
+      contextIsolation: false
     },
-    icon: w(),
+    icon: getIconPath(),
     title: "Stock No Limit"
-  }), I.setApplicationMenu(null), process.env.VITE_DEV_SERVER_URL ? e.loadURL(process.env.VITE_DEV_SERVER_URL) : e.loadFile(u.join(S, "../dist/index.html")), e.on("closed", () => {
-    e = null;
+  });
+  Menu.setApplicationMenu(null);
+  if (process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    mainWindow.loadFile(path.join(__dirname$1, "../dist/index.html"));
+  }
+  mainWindow.on("closed", () => {
+    mainWindow = null;
   });
 }
-function w() {
-  return c.isPackaged ? u.join(process.resourcesPath, "app.asar/dist/icons/nol.png") : u.join(S, "../public/icons/nol.png");
+function getIconPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "app.asar/dist/icons/nol.png");
+  }
+  return path.join(__dirname$1, "../public/icons/nol.png");
 }
-function P(t) {
-  return new Promise((n, s) => {
-    const r = new URL(t.url), a = r.protocol === "https:", o = a ? E : v, l = {
-      hostname: r.hostname,
-      port: r.port || (a ? 443 : 80),
-      path: r.pathname + r.search,
-      method: t.method,
+function nodeHttpRequest(options) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(options.url);
+    const isHttps = url.protocol === "https:";
+    const lib = isHttps ? https : http;
+    const reqOptions = {
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      method: options.method,
       headers: {
-        ...t.headers,
-        ...t.body ? { "Content-Length": Buffer.byteLength(t.body).toString() } : {}
+        ...options.headers,
+        ...options.body ? { "Content-Length": Buffer.byteLength(options.body).toString() } : {}
       },
       // Accepte les certificats auto-signés en dev
-      rejectUnauthorized: !1
-    }, d = o.request(l, (p) => {
-      let f = "";
-      p.on("data", (_) => {
-        f += _;
-      }), p.on("end", () => n({ status: p.statusCode || 0, data: f }));
+      rejectUnauthorized: false
+    };
+    const req = lib.request(reqOptions, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => resolve({ status: res.statusCode || 0, data }));
     });
-    d.on("error", (p) => s(p)), d.setTimeout(3e4, () => {
-      d.destroy(), s(new Error("Timeout (30s)"));
-    }), t.body && d.write(t.body), d.end();
+    req.on("error", (err) => reject(err));
+    req.setTimeout(3e4, () => {
+      req.destroy();
+      reject(new Error("Timeout (30s)"));
+    });
+    if (options.body) req.write(options.body);
+    req.end();
   });
 }
-i.handle("cloud:push", async (t, {
-  url: n,
-  apiKey: s,
-  siteId: r,
-  data: a
+ipcMain.handle("cloud:push", async (_event, {
+  url,
+  apiKey,
+  siteId,
+  data
 }) => {
   try {
-    const o = JSON.stringify({
-      siteId: r,
-      data: a,
+    const body = JSON.stringify({
+      siteId,
+      data,
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       version: 3
-    }), l = await P({
-      url: n,
+    });
+    const result = await nodeHttpRequest({
+      url,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": s
+        "X-API-KEY": apiKey
       },
-      body: o
+      body
     });
-    return l.status < 200 || l.status >= 300 ? { success: !1, error: `HTTP ${l.status}: ${l.data}` } : { success: !0, response: l.data };
-  } catch (o) {
-    return { success: !1, error: o.message };
+    if (result.status < 200 || result.status >= 300) {
+      return { success: false, error: `HTTP ${result.status}: ${result.data}` };
+    }
+    return { success: true, response: result.data };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
-i.handle("cloud:pull", async (t, {
-  url: n,
-  apiKey: s,
-  siteId: r
+ipcMain.handle("cloud:pull", async (_event, {
+  url,
+  apiKey,
+  siteId
 }) => {
   try {
-    const a = `${n}?siteId=${encodeURIComponent(r)}`, o = await P({
-      url: a,
+    const fullUrl = `${url}?siteId=${encodeURIComponent(siteId)}`;
+    const result = await nodeHttpRequest({
+      url: fullUrl,
       method: "GET",
       headers: {
-        "X-API-KEY": s
+        "X-API-KEY": apiKey
       }
     });
-    return o.status < 200 || o.status >= 300 ? { success: !1, error: `HTTP ${o.status}: ${o.data}` } : { success: !0, data: o.data };
-  } catch (a) {
-    return { success: !1, error: a.message };
+    if (result.status < 200 || result.status >= 300) {
+      return { success: false, error: `HTTP ${result.status}: ${result.data}` };
+    }
+    return { success: true, data: result.data };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
-i.handle("notify", (t, { title: n, body: s, urgency: r }) => {
-  if (m.isSupported()) {
-    const a = new m({
-      title: n,
-      body: s,
-      icon: w(),
-      urgency: r || "normal",
+ipcMain.handle("notify", (_event, { title, body, urgency }) => {
+  if (Notification.isSupported()) {
+    const n = new Notification({
+      title,
+      body,
+      icon: getIconPath(),
+      urgency: urgency || "normal",
       timeoutType: "default"
     });
-    return a.show(), a.on("click", () => {
-      e == null || e.focus();
-    }), { success: !0 };
+    n.show();
+    n.on("click", () => {
+      mainWindow == null ? void 0 : mainWindow.focus();
+    });
+    return { success: true };
   }
-  return { success: !1 };
+  return { success: false };
 });
-i.handle("db:export", async (t, { data: n }) => {
-  const s = await y.showSaveDialog(e, {
+ipcMain.handle("db:export", async (_event, { data }) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
     title: "Exporter la base de données",
     defaultPath: `snl_backup_${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.json`,
     filters: [
@@ -120,10 +149,12 @@ i.handle("db:export", async (t, { data: n }) => {
       { name: "All Files", extensions: ["*"] }
     ]
   });
-  return s.canceled || !s.filePath ? { success: !1 } : (h.writeFileSync(s.filePath, n, "utf-8"), { success: !0, path: s.filePath });
+  if (result.canceled || !result.filePath) return { success: false };
+  fs.writeFileSync(result.filePath, data, "utf-8");
+  return { success: true, path: result.filePath };
 });
-i.handle("db:import", async () => {
-  const t = await y.showOpenDialog(e, {
+ipcMain.handle("db:import", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
     title: "Importer une base de données",
     filters: [
       { name: "JSON Database", extensions: ["json"] },
@@ -131,28 +162,34 @@ i.handle("db:import", async () => {
     ],
     properties: ["openFile"]
   });
-  return t.canceled || t.filePaths.length === 0 ? { success: !1 } : { success: !0, data: h.readFileSync(t.filePaths[0], "utf-8") };
+  if (result.canceled || result.filePaths.length === 0) return { success: false };
+  const content = fs.readFileSync(result.filePaths[0], "utf-8");
+  return { success: true, data: content };
 });
-i.handle("db:backup-path", async (t, { data: n }) => {
-  const s = u.join(c.getPath("userData"), "backups");
-  h.existsSync(s) || h.mkdirSync(s, { recursive: !0 });
-  const r = `auto_backup_${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}.json`, a = u.join(s, r);
-  return h.writeFileSync(a, n, "utf-8"), { success: !0, path: a };
+ipcMain.handle("db:backup-path", async (_event, { data }) => {
+  const backupDir = path.join(app.getPath("userData"), "backups");
+  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+  const filename = `auto_backup_${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}.json`;
+  const filepath = path.join(backupDir, filename);
+  fs.writeFileSync(filepath, data, "utf-8");
+  return { success: true, path: filepath };
 });
-i.handle("shell:open-path", (t, { path: n }) => {
-  x.showItemInFolder(n);
+ipcMain.handle("shell:open-path", (_event, { path: filePath }) => {
+  shell.showItemInFolder(filePath);
 });
-i.handle("app:minimize", () => e == null ? void 0 : e.minimize());
-i.handle("app:maximize", () => {
-  e != null && e.isMaximized() ? e.unmaximize() : e == null || e.maximize();
+ipcMain.handle("app:minimize", () => mainWindow == null ? void 0 : mainWindow.minimize());
+ipcMain.handle("app:maximize", () => {
+  if (mainWindow == null ? void 0 : mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow == null ? void 0 : mainWindow.maximize();
 });
-i.handle("app:close", () => e == null ? void 0 : e.close());
-i.handle("app:is-maximized", () => e == null ? void 0 : e.isMaximized());
-c.whenReady().then(() => {
-  g(), c.on("activate", () => {
-    b.getAllWindows().length === 0 && g();
+ipcMain.handle("app:close", () => mainWindow == null ? void 0 : mainWindow.close());
+ipcMain.handle("app:is-maximized", () => mainWindow == null ? void 0 : mainWindow.isMaximized());
+app.whenReady().then(() => {
+  createWindow();
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
-c.on("window-all-closed", () => {
-  process.platform !== "darwin" && c.quit();
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });

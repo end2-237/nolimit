@@ -30,14 +30,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedUserId = sessionStorage.getItem('snl_user_id');
-    if (savedUserId) {
-      const u = db.getUserById(parseInt(savedUserId));
-      if (u && u.is_active) setUser(u as any);
-    }
-    setIsLoading(false);
+    const restore = async () => {
+      const savedUserId = sessionStorage.getItem('snl_user_id');
+      if (savedUserId) {
+        // Wait for db to be ready
+        await db.init();
+        const u = db.getUserById(parseInt(savedUserId));
+        if (u && u.is_active) {
+          setUser(u as any);
+        } else {
+          // User no longer exists (after reset) — clear session
+          sessionStorage.removeItem('snl_user_id');
+        }
+      }
+      setIsLoading(false);
+    };
+    restore();
 
-    // Request notification permission on load
+    // Request notification permission
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
@@ -50,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem('snl_user_id', u.id.toString());
       return { success: true };
     }
-    return { success: false, error: 'Identifiants incorrects' };
+    return { success: false, error: 'Identifiants incorrects. Vérifiez votre nom d\'utilisateur et mot de passe.' };
   };
 
   const logout = () => {
@@ -68,16 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getUserPermissions = (): PermissionKey[] => {
     if (!user) return [];
-
-    // Check for custom granular permissions
     if ((user as any).permissions) {
       try {
         const perms = JSON.parse((user as any).permissions) as PermissionKey[];
-        if (Array.isArray(perms)) return perms;
+        if (Array.isArray(perms) && perms.length > 0) return perms;
       } catch {}
     }
-
-    // Fall back to role-based permissions
     return PROFILE_PERMISSIONS[user.role] || ['view'];
   };
 

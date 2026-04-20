@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, RefreshCw, TrendingUp, Package, AlertTriangle, Edit2, Trash2, ArrowUpDown, Truck } from 'lucide-react';
+import { Search, Plus, RefreshCw, Package, AlertTriangle, Edit2, Trash2, ArrowUpDown, Truck, Clock } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -10,14 +10,27 @@ import { APP_CONFIG } from '../../config/app.config';
 import { BulkInputModal, TransportDamageModal } from './BulkInputModal';
 import { TransferModal } from './TransferModal';
 import { ProductFormModal } from './ProductFormModal';
+import { PendingApprovalsPanel } from './PendingApprovalsPanel';
 
 const categoryColors: Record<string, string> = {
-  Plante: 'bg-green-100 text-green-700',
-  Huile: 'bg-amber-100 text-amber-700',
-  Complément: 'bg-blue-100 text-blue-700',
-  Cosmétique: 'bg-pink-100 text-pink-700',
-  Alimentaire: 'bg-orange-100 text-orange-700',
+  plante: 'bg-emerald-100 text-emerald-700',
+  huile: 'bg-amber-100 text-amber-700',
+  complement_alimentaire: 'bg-cyan-100 text-cyan-700',
+  cosmetique: 'bg-pink-100 text-pink-700',
+  ampoule_buvable: 'bg-blue-100 text-blue-700',
+  poudre: 'bg-yellow-100 text-yellow-700',
+  creme: 'bg-rose-100 text-rose-700',
+  the: 'bg-teal-100 text-teal-700',
+  boisson: 'bg-orange-100 text-orange-700',
+  colis: 'bg-gray-100 text-gray-700',
+  materiel: 'bg-slate-100 text-slate-700',
+  test: 'bg-purple-100 text-purple-700',
 };
+
+function getCategoryLabel(id: string): string {
+  const cat = APP_CONFIG.categories.find(c => c.id === id);
+  return cat?.name || id;
+}
 
 export function InventoryDashboard() {
   const { getAllowedSites, hasPermission } = useAuth();
@@ -32,7 +45,7 @@ export function InventoryDashboard() {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
-  const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0 });
+  const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
   const [sortField, setSortField] = useState<string>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -65,7 +78,7 @@ export function InventoryDashboard() {
   };
 
   const handleDeleteProduct = (id: number) => {
-    if (!confirm('Supprimer ce produit ?')) return;
+    if (!confirm('Supprimer ce produit ? Cette action est irréversible.')) return;
     db.deleteProduct(id);
     load();
   };
@@ -104,11 +117,13 @@ export function InventoryDashboard() {
                   <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)}>
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Transfert
                   </Button>
-                  <Button variant="outline" size="sm" className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                  <Button variant="outline" size="sm"
+                    className="border-orange-300 text-orange-700 hover:bg-orange-50"
                     onClick={() => { setSelectedProduct(null); setShowTransportDamage(true); }}>
                     <Truck className="w-3.5 h-3.5 mr-1.5" /> Dégât transport
                   </Button>
-                  <Button size="sm" onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
+                  <Button size="sm"
+                    onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
                     className="bg-[#0284C7] hover:bg-[#0369A1]">
                     <Plus className="w-3.5 h-3.5 mr-1.5" /> Nouveau Produit
                   </Button>
@@ -118,35 +133,46 @@ export function InventoryDashboard() {
           </div>
 
           {/* KPI Cards */}
-          <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-5 gap-3 mb-4">
             <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-xl border border-blue-100">
               <div className="text-xs text-gray-500 mb-0.5">Valeur du Stock</div>
-              <div className="text-2xl font-bold text-[#0284C7]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              <div className="text-xl font-bold text-[#0284C7]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {totalValue.toLocaleString('fr-FR')}
               </div>
               <div className="text-xs text-gray-400">XAF</div>
             </div>
             <div className="bg-gradient-to-br from-orange-50 to-white p-4 rounded-xl border border-orange-100">
               <div className="text-xs text-gray-500 mb-0.5">Alertes Actives</div>
-              <div className="text-2xl font-bold text-orange-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              <div className="text-xl font-bold text-orange-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {stats.alertCount}
               </div>
               <div className="text-xs text-gray-400">{stats.criticalProducts} critique(s)</div>
             </div>
             <div className="bg-gradient-to-br from-green-50 to-white p-4 rounded-xl border border-green-100">
               <div className="text-xs text-gray-500 mb-0.5">Mouvements Aujourd'hui</div>
-              <div className="text-2xl font-bold text-green-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              <div className="text-xl font-bold text-green-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {stats.todayMovements}
               </div>
               <div className="text-xs text-gray-400">opérations</div>
             </div>
             <div className="bg-gradient-to-br from-purple-50 to-white p-4 rounded-xl border border-purple-100">
               <div className="text-xs text-gray-500 mb-0.5">Produits Actifs</div>
-              <div className="text-2xl font-bold text-purple-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              <div className="text-xl font-bold text-purple-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {stats.totalProducts}
               </div>
               <div className="text-xs text-gray-400">références</div>
             </div>
+            {stats.pendingCount > 0 && (
+              <div className="bg-gradient-to-br from-yellow-50 to-white p-4 rounded-xl border border-yellow-200 animate-pulse">
+                <div className="text-xs text-gray-500 mb-0.5">En attente</div>
+                <div className="text-xl font-bold text-yellow-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {stats.pendingCount}
+                </div>
+                <div className="text-xs text-yellow-600 flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> approbation
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="relative">
@@ -162,115 +188,145 @@ export function InventoryDashboard() {
       </div>
 
       <div className="flex-1 overflow-auto px-6 py-4">
-        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-[#E2E8F0]">
-                <th className="px-4 py-3 text-left">
-                  <button onClick={() => handleSort('name')} className="flex items-center gap-1 text-xs font-semibold text-gray-600 uppercase hover:text-gray-900">
-                    Désignation <ArrowUpDown className="w-3 h-3" />
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Catégorie</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
-                  {selectedSite === 'all' ? 'Stock par Site' : `Stock — ${APP_CONFIG.sites.find(s => s.id === selectedSite)?.name}`}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Dernier Arrivage</th>
-                {hasPermission('create') && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-12 text-gray-400">
-                  <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  Aucun produit trouvé
-                </td></tr>
-              )}
-              {filteredProducts.map(product => {
-                const status = getStockStatus(product);
-                const displaySites = selectedSite === 'all' ? allowedSites : [selectedSite];
+        {/* Pending approvals panel at the top */}
+        <PendingApprovalsPanel />
 
-                return (
-                  <tr key={product.id} className="border-b border-[#F1F5F9] hover:bg-gray-50 transition-colors group">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-gray-900 text-sm">{product.name}</div>
-                      <div className="text-xs text-gray-400 font-mono">{product.sku}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge className={`text-xs ${categoryColors[product.category] || 'bg-gray-100 text-gray-700'}`}>
-                        {product.category}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-3" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                        {displaySites.map((sid, i) => (
-                          <div key={sid} className="text-center">
-                            {displaySites.length > 1 && <div className="text-[10px] text-gray-400 mb-0.5">{sid}</div>}
-                            <div className={`font-semibold text-sm ${(product.stock[sid] || 0) < product.threshold * 0.3 ? 'text-red-600' : (product.stock[sid] || 0) < product.threshold ? 'text-orange-500' : 'text-gray-900'}`}>
-                              {product.stock[sid] || 0}
-                            </div>
-                          </div>
-                        ))}
-                        {displaySites.length > 1 && (
-                          <>
-                            <div className="w-px h-6 bg-gray-200" />
-                            <div className="text-center">
-                              <div className="text-[10px] text-gray-400 mb-0.5">Total</div>
-                              <div className="font-bold text-sm text-gray-900">
-                                {displaySites.reduce((s, sid) => s + (product.stock[sid] || 0), 0)}
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-20 text-gray-400">
+            <Package className="w-14 h-14 mx-auto mb-4 opacity-20" />
+            <p className="text-base font-medium text-gray-500">Aucun produit</p>
+            <p className="text-sm mt-1">
+              {products.length === 0
+                ? 'Commencez par ajouter vos premiers produits'
+                : 'Aucun produit ne correspond à votre recherche'}
+            </p>
+            {products.length === 0 && hasPermission('create') && (
+              <Button size="sm" className="mt-4 bg-[#0284C7] hover:bg-[#0369A1]"
+                onClick={() => { setEditingProduct(null); setShowProductForm(true); }}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> Ajouter un produit
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-[#E2E8F0]">
+                  <th className="px-4 py-3 text-left">
+                    <button onClick={() => handleSort('name')} className="flex items-center gap-1 text-xs font-semibold text-gray-600 uppercase hover:text-gray-900">
+                      Désignation <ArrowUpDown className="w-3 h-3" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Catégorie</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                    {selectedSite === 'all' ? 'Stock par Site' : `Stock — ${APP_CONFIG.sites.find(s => s.id === selectedSite)?.name}`}
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Dernier Arrivage</th>
+                  {hasPermission('create') && (
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map(product => {
+                  const status = getStockStatus(product);
+                  const displaySites = selectedSite === 'all' ? allowedSites : [selectedSite];
+                  const catColor = categoryColors[product.category] || 'bg-gray-100 text-gray-700';
+
+                  return (
+                    <tr key={product.id} className="border-b border-[#F1F5F9] hover:bg-gray-50 transition-colors group">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-gray-900 text-sm">{product.name}</div>
+                        <div className="text-xs text-gray-400 font-mono">{product.sku}</div>
+                        {product.sub_type && (
+                          <div className="text-xs text-purple-600 mt-0.5">{product.sub_type}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge className={`text-xs ${catColor}`}>
+                          {getCategoryLabel(product.category)}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-3" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                          {displaySites.map(sid => (
+                            <div key={sid} className="text-center">
+                              {displaySites.length > 1 && <div className="text-[10px] text-gray-400 mb-0.5">{sid}</div>}
+                              <div className={`font-semibold text-sm ${
+                                (product.stock[sid] || 0) < product.threshold * 0.3 ? 'text-red-600' :
+                                (product.stock[sid] || 0) < product.threshold ? 'text-orange-500' : 'text-gray-900'
+                              }`}>
+                                {product.stock[sid] || 0}
                               </div>
                             </div>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                          <div className={`h-full ${status.color} transition-all`} style={{ width: `${status.pct}%` }} />
-                        </div>
-                        <span className={`text-xs font-medium ${status.label === 'Critique' ? 'text-red-600' : status.label === 'Alerte' ? 'text-orange-500' : 'text-gray-500'}`}>
-                          {status.label}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {product.lastDelivery ? new Date(product.lastDelivery).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                    </td>
-                    {hasPermission('create') && (
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-[#0284C7] hover:bg-blue-50"
-                            onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}>
-                            <Plus className="w-3.5 h-3.5 mr-1" /> Réappro.
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-orange-600 hover:bg-orange-50"
-                            onClick={() => { setSelectedProduct(product); setShowTransportDamage(true); }}
-                            title="Déclarer un dégât transport">
-                            <Truck className="w-3.5 h-3.5" />
-                          </Button>
-                          {hasPermission('edit') && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-500 hover:text-gray-900"
-                              onClick={() => { setEditingProduct(product); setShowProductForm(true); }}>
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                          {hasPermission('delete') && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                              onClick={() => handleDeleteProduct(product.id)}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                          ))}
+                          {displaySites.length > 1 && (
+                            <>
+                              <div className="w-px h-6 bg-gray-200" />
+                              <div className="text-center">
+                                <div className="text-[10px] text-gray-400 mb-0.5">Total</div>
+                                <div className="font-bold text-sm text-gray-900">
+                                  {displaySites.reduce((s, sid) => s + (product.stock[sid] || 0), 0)}
+                                </div>
+                              </div>
+                            </>
                           )}
                         </div>
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                            <div className={`h-full ${status.color} transition-all`} style={{ width: `${status.pct}%` }} />
+                          </div>
+                          <span className={`text-xs font-medium ${
+                            status.label === 'Critique' ? 'text-red-600' :
+                            status.label === 'Alerte' ? 'text-orange-500' : 'text-gray-500'
+                          }`}>
+                            {status.label}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {product.lastDelivery
+                          ? new Date(product.lastDelivery).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : '—'}
+                      </td>
+                      {hasPermission('create') && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-[#0284C7] hover:bg-blue-50"
+                              onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}>
+                              <Plus className="w-3.5 h-3.5 mr-1" /> Entrée
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-orange-600 hover:bg-orange-50"
+                              onClick={() => { setSelectedProduct(product); setShowTransportDamage(true); }}
+                              title="Dégât transport">
+                              <Truck className="w-3.5 h-3.5" />
+                            </Button>
+                            {hasPermission('edit') && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-500 hover:text-gray-900"
+                                onClick={() => { setEditingProduct(product); setShowProductForm(true); }}>
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {hasPermission('delete') && (
+                              <Button variant="ghost" size="sm"
+                                className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => handleDeleteProduct(product.id)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {showBulkInput && (

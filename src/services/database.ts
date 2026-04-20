@@ -1,6 +1,9 @@
 /**
- * Service base de données - IndexedDB (persistance disque via Electron)
- * Remplace complètement localStorage par IndexedDB
+ * Service base de données - IndexedDB
+ * - App démarre VIDE (aucun produit/stock pré-rempli)
+ * - Mode démo disponible dans les paramètres
+ * - Mouvements en attente d'approbation
+ * - Génération automatique de SKU
  */
 
 import { APP_CONFIG } from '../config/app.config';
@@ -26,6 +29,7 @@ export interface Product {
   name: string;
   sku: string;
   category: string;
+  sub_type?: string;       // For Test/Matériel sub-types
   description: string;
   unit: string;
   price: number;
@@ -48,7 +52,8 @@ export interface Stock {
 
 export interface Movement {
   id: number;
-  type: 'in' | 'out' | 'transfer' | 'adjustment' | 'transport_damage';
+  type: 'in' | 'out' | 'transfer' | 'adjustment' | 'transport_damage' | 'pending_in';
+  status: 'confirmed' | 'pending' | 'approved' | 'rejected';
   product_id: number;
   product_name?: string;
   from_site_id: string | null;
@@ -58,13 +63,16 @@ export interface Movement {
   reference: string;
   user_id: number;
   user_name?: string;
+  approved_by?: number;
+  approved_at?: string;
+  rejection_reason?: string;
   damage_details?: string;
   created_at: string;
 }
 
 export interface Alert {
   id: number;
-  type: 'low_stock' | 'expiry' | 'critical_stock';
+  type: 'low_stock' | 'expiry' | 'critical_stock' | 'pending_approval';
   product_id: number;
   product_name?: string;
   site_id: string | null;
@@ -110,10 +118,45 @@ function verifyHash(plain: string, hash: string): boolean {
   return simpleHash(plain) === hash;
 }
 
+// ─── Auto SKU Generation ──────────────────────────────────────────────────────
+
+export function generateSKU(category: string, name: string, existingSkus: string[]): string {
+  const catMap: Record<string, string> = {
+    plante: 'PLT',
+    huile: 'HUL',
+    complement_alimentaire: 'CMP',
+    cosmetique: 'CSM',
+    ampoule_buvable: 'AMP',
+    poudre: 'PDR',
+    creme: 'CRM',
+    the: 'THE',
+    boisson: 'BSN',
+    colis: 'COL',
+    materiel: 'MAT',
+    test: 'TST',
+  };
+  const prefix = catMap[category] || category.substring(0, 3).toUpperCase();
+  const namePart = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .substring(0, 3)
+    .toUpperCase()
+    .padEnd(3, 'X');
+
+  let counter = 1;
+  let sku = '';
+  do {
+    sku = `${prefix}-${namePart}-${String(counter).padStart(3, '0')}`;
+    counter++;
+  } while (existingSkus.includes(sku) && counter < 1000);
+  return sku;
+}
+
 // ─── IndexedDB Manager ────────────────────────────────────────────────────────
 
 const DB_NAME = 'SNLDatabase';
-const DB_VERSION = 3;
+const DB_VERSION = 4; // Bumped for schema changes (status field, sub_type)
 const STORES = ['users', 'products', 'stocks', 'movements', 'alerts', 'reports', 'meta'];
 
 class IDBManager {
@@ -208,7 +251,6 @@ class IDBManager {
     });
   }
 
-  // Export entire DB as JSON
   async exportAll(): Promise<Record<string, any[]>> {
     const result: Record<string, any[]> = {};
     for (const store of STORES) {
@@ -217,7 +259,6 @@ class IDBManager {
     return result;
   }
 
-  // Import entire DB from JSON
   async importAll(data: Record<string, any[]>): Promise<void> {
     for (const store of STORES) {
       if (data[store]) {
@@ -230,7 +271,7 @@ class IDBManager {
 
 const idb = new IDBManager();
 
-// ─── In-memory cache for sync operations ────────────────────────────────────
+// ─── Cache ────────────────────────────────────────────────────────────────────
 
 interface DBCache {
   users: User[];
@@ -257,7 +298,7 @@ class DatabaseService {
   private async _initialize(): Promise<void> {
     await idb.init();
     await this._loadCache();
-    await this._ensureDefaults();
+    await this._ensureAdminUser();
   }
 
   async init(): Promise<void> {
@@ -280,56 +321,93 @@ class DatabaseService {
     return arr.length === 0 ? 1 : Math.max(...arr.map(x => x.id)) + 1;
   }
 
-  private async _ensureDefaults(): Promise<void> {
-    if (this.cache.users.length === 0) {
-      const defaultUsers: User[] = [
-        { id: 1, username: 'admin', password_hash: simpleHash('admin123'), full_name: 'Administrateur', email: 'admin@nolimit.cm', role: 'admin', site_ids: '*', is_active: true, created_at: this.now(), updated_at: this.now() },
-        { id: 2, username: 'jean.kamga', password_hash: simpleHash('manager123'), full_name: 'Jean Kamga', email: 'jean@nolimit.cm', role: 'manager', site_ids: JSON.stringify(['DLA', 'YDE']), is_active: true, created_at: this.now(), updated_at: this.now() },
-        { id: 3, username: 'marie.nkolo', password_hash: simpleHash('operator123'), full_name: 'Marie Nkolo', email: 'marie@nolimit.cm', role: 'operator', site_ids: JSON.stringify(['DLA']), is_active: true, created_at: this.now(), updated_at: this.now() },
-      ];
-      await idb.putBulk('users', defaultUsers);
-      this.cache.users = defaultUsers;
+  // Ensure at least one admin exists — NO products are created
+  private async _ensureAdminUser(): Promise<void> {
+    const hasAdmin = this.cache.users.some(u => u.role === 'admin' && u.is_active);
+    if (!hasAdmin) {
+      const adminUser: User = {
+        id: this.nextId(this.cache.users),
+        username: 'admin',
+        password_hash: simpleHash('admin123'),
+        full_name: 'Administrateur',
+        email: 'admin@nolimit.cm',
+        role: 'admin',
+        site_ids: '*',
+        is_active: true,
+        created_at: this.now(),
+        updated_at: this.now(),
+      };
+      await idb.put('users', adminUser);
+      this.cache.users.push(adminUser);
     }
+  }
 
-    if (this.cache.products.length === 0) {
-      const defaultProducts = [
-        { name: 'Artémisia Premium', sku: 'ART-001', category: 'Plante', description: 'Plante médicinale anti-paludique', unit: 'sachet', price: 2500, threshold: 50, expiry_date: '2026-10-15' },
-        { name: 'Huile de Moringa', sku: 'MOR-002', category: 'Huile', description: 'Huile naturelle de moringa bio', unit: 'flacon', price: 4500, threshold: 80, expiry_date: '2027-01-20' },
-        { name: 'Complément Baobab', sku: 'BAO-003', category: 'Complément', description: 'Complément alimentaire au baobab', unit: 'boîte', price: 3200, threshold: 40, expiry_date: '2026-08-30' },
-        { name: 'Tisane Kinkeliba', sku: 'KIN-004', category: 'Plante', description: 'Tisane traditionnelle africaine', unit: 'sachet', price: 1800, threshold: 60, expiry_date: '2026-12-15' },
-        { name: 'Poudre de Neem', sku: 'NEE-005', category: 'Complément', description: 'Poudre de neem naturelle', unit: 'pot', price: 2800, threshold: 30, expiry_date: '2026-07-10' },
-        { name: 'Huile de Karité Bio', sku: 'KAR-006', category: 'Huile', description: 'Huile de karité certifiée bio', unit: 'flacon', price: 5500, threshold: 50, expiry_date: '2027-02-28' },
-        { name: 'Gingembre Séché', sku: 'GIN-007', category: 'Plante', description: 'Gingembre séché et moulu', unit: 'sachet', price: 1500, threshold: 70, expiry_date: '2026-11-20' },
-        { name: 'Spiruline Premium', sku: 'SPI-008', category: 'Complément', description: 'Spiruline algue superfood', unit: 'pot', price: 6500, threshold: 45, expiry_date: '2026-09-15' },
-      ];
+  // ─── Demo Data ───────────────────────────────────────────────────────────────
 
-      const quantities = [
-        [150, 85, 45], [200, 120, 95], [30, 15, 8], [180, 140, 110],
-        [25, 18, 12], [95, 75, 60], [120, 90, 55], [65, 48, 32],
-      ];
+  async loadDemoData(): Promise<void> {
+    const demoProducts = [
+      { name: 'Artémisia Premium', category: 'plante', description: 'Plante médicinale anti-paludique', unit: 'sachet', price: 2500, threshold: 50, expiry_date: '2026-10-15', quantities: [150, 85, 45] },
+      { name: 'Huile de Moringa', category: 'huile', description: 'Huile naturelle de moringa bio', unit: 'flacon', price: 4500, threshold: 80, expiry_date: '2027-01-20', quantities: [200, 120, 95] },
+      { name: 'Complément Baobab', category: 'complement_alimentaire', description: 'Complément alimentaire au baobab', unit: 'boîte', price: 3200, threshold: 40, expiry_date: '2026-08-30', quantities: [30, 15, 8] },
+      { name: 'Tisane Kinkeliba', category: 'the', description: 'Tisane traditionnelle africaine', unit: 'sachet', price: 1800, threshold: 60, expiry_date: '2026-12-15', quantities: [180, 140, 110] },
+      { name: 'Poudre de Neem', category: 'poudre', description: 'Poudre de neem naturelle', unit: 'pot', price: 2800, threshold: 30, expiry_date: '2026-07-10', quantities: [25, 18, 12] },
+      { name: 'Huile de Karité Bio', category: 'cosmetique', description: 'Huile de karité certifiée bio', unit: 'flacon', price: 5500, threshold: 50, expiry_date: '2027-02-28', quantities: [95, 75, 60] },
+      { name: 'Gingembre Séché', category: 'plante', description: 'Gingembre séché et moulu', unit: 'sachet', price: 1500, threshold: 70, expiry_date: '2026-11-20', quantities: [120, 90, 55] },
+      { name: 'Spiruline Premium', category: 'complement_alimentaire', description: 'Spiruline algue superfood', unit: 'pot', price: 6500, threshold: 45, expiry_date: '2026-09-15', quantities: [65, 48, 32] },
+      { name: 'Test VIH Rapide', category: 'test', sub_type: 'VIH', description: 'Test de dépistage rapide VIH', unit: 'unité', price: 3500, threshold: 20, expiry_date: '2026-06-30', quantities: [50, 30, 20] },
+      { name: 'Seringue 5ml', category: 'materiel', sub_type: 'Seringue', description: 'Seringue stérile 5ml', unit: 'boîte', price: 1200, threshold: 10, expiry_date: null, quantities: [30, 20, 15] },
+    ];
 
-      const products: Product[] = defaultProducts.map((p, i) => ({
-        id: i + 1, ...p, image_url: null, created_at: this.now(), updated_at: this.now(), count: 0
-      }));
+    const existingSkus = this.cache.products.map(p => p.sku);
+    const products: Product[] = demoProducts.map((p, i) => {
+      const sku = generateSKU(p.category, p.name, existingSkus);
+      existingSkus.push(sku);
+      return {
+        id: this.nextId([...this.cache.products, ...demoProducts.slice(0, i).map((_, j) => ({ id: this.cache.products.length + j + 1 }))]),
+        name: p.name,
+        sku,
+        category: p.category,
+        sub_type: p.sub_type,
+        description: p.description,
+        unit: p.unit,
+        price: p.price,
+        threshold: p.threshold,
+        expiry_date: p.expiry_date,
+        image_url: null,
+        created_at: this.now(),
+        updated_at: this.now(),
+        count: 0,
+      } as Product;
+    });
 
-      const stocks: Stock[] = [];
-      products.forEach((product, i) => {
-        APP_CONFIG.sites.forEach((site, si) => {
-          stocks.push({
-            id: this.nextId(stocks),
-            product_id: product.id,
-            site_id: site.id,
-            quantity: quantities[i][si],
-            last_delivery: '2026-04-0' + (si + 5),
-            updated_at: this.now(),
-          });
+    const stocks: Stock[] = [];
+    products.forEach((product, i) => {
+      APP_CONFIG.sites.forEach((site, si) => {
+        stocks.push({
+          id: this.nextId([...this.cache.stocks, ...stocks]),
+          product_id: product.id,
+          site_id: site.id,
+          quantity: demoProducts[i].quantities[si] || 0,
+          last_delivery: `2026-04-0${si + 5}`,
+          updated_at: this.now(),
         });
       });
+    });
 
-      await idb.putBulk('products', products);
-      await idb.putBulk('stocks', stocks);
-      this.cache.products = products;
-      this.cache.stocks = stocks;
+    await idb.putBulk('products', products);
+    await idb.putBulk('stocks', stocks);
+    this.cache.products.push(...products);
+    this.cache.stocks.push(...stocks);
+
+    // Also create demo users
+    const demoUsers = [
+      { username: 'jean.kamga', password: 'manager123', full_name: 'Jean Kamga', email: 'jean@nolimit.cm', role: 'manager' as const, site_ids: JSON.stringify(['DLA', 'YDE']) },
+      { username: 'marie.nkolo', password: 'operator123', full_name: 'Marie Nkolo', email: 'marie@nolimit.cm', role: 'operator' as const, site_ids: JSON.stringify(['DLA']) },
+    ];
+    for (const u of demoUsers) {
+      if (!this.cache.users.find(ex => ex.username === u.username)) {
+        this.createUser({ ...u, is_active: true });
+      }
     }
   }
 
@@ -360,7 +438,7 @@ class DatabaseService {
       role: data.role,
       site_ids: data.site_ids,
       is_active: data.is_active,
-      permissions: data.permissions,
+      permissions: (data as any).permissions,
       created_at: this.now(),
       updated_at: this.now(),
     };
@@ -384,6 +462,11 @@ class DatabaseService {
   }
 
   deleteUser(id: number): boolean {
+    // Never delete the last admin
+    const admins = this.cache.users.filter(u => u.role === 'admin' && u.is_active);
+    const target = this.cache.users.find(u => u.id === id);
+    if (target?.role === 'admin' && admins.length <= 1) return false;
+
     const idx = this.cache.users.findIndex(u => u.id === id);
     if (idx === -1) return false;
     this.cache.users.splice(idx, 1);
@@ -399,10 +482,20 @@ class DatabaseService {
     return this.cache.products.find(p => p.id === id) || null;
   }
 
+  getExistingSkus(): string[] {
+    return this.cache.products.map(p => p.sku);
+  }
+
   createProduct(data: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Product {
+    // Auto-generate SKU if not provided or empty
+    const sku = data.sku && data.sku.trim()
+      ? data.sku.trim().toUpperCase()
+      : generateSKU(data.category, data.name, this.getExistingSkus());
+
     const product: Product = {
       id: this.nextId(this.cache.products),
       ...data,
+      sku,
       created_at: this.now(),
       updated_at: this.now(),
     };
@@ -439,6 +532,7 @@ class DatabaseService {
     idb.delete('products', id);
     this.cache.stocks.filter(s => s.product_id === id).forEach(s => idb.delete('stocks', s.id));
     this.cache.stocks = this.cache.stocks.filter(s => s.product_id !== id);
+    this.cache.alerts = this.cache.alerts.filter(a => a.product_id !== id);
     return true;
   }
 
@@ -472,9 +566,18 @@ class DatabaseService {
 
   // ─── Movements ────────────────────────────────────────────────────────────────
 
-  getMovements(filters?: { type?: string; site_id?: string; product_id?: number; limit?: number; date_from?: string; date_to?: string }): Movement[] {
+  getMovements(filters?: {
+    type?: string;
+    status?: string;
+    site_id?: string;
+    product_id?: number;
+    limit?: number;
+    date_from?: string;
+    date_to?: string;
+  }): Movement[] {
     let result = [...this.cache.movements].reverse();
     if (filters?.type) result = result.filter(m => m.type === filters.type);
+    if (filters?.status) result = result.filter(m => m.status === filters.status);
     if (filters?.site_id) result = result.filter(m => m.from_site_id === filters.site_id || m.to_site_id === filters.site_id);
     if (filters?.product_id) result = result.filter(m => m.product_id === filters.product_id);
     if (filters?.date_from) result = result.filter(m => m.created_at >= filters.date_from!);
@@ -491,8 +594,16 @@ class DatabaseService {
     });
   }
 
+  getPendingMovements(): Movement[] {
+    return this.getMovements({ status: 'pending' });
+  }
+
+  /**
+   * createMovement — if type is 'pending_in', stock is NOT updated until approved
+   */
   createMovement(data: Omit<Movement, 'id' | 'created_at'>): Movement | { error: string } {
-    if (data.type === 'out' || data.type === 'transfer' || data.type === 'transport_damage') {
+    // For confirmed out/transfer/damage — check stock
+    if (data.status === 'confirmed' && (data.type === 'out' || data.type === 'transfer' || data.type === 'transport_damage')) {
       const fromStock = this.cache.stocks.find(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
       if (!fromStock || fromStock.quantity < data.quantity) {
         return { error: `Stock insuffisant. Disponible: ${fromStock?.quantity || 0}` };
@@ -505,50 +616,111 @@ class DatabaseService {
       created_at: this.now(),
     };
 
-    // Update stocks
-    if (data.type === 'in' && data.to_site_id) {
-      const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.to_site_id);
-      if (idx !== -1) {
-        this.cache.stocks[idx].quantity += data.quantity;
-        this.cache.stocks[idx].last_delivery = movement.created_at.split('T')[0];
-        this.cache.stocks[idx].updated_at = this.now();
-        idb.put('stocks', this.cache.stocks[idx]);
-      }
-    } else if ((data.type === 'out' || data.type === 'transport_damage') && data.from_site_id) {
-      const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
-      if (idx !== -1) {
-        this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - data.quantity);
-        this.cache.stocks[idx].updated_at = this.now();
-        idb.put('stocks', this.cache.stocks[idx]);
-      }
-    } else if (data.type === 'transfer') {
-      if (data.from_site_id) {
-        const fi = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
-        if (fi !== -1) { this.cache.stocks[fi].quantity -= data.quantity; idb.put('stocks', this.cache.stocks[fi]); }
-      }
-      if (data.to_site_id) {
-        const ti = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.to_site_id);
-        if (ti !== -1) { this.cache.stocks[ti].quantity += data.quantity; idb.put('stocks', this.cache.stocks[ti]); }
-      }
-    } else if (data.type === 'adjustment' && data.from_site_id) {
-      const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
-      if (idx !== -1) {
-        this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity + data.quantity);
-        this.cache.stocks[idx].updated_at = this.now();
-        idb.put('stocks', this.cache.stocks[idx]);
+    // Only update stocks for confirmed movements
+    if (data.status === 'confirmed') {
+      this._applyMovementToStock(movement);
+    } else if (data.status === 'pending') {
+      // Create a pending_approval alert
+      const product = this.cache.products.find(p => p.id === data.product_id);
+      if (product) {
+        const alert: Alert = {
+          id: this.nextId(this.cache.alerts),
+          type: 'pending_approval',
+          product_id: data.product_id,
+          site_id: data.to_site_id || data.from_site_id,
+          message: `Demande d'entrée de ${data.quantity} ${product.name} en attente d'approbation`,
+          is_read: false,
+          created_at: this.now(),
+        };
+        this.cache.alerts.push(alert);
+        idb.put('alerts', alert);
       }
     }
 
     this.cache.movements.push(movement);
     idb.put('movements', movement);
-    if (data.from_site_id) this._checkAlerts(data.product_id, data.from_site_id);
     return movement;
+  }
+
+  approveMovement(movementId: number, approverId: number): boolean {
+    const idx = this.cache.movements.findIndex(m => m.id === movementId);
+    if (idx === -1) return false;
+    const m = this.cache.movements[idx];
+    if (m.status !== 'pending') return false;
+
+    m.status = 'approved';
+    m.approved_by = approverId;
+    m.approved_at = this.now();
+    // Convert pending_in → in
+    if (m.type === 'pending_in') m.type = 'in';
+
+    this._applyMovementToStock(m);
+    idb.put('movements', m);
+
+    // Remove the pending alert
+    const alertIdx = this.cache.alerts.findIndex(a => a.type === 'pending_approval' && a.product_id === m.product_id);
+    if (alertIdx !== -1) {
+      idb.delete('alerts', this.cache.alerts[alertIdx].id);
+      this.cache.alerts.splice(alertIdx, 1);
+    }
+    return true;
+  }
+
+  rejectMovement(movementId: number, approverId: number, reason: string): boolean {
+    const idx = this.cache.movements.findIndex(m => m.id === movementId);
+    if (idx === -1) return false;
+    const m = this.cache.movements[idx];
+    if (m.status !== 'pending') return false;
+
+    m.status = 'rejected';
+    m.approved_by = approverId;
+    m.approved_at = this.now();
+    m.rejection_reason = reason;
+    idb.put('movements', m);
+
+    const alertIdx = this.cache.alerts.findIndex(a => a.type === 'pending_approval' && a.product_id === m.product_id);
+    if (alertIdx !== -1) {
+      idb.delete('alerts', this.cache.alerts[alertIdx].id);
+      this.cache.alerts.splice(alertIdx, 1);
+    }
+    return true;
+  }
+
+  private _applyMovementToStock(m: Movement) {
+    if (m.type === 'in' && m.to_site_id) {
+      const idx = this.cache.stocks.findIndex(s => s.product_id === m.product_id && s.site_id === m.to_site_id);
+      if (idx !== -1) {
+        this.cache.stocks[idx].quantity += m.quantity;
+        this.cache.stocks[idx].last_delivery = m.created_at.split('T')[0];
+        this.cache.stocks[idx].updated_at = this.now();
+        idb.put('stocks', this.cache.stocks[idx]);
+      }
+    } else if ((m.type === 'out' || m.type === 'transport_damage') && m.from_site_id) {
+      const idx = this.cache.stocks.findIndex(s => s.product_id === m.product_id && s.site_id === m.from_site_id);
+      if (idx !== -1) {
+        this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - m.quantity);
+        this.cache.stocks[idx].updated_at = this.now();
+        idb.put('stocks', this.cache.stocks[idx]);
+      }
+    } else if (m.type === 'transfer') {
+      if (m.from_site_id) {
+        const fi = this.cache.stocks.findIndex(s => s.product_id === m.product_id && s.site_id === m.from_site_id);
+        if (fi !== -1) { this.cache.stocks[fi].quantity -= m.quantity; idb.put('stocks', this.cache.stocks[fi]); }
+      }
+      if (m.to_site_id) {
+        const ti = this.cache.stocks.findIndex(s => s.product_id === m.product_id && s.site_id === m.to_site_id);
+        if (ti !== -1) { this.cache.stocks[ti].quantity += m.quantity; idb.put('stocks', this.cache.stocks[ti]); }
+      }
+    }
+
+    if (m.from_site_id) this._checkAlerts(m.product_id, m.from_site_id);
+    if (m.to_site_id) this._checkAlerts(m.product_id, m.to_site_id);
   }
 
   // ─── Alerts ───────────────────────────────────────────────────────────────────
 
   getAlerts(isRead?: boolean): Alert[] {
-    let alerts = [...this.cache.alerts].reverse();
+    let alerts = [...this.cache.alerts].sort((a, b) => b.created_at.localeCompare(a.created_at));
     if (isRead !== undefined) alerts = alerts.filter(a => a.is_read === isRead);
     return alerts.map(a => {
       const p = this.cache.products.find(p => p.id === a.product_id);
@@ -577,16 +749,40 @@ class DatabaseService {
     if (!stock) return;
 
     const totalStock = this.cache.stocks.filter(s => s.product_id === productId).reduce((sum, s) => sum + s.quantity, 0);
-    const oldAlerts = this.cache.alerts.filter(a => a.product_id === productId && a.site_id === siteId);
-    oldAlerts.forEach(a => { idb.delete('alerts', a.id); });
-    this.cache.alerts = this.cache.alerts.filter(a => !(a.product_id === productId && a.site_id === siteId));
+
+    // Remove old stock alerts for this product/site
+    const toRemove = this.cache.alerts.filter(a =>
+      a.product_id === productId && a.site_id === siteId &&
+      (a.type === 'low_stock' || a.type === 'critical_stock')
+    );
+    toRemove.forEach(a => { idb.delete('alerts', a.id); });
+    this.cache.alerts = this.cache.alerts.filter(a =>
+      !(a.product_id === productId && a.site_id === siteId &&
+        (a.type === 'low_stock' || a.type === 'critical_stock'))
+    );
 
     if (totalStock < product.threshold * 0.3) {
-      const alert: Alert = { id: this.nextId(this.cache.alerts), type: 'critical_stock', product_id: productId, site_id: siteId, message: `Stock critique — ${stock.quantity} u. sur ${siteId} (seuil: ${product.threshold})`, is_read: false, created_at: this.now() };
+      const alert: Alert = {
+        id: this.nextId(this.cache.alerts),
+        type: 'critical_stock',
+        product_id: productId,
+        site_id: siteId,
+        message: `Stock critique — ${stock.quantity} u. sur ${siteId} (seuil: ${product.threshold})`,
+        is_read: false,
+        created_at: this.now(),
+      };
       this.cache.alerts.push(alert);
       idb.put('alerts', alert);
     } else if (totalStock < product.threshold) {
-      const alert: Alert = { id: this.nextId(this.cache.alerts), type: 'low_stock', product_id: productId, site_id: siteId, message: `Stock faible — ${stock.quantity} u. sur ${siteId} (seuil: ${product.threshold})`, is_read: false, created_at: this.now() };
+      const alert: Alert = {
+        id: this.nextId(this.cache.alerts),
+        type: 'low_stock',
+        product_id: productId,
+        site_id: siteId,
+        message: `Stock faible — ${stock.quantity} u. sur ${siteId} (seuil: ${product.threshold})`,
+        is_read: false,
+        created_at: this.now(),
+      };
       this.cache.alerts.push(alert);
       idb.put('alerts', alert);
     }
@@ -624,45 +820,33 @@ class DatabaseService {
     }, 0);
 
     const today = new Date().toISOString().split('T')[0];
-    const todayMovements = this.cache.movements.filter(m => m.created_at.startsWith(today)).length;
+    const todayMovements = this.cache.movements.filter(m => m.created_at.startsWith(today) && m.status === 'confirmed').length;
     const alertCount = this.cache.alerts.filter(a => !a.is_read).length;
+    const pendingCount = this.cache.movements.filter(m => m.status === 'pending').length;
     const criticalProducts = this.cache.products.filter(p => {
       const total = this.cache.stocks.filter(s => s.product_id === p.id && sites.includes(s.site_id)).reduce((sum, s) => sum + s.quantity, 0);
       return total < p.threshold;
     }).length;
 
-    return { totalProducts: this.cache.products.length, totalValue, todayMovements, alertCount, criticalProducts };
+    return { totalProducts: this.cache.products.length, totalValue, todayMovements, alertCount, criticalProducts, pendingCount };
   }
 
-  // ─── Sales / CA Reporting ─────────────────────────────────────────────────────
+  // ─── Sales Reporting ──────────────────────────────────────────────────────────
 
-  getSalesReport(dateFrom: string, dateTo: string, siteId?: string): {
-    movements: Movement[];
-    totalQty: number;
-    totalCA: number;
-    byProduct: { name: string; sku: string; qty: number; ca: number }[];
-    byDate: { date: string; qty: number; ca: number }[];
-  } {
-    const outMovements = this.getMovements({ type: 'out', date_from: dateFrom, date_to: dateTo, site_id: siteId });
+  getSalesReport(dateFrom: string, dateTo: string, siteId?: string) {
+    const outMovements = this.getMovements({ type: 'out', status: 'confirmed', date_from: dateFrom, date_to: dateTo, site_id: siteId });
 
     const byProductMap: Record<number, { name: string; sku: string; qty: number; ca: number }> = {};
     const byDateMap: Record<string, { qty: number; ca: number }> = {};
-
-    let totalQty = 0;
-    let totalCA = 0;
+    let totalQty = 0, totalCA = 0;
 
     outMovements.forEach(m => {
       const p = this.cache.products.find(p => p.id === m.product_id);
       const ca = m.quantity * (p?.price || 0);
-      totalQty += m.quantity;
-      totalCA += ca;
-
-      if (!byProductMap[m.product_id]) {
-        byProductMap[m.product_id] = { name: p?.name || '', sku: p?.sku || '', qty: 0, ca: 0 };
-      }
+      totalQty += m.quantity; totalCA += ca;
+      if (!byProductMap[m.product_id]) byProductMap[m.product_id] = { name: p?.name || '', sku: p?.sku || '', qty: 0, ca: 0 };
       byProductMap[m.product_id].qty += m.quantity;
       byProductMap[m.product_id].ca += ca;
-
       const date = m.created_at.split('T')[0];
       if (!byDateMap[date]) byDateMap[date] = { qty: 0, ca: 0 };
       byDateMap[date].qty += m.quantity;
@@ -670,33 +854,22 @@ class DatabaseService {
     });
 
     return {
-      movements: outMovements,
-      totalQty,
-      totalCA,
+      movements: outMovements, totalQty, totalCA,
       byProduct: Object.values(byProductMap).sort((a, b) => b.ca - a.ca),
       byDate: Object.entries(byDateMap).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, ...v })),
     };
   }
 
-  getDamageReport(dateFrom: string, dateTo: string, siteId?: string): {
-    movements: Movement[];
-    totalQty: number;
-    totalLoss: number;
-    byProduct: { name: string; sku: string; qty: number; loss: number }[];
-  } {
+  getDamageReport(dateFrom: string, dateTo: string, siteId?: string) {
     const dmgMovements = this.getMovements({ type: 'transport_damage', date_from: dateFrom, date_to: dateTo, site_id: siteId });
-
     const byProductMap: Record<number, { name: string; sku: string; qty: number; loss: number }> = {};
     let totalQty = 0, totalLoss = 0;
 
     dmgMovements.forEach(m => {
       const p = this.cache.products.find(p => p.id === m.product_id);
       const loss = m.quantity * (p?.price || 0);
-      totalQty += m.quantity;
-      totalLoss += loss;
-      if (!byProductMap[m.product_id]) {
-        byProductMap[m.product_id] = { name: p?.name || '', sku: p?.sku || '', qty: 0, loss: 0 };
-      }
+      totalQty += m.quantity; totalLoss += loss;
+      if (!byProductMap[m.product_id]) byProductMap[m.product_id] = { name: p?.name || '', sku: p?.sku || '', qty: 0, loss: 0 };
       byProductMap[m.product_id].qty += m.quantity;
       byProductMap[m.product_id].loss += loss;
     });
@@ -704,7 +877,7 @@ class DatabaseService {
     return { movements: dmgMovements, totalQty, totalLoss, byProduct: Object.values(byProductMap) };
   }
 
-  // ─── Export/Import for cloud sync ─────────────────────────────────────────────
+  // ─── Export/Import ─────────────────────────────────────────────────────────────
 
   async exportDatabase(): Promise<string> {
     const data = await idb.exportAll();
@@ -715,13 +888,11 @@ class DatabaseService {
     const data = JSON.parse(jsonStr);
     await idb.importAll(data);
     await this._loadCache();
+    // Ensure admin still exists after import
+    await this._ensureAdminUser();
   }
 
-  /**
-   * Merge sync: only update data for a specific siteId, keep other sites' data intact
-   */
   async mergeSiteData(siteId: string, remoteData: Record<string, any[]>): Promise<void> {
-    // Merge products: add/update products not conflicting
     if (remoteData.products) {
       for (const remoteProd of remoteData.products) {
         const local = this.cache.products.find(p => p.sku === remoteProd.sku);
@@ -733,8 +904,6 @@ class DatabaseService {
         }
       }
     }
-
-    // Merge stocks: only update stocks for the given siteId
     if (remoteData.stocks) {
       for (const remoteStock of remoteData.stocks) {
         if (remoteStock.site_id !== siteId) continue;
@@ -743,7 +912,6 @@ class DatabaseService {
           return remoteProd && p.sku === remoteProd.sku;
         });
         if (!localProd) continue;
-
         const localStock = this.cache.stocks.find(s => s.product_id === localProd.id && s.site_id === siteId);
         if (localStock) {
           localStock.quantity = remoteStock.quantity;
@@ -757,8 +925,6 @@ class DatabaseService {
         }
       }
     }
-
-    // Merge movements: add movements from remote siteId that don't exist locally
     if (remoteData.movements) {
       for (const rm of remoteData.movements) {
         if (rm.from_site_id !== siteId && rm.to_site_id !== siteId) continue;
@@ -772,14 +938,21 @@ class DatabaseService {
     }
   }
 
-  getProductsForExport() {
-    return this.getStocksGroupedByProduct();
-  }
+  getProductsForExport() { return this.getStocksGroupedByProduct(); }
 
-  async reset(): Promise<void> {
+  // ─── Full Reset ───────────────────────────────────────────────────────────────
+
+  async reset(keepUsers = false): Promise<void> {
+    const usersBackup = keepUsers ? [...this.cache.users] : [];
     for (const store of STORES) await idb.clear(store);
     this.cache = { users: [], products: [], stocks: [], movements: [], alerts: [], reports: [], loaded: false };
-    await this._initialize();
+
+    if (keepUsers && usersBackup.length > 0) {
+      await idb.putBulk('users', usersBackup);
+      this.cache.users = usersBackup;
+    }
+
+    await this._ensureAdminUser();
   }
 }
 
