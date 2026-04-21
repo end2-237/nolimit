@@ -99,10 +99,10 @@ function SitesManager() {
 
       {expanded && (
         <CardContent className="space-y-3">
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700">
+          {/* <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700">
             <p className="font-semibold mb-1">💡 Sites dynamiques</p>
             <p>Les sites ajoutés ici seront disponibles dans tout l'app : entrées/sorties, transferts, rapports et synchronisation cloud. Les stocks existants sont conservés.</p>
-          </div>
+          </div> */}
 
           {sites.map(site => (
             <div key={site.id}>

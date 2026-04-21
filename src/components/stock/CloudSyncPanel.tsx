@@ -224,13 +224,13 @@ export function CloudSyncPanel() {
               placeholder="snl-prod-auth-..." />
           </div>
 
-          {/* Explication */}
+          {/* Explication
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800 space-y-1">
             <p className="font-semibold">💡 Logique de synchronisation</p>
             <p>• <strong>Sauvegarder (Push)</strong> : Exporte la base IndexedDB en JSON et l'envoie via POST à votre API — identique à <code className="bg-blue-100 px-1 rounded">curl -X POST ... -d &lbrace;"data":...&rbrace;</code></p>
             <p>• <strong>Synchroniser un site</strong> : Récupère les données d'UN site distant et les fusionne localement. Les autres sites locaux restent intacts.</p>
             <p>• <strong>Restauration complète</strong> : Remplace toute la base (usage rare).</p>
-          </div>
+          </div> */}
 
           {/* Actions */}
           <div className="flex flex-col gap-2 pt-1">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Search, Filter, Download, ArrowUpRight, ArrowDownLeft, RefreshCw,
   Package, Clock, CheckCircle, XCircle, User, MapPin, TrendingUp,
@@ -66,54 +66,79 @@ function exportToCSV(movements: Movement[]) {
   a.click(); URL.revokeObjectURL(url);
 }
 
-// ─── CA Dashboard Component ───────────────────────────────────────────────────
+// ─── CA Dashboard — MODIFIÉ: accepte filtres externes ───────────────────────
 
-function CADashboard({ movements }: { movements: Movement[] }) {
+function CADashboard({
+  movements,
+  externalUser = 'all',
+  externalDateFrom = '',
+  externalDateTo = '',
+}: {
+  movements: Movement[];
+  externalUser?: string;
+  externalDateFrom?: string;
+  externalDateTo?: string;
+}) {
   const [activeCity, setActiveCity] = useState<string>('all');
-  const [activeUser, setActiveUser] = useState<string>('all');
+  // Quand des filtres externes sont actifs, ils priment sur l'état interne
+  const [internalUser, setInternalUser] = useState<string>('all');
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
 
+  // Filtre utilisateur effectif: externe si défini, sinon interne
+  const activeUser = externalUser !== 'all' ? externalUser : internalUser;
+  // Filtre date effectif: externe si défini, sinon calculé depuis la période interne
+  const hasExternalDate = externalDateFrom !== '' || externalDateTo !== '';
+
   const getDateFrom = () => {
+    if (hasExternalDate) return externalDateFrom;
     if (period === 'today') return today();
     if (period === 'week') return weekStart();
     if (period === 'month') return monthStart();
     return '';
   };
+  const getDateTo = () => {
+    if (hasExternalDate) return externalDateTo;
+    return today();
+  };
 
   const dateFrom = getDateFrom();
+  const dateTo = getDateTo();
 
-  // Filter confirmed out movements (sales)
+  // FIX: inclure type 'out' ET status 'confirmed' ou 'approved'
   const sales = movements.filter(m =>
     m.type === 'out' &&
-    m.status === 'confirmed' &&
+    (m.status === 'confirmed' || m.status === 'approved') &&
     (!dateFrom || m.created_at >= dateFrom) &&
+    (!dateTo || m.created_at <= dateTo + 'T23:59:59') &&
     (activeCity === 'all' || m.from_site_id === activeCity) &&
     (activeUser === 'all' || m.user_name === activeUser)
   );
 
-  // CA by city
+  // CA par ville (respecte filtre date)
   const caByCity = APP_CONFIG.sites.reduce((acc, site) => {
     const siteSales = movements.filter(m =>
-      m.type === 'out' && m.status === 'confirmed' &&
+      m.type === 'out' && (m.status === 'confirmed' || m.status === 'approved') &&
       m.from_site_id === site.id &&
-      (!dateFrom || m.created_at >= dateFrom)
+      (!dateFrom || m.created_at >= dateFrom) &&
+      (!dateTo || m.created_at <= dateTo + 'T23:59:59') &&
+      (activeUser === 'all' || m.user_name === activeUser)
     );
     const total = siteSales.reduce((sum, m) => {
       const p = db.getProductById(m.product_id);
       return sum + m.quantity * (p?.price || 0);
     }, 0);
-    const qty = siteSales.reduce((sum, m) => sum + m.quantity, 0);
-    acc[site.id] = { total, qty, count: siteSales.length };
+    acc[site.id] = { total, qty: siteSales.reduce((s, m) => s + m.quantity, 0), count: siteSales.length };
     return acc;
   }, {} as Record<string, { total: number; qty: number; count: number }>);
 
-  // CA by user
-  const allUsers = [...new Set(movements.filter(m => m.type === 'out' && m.status === 'confirmed').map(m => m.user_name).filter(Boolean))];
+  // CA par utilisateur (respecte filtres date + ville)
+  const allUsers = [...new Set(movements.filter(m => m.type === 'out' && (m.status === 'confirmed' || m.status === 'approved')).map(m => m.user_name).filter(Boolean))];
   const caByUser = allUsers.reduce((acc, userName) => {
     const userSales = movements.filter(m =>
-      m.type === 'out' && m.status === 'confirmed' &&
+      m.type === 'out' && (m.status === 'confirmed' || m.status === 'approved') &&
       m.user_name === userName &&
       (!dateFrom || m.created_at >= dateFrom) &&
+      (!dateTo || m.created_at <= dateTo + 'T23:59:59') &&
       (activeCity === 'all' || m.from_site_id === activeCity)
     );
     const total = userSales.reduce((sum, m) => {
@@ -129,10 +154,12 @@ function CADashboard({ movements }: { movements: Movement[] }) {
     const p = db.getProductById(m.product_id);
     return sum + m.quantity * (p?.price || 0);
   }, 0);
-
   const totalQty = sales.reduce((sum, m) => sum + m.quantity, 0);
 
   const periodLabels = { today: "Aujourd'hui", week: 'Cette semaine', month: 'Ce mois', all: 'Tout' };
+
+  // Afficher un bandeau si des filtres externes sont actifs
+  const externalFiltersActive = externalUser !== 'all' || hasExternalDate;
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-4">
@@ -144,40 +171,55 @@ function CADashboard({ movements }: { movements: Movement[] }) {
           </div>
           <div>
             <h2 className="text-sm font-bold text-gray-900">Chiffre d'Affaires</h2>
-            <p className="text-xs text-gray-500">Ventes confirmées par l'admin</p>
+            <p className="text-xs text-gray-500">Ventes confirmées et approuvées</p>
           </div>
         </div>
-        <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1">
-          {(['today', 'week', 'month', 'all'] as const).map(p => (
-            <button key={p} onClick={() => setPeriod(p)}
-              className={`px-3 py-1 text-xs rounded-lg font-medium transition-all ${period === p ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              {periodLabels[p]}
-            </button>
-          ))}
-        </div>
+        {/* Sélecteur de période — désactivé si filtre externe de date actif */}
+        {!hasExternalDate ? (
+          <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1">
+            {(['today', 'week', 'month', 'all'] as const).map(p => (
+              <button key={p} onClick={() => setPeriod(p)}
+                className={`px-3 py-1 text-xs rounded-lg font-medium transition-all ${period === p ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                {periodLabels[p]}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl font-medium">
+            Filtre date actif: {externalDateFrom || '…'} → {externalDateTo || '…'}
+          </div>
+        )}
       </div>
+
+      {/* Bandeau filtre vendeur externe */}
+      {externalUser !== 'all' && (
+        <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700 font-medium flex items-center gap-2">
+          <User className="w-3 h-3" />
+          Filtre vendeur actif : <strong>{externalUser}</strong> — CA affiché uniquement pour ce vendeur
+        </div>
+      )}
 
       <div className="p-5">
         {/* Global KPI */}
         <div className="grid grid-cols-3 gap-4 mb-5">
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
-            <div className="text-xs text-gray-500 mb-1">CA Total</div>
+            <div className="text-xs text-gray-500">CA Total</div>
             <div className="text-2xl font-bold text-green-700 font-mono">{totalCA.toLocaleString('fr-FR')}</div>
             <div className="text-xs text-gray-400">XAF</div>
           </div>
           <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100">
-            <div className="text-xs text-gray-500 mb-1">Unités vendues</div>
+            <div className="text-xs text-gray-500">Unités vendues</div>
             <div className="text-2xl font-bold text-blue-700 font-mono">{totalQty}</div>
             <div className="text-xs text-gray-400">articles</div>
           </div>
           <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-4 border border-purple-100">
-            <div className="text-xs text-gray-500 mb-1">Transactions</div>
+            <div className="text-xs text-gray-500">Transactions</div>
             <div className="text-2xl font-bold text-purple-700 font-mono">{sales.length}</div>
             <div className="text-xs text-gray-400">ventes validées</div>
           </div>
         </div>
 
-        {/* CA by city tabs */}
+        {/* CA par ville */}
         <div className="mb-4">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Par Ville</p>
           <div className="flex gap-2 mb-3">
@@ -196,7 +238,6 @@ function CADashboard({ movements }: { movements: Movement[] }) {
           <div className="grid grid-cols-3 gap-3">
             {APP_CONFIG.sites.map(site => {
               const data = caByCity[site.id] || { total: 0, qty: 0, count: 0 };
-              const isActive = activeCity === site.id || activeCity === 'all';
               return (
                 <button key={site.id} onClick={() => setActiveCity(activeCity === site.id ? 'all' : site.id)}
                   className={`p-3 rounded-xl border-2 text-left transition-all ${activeCity === site.id ? 'border-2' : 'border border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200'}`}
@@ -215,38 +256,47 @@ function CADashboard({ movements }: { movements: Movement[] }) {
           </div>
         </div>
 
-        {/* CA by user */}
+        {/* CA par vendeur — si filtre externe actif, highlight le vendeur filtré */}
         <div>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Par Vendeur</p>
           {Object.keys(caByUser).length === 0 ? (
             <p className="text-xs text-gray-400 text-center py-3">Aucune vente pour cette période</p>
           ) : (
             <div className="space-y-2">
-              {Object.entries(caByUser).sort((a, b) => b[1].total - a[1].total).map(([userName, data]) => {
-                const initials = userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-                const isSelected = activeUser === userName;
-                const pct = totalCA > 0 ? (data.total / totalCA) * 100 : 0;
-                return (
-                  <button key={userName} onClick={() => setActiveUser(isSelected ? 'all' : userName)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${isSelected ? 'border-green-400 bg-green-50' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${isSelected ? 'bg-green-600' : 'bg-gray-400'}`}>
-                      {initials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-semibold text-gray-800">{userName}</span>
-                        <span className="text-sm font-bold text-green-700 font-mono">{data.total.toLocaleString('fr-FR')} XAF</span>
+              {Object.entries(caByUser)
+                .sort((a, b) => b[1].total - a[1].total)
+                .map(([userName, data]) => {
+                  const initials = userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                  const isSelected = internalUser === userName || externalUser === userName;
+                  // Total CA pour le calcul du pourcentage (sur tous vendeurs de la période/ville)
+                  const grandTotal = Object.values(caByUser).reduce((s, v) => s + v.total, 0);
+                  const pct = grandTotal > 0 ? (data.total / grandTotal) * 100 : 0;
+                  const isExternallyHighlighted = externalUser === userName;
+                  return (
+                    <button key={userName}
+                      onClick={() => externalUser === 'all' ? setInternalUser(isSelected ? 'all' : userName) : undefined}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all
+                        ${isExternallyHighlighted ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200' :
+                          isSelected ? 'border-green-400 bg-green-50' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200'}
+                        ${externalUser !== 'all' && !isExternallyHighlighted ? 'opacity-50' : ''}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${isExternallyHighlighted ? 'bg-amber-500' : isSelected ? 'bg-green-600' : 'bg-gray-400'}`}>
+                        {initials}
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                          <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold text-gray-800">{userName}</span>
+                          <span className="text-sm font-bold text-green-700 font-mono">{data.total.toLocaleString('fr-FR')} XAF</span>
                         </div>
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap">{data.qty} u. · {pct.toFixed(0)}%</span>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-[10px] text-gray-400 whitespace-nowrap">{data.qty} u. · {pct.toFixed(0)}%</span>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
             </div>
           )}
         </div>
@@ -282,7 +332,6 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
     load(); onRefresh();
   };
 
-  // Group by type
   const pendingIn = pending.filter(m => m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending'));
   const pendingOut = pending.filter(m => m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending'));
   const pendingOther = pending.filter(m => !['pending_in', 'pending_out'].includes(m.type) && !['in', 'out'].includes(m.type));
@@ -319,7 +368,7 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
             <div key={m.id} className="px-4 py-3">
               <div className="flex items-start gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isOut ? 'bg-red-100' : isIn ? 'bg-green-100' : 'bg-blue-100'}`}>
-                  {isOut ? <ArrowUpRight className={`w-4 h-4 ${isOut ? 'text-red-600' : 'text-green-600'}`} /> : <ArrowDownLeft className="w-4 h-4 text-green-600" />}
+                  {isOut ? <ArrowUpRight className="w-4 h-4 text-red-600" /> : <ArrowDownLeft className="w-4 h-4 text-green-600" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
@@ -405,7 +454,6 @@ export function MovementsPage() {
       date_to: dateTo || undefined,
     });
 
-    // Non-admin users only see their own movements
     const filtered = isAdmin ? all : all.filter(m => m.user_id === user?.id);
     setAllMovements(all);
     setMovements(filtered);
@@ -453,7 +501,7 @@ export function MovementsPage() {
           </div>
         </div>
 
-        {/* Tabs (admin only) */}
+        {/* Tabs */}
         {isAdmin && (
           <div className="flex gap-1 mb-4">
             <button onClick={() => setActiveTab('movements')}
@@ -464,6 +512,7 @@ export function MovementsPage() {
             <button onClick={() => setActiveTab('ca')}
               className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-medium transition-all ${activeTab === 'ca' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               <BarChart3 className="w-3.5 h-3.5" /> Chiffre d'Affaires
+              {userFilter !== 'all' && <span className="text-[10px] bg-amber-400 text-white px-1.5 py-0.5 rounded-full">filtré</span>}
             </button>
           </div>
         )}
@@ -507,7 +556,7 @@ export function MovementsPage() {
           </Select>
           {isAdmin && allUsers.length > 0 && (
             <Select value={userFilter} onValueChange={setUserFilter}>
-              <SelectTrigger className="w-[150px] h-9 text-sm">
+              <SelectTrigger className="w-[160px] h-9 text-sm">
                 <User className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
                 <SelectValue placeholder="Vendeur" />
               </SelectTrigger>
@@ -552,24 +601,25 @@ export function MovementsPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto px-6 py-4">
 
-        {/* CA Tab */}
+        {/* CA Tab — passe les filtres externes */}
         {activeTab === 'ca' && isAdmin && (
-          <CADashboard movements={allMovements} />
+          <CADashboard
+            movements={allMovements}
+            externalUser={userFilter}
+            externalDateFrom={dateFrom}
+            externalDateTo={dateTo}
+          />
         )}
 
         {/* Movements Tab */}
         {activeTab === 'movements' && (
           <>
-            {/* Admin: pending approvals */}
             {isAdmin && <PendingApprovalsAdmin onRefresh={load} />}
 
             {displayMovements.length === 0 ? (
               <div className="text-center py-16 text-gray-400">
                 <RefreshCw className="w-10 h-10 mx-auto mb-3 opacity-20" />
                 <p className="text-sm">Aucun mouvement trouvé</p>
-                <p className="text-xs mt-1">
-                  {!isAdmin ? 'Vos demandes de sorties et entrées apparaîtront ici' : 'Modifiez vos filtres ou créez des mouvements de stock'}
-                </p>
               </div>
             ) : (
               <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
@@ -590,6 +640,8 @@ export function MovementsPage() {
                       const product = db.getProductById(m.product_id);
                       const isOut = m.type === 'out' || m.type === 'pending_out';
                       const estCA = isOut && product ? m.quantity * product.price : 0;
+                      // FIX: afficher le CA pour confirmed ET approved
+                      const showCA = isOut && estCA > 0 && (m.status === 'confirmed' || m.status === 'approved');
 
                       return (
                         <tr key={m.id} className={`border-b border-[#F1F5F9] hover:bg-gray-50 ${m.status === 'pending' ? 'bg-yellow-50/50' : m.status === 'rejected' ? 'bg-red-50/30' : ''}`}>
@@ -608,8 +660,12 @@ export function MovementsPage() {
                           <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{m.reference}</td>
                           <td className="px-3 py-2.5">
                             <div className="font-medium max-w-[120px] truncate">{m.product_name}</div>
-                            {isOut && estCA > 0 && m.status === 'confirmed' && (
-                              <div className="text-[10px] text-green-600 font-mono">{estCA.toLocaleString('fr-FR')} XAF</div>
+                            {/* FIX: Afficher CA pour approved aussi */}
+                            {showCA && (
+                              <div className="text-[10px] text-green-600 font-mono font-semibold">
+                                {estCA.toLocaleString('fr-FR')} XAF
+                              
+                              </div>
                             )}
                           </td>
                           <td className="px-3 py-2.5 font-mono font-semibold">

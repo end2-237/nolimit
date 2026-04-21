@@ -341,7 +341,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
                   )}
                   {estimatedCA > 0 && (
                     <p className="text-xs text-green-600 font-semibold">
-                      💰 CA estimé: {estimatedCA.toLocaleString('fr-FR')} XAF
+                       CA estimé: {estimatedCA.toLocaleString('fr-FR')} XAF
                     </p>
                   )}
                 </div>

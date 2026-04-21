@@ -4,6 +4,7 @@ import {
   Edit2, Trash2, ArrowUpRight, ArrowDownLeft, RefreshCw,
   Image as ImageIcon, X, CheckCircle, AlertCircle, Upload
 } from 'lucide-react';
+
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -13,142 +14,142 @@ import { db } from '../services/database';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 import { ProductFormModal } from '../components/stock/ProductFormModal';
-import { BulkInputModal } from '../components/stock/BulkInputModal';
+import { BulkInputModal, StockOutModal } from '../components/stock/BulkInputModal';
 
 // ─── Stock Out Modal ──────────────────────────────────────────────────────────
 
-function StockOutModal({ product, allowedSites, onClose }: { product: any; allowedSites: string[]; onClose: () => void }) {
-  const { user } = useAuth();
-  const [site, setSite] = useState(allowedSites[0] || 'DLA');
-  const [quantity, setQuantity] = useState('');
-  const [reason, setReason] = useState('Vente client');
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [error, setError] = useState('');
+// function StockOutModal({ product, allowedSites, onClose }: { product: any; allowedSites: string[]; onClose: () => void }) {
+//   const { user } = useAuth();
+//   const [site, setSite] = useState(allowedSites[0] || 'DLA');
+//   const [quantity, setQuantity] = useState('');
+//   const [reason, setReason] = useState('Vente client');
+//   const [isSuccess, setIsSuccess] = useState(false);
+//   const [error, setError] = useState('');
 
-  const availableStock = product?.stock?.[site] || 0;
-  const siteOptions = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id));
+//   const availableStock = product?.stock?.[site] || 0;
+//   const siteOptions = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id));
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const qty = parseInt(quantity);
-    if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
-    if (qty > availableStock) { setError(`Stock insuffisant. Disponible: ${availableStock}`); return; }
+//   const handleSubmit = (e: React.FormEvent) => {
+//     e.preventDefault();
+//     const qty = parseInt(quantity);
+//     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
+//     if (qty > availableStock) { setError(`Stock insuffisant. Disponible: ${availableStock}`); return; }
 
-    const result = db.createMovement({
-      type: 'out',
-      product_id: product.id,
-      from_site_id: site,
-      to_site_id: null,
-      quantity: qty,
-      reason,
-      reference: `SRT-${Date.now().toString(36).toUpperCase()}`,
-      user_id: user?.id || 1,
-      status: 'confirmed'
-    });
+//     const result = db.createMovement({
+//       type: 'out',
+//       product_id: product.id,
+//       from_site_id: site,
+//       to_site_id: null,
+//       quantity: qty,
+//       reason,
+//       reference: `SRT-${Date.now().toString(36).toUpperCase()}`,
+//       user_id: user?.id || 1,
+//       status: 'confirmed'
+//     });
 
-    if ('error' in result) {
-      setError(result.error);
-    } else {
-      setIsSuccess(true);
-      setTimeout(onClose, 1200);
-    }
-  };
+//     if ('error' in result) {
+//       setError(result.error);
+//     } else {
+//       setIsSuccess(true);
+//       setTimeout(onClose, 1200);
+//     }
+//   };
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center">
-              <ArrowUpRight className="w-4 h-4 text-red-600" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold">Sortie de Stock</h2>
-              <p className="text-xs text-gray-500">{product?.name}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-        </div>
+//   return (
+//     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+//       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+//         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+//           <div className="flex items-center gap-3">
+//             <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center">
+//               <ArrowUpRight className="w-4 h-4 text-red-600" />
+//             </div>
+//             <div>
+//               <h2 className="text-base font-semibold">Sortie de Stock</h2>
+//               <p className="text-xs text-gray-500">{product?.name}</p>
+//             </div>
+//           </div>
+//           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+//         </div>
 
-        {isSuccess ? (
-          <div className="px-6 py-12 text-center">
-            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Sortie enregistrée !</h3>
-            <p className="text-sm text-gray-500">-{quantity} unités de {APP_CONFIG.sites.find(s => s.id === site)?.name}</p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-            {error && (
-              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                <span className="text-sm text-red-700">{error}</span>
-              </div>
-            )}
-            <div>
-              <Label>Site de Départ</Label>
-              <Select value={site} onValueChange={v => { setSite(v); setError(''); }}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {siteOptions.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name} — disponible: <span className="font-mono font-bold ml-1">{product?.stock?.[s.id] || 0}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Quantité à Sortir</Label>
-              <div className="relative mt-1">
-                <Input
-                  type="number"
-                  placeholder="Ex: 10"
-                  value={quantity}
-                  onChange={e => { setQuantity(e.target.value); setError(''); }}
-                  min="1"
-                  max={availableStock}
-                  required
-                  className="pr-16 font-mono"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{product?.unit || 'unité(s)'}</span>
-              </div>
-              {quantity && parseInt(quantity) > 0 && parseInt(quantity) <= availableStock && (
-                <p className="text-xs text-red-600 mt-1">
-                  Nouveau stock: {availableStock} - {quantity} = <strong>{availableStock - parseInt(quantity)}</strong>
-                </p>
-              )}
-              <p className="text-xs text-gray-400 mt-1">Stock disponible sur {APP_CONFIG.sites.find(s => s.id === site)?.name}: <strong className="font-mono">{availableStock}</strong></p>
-            </div>
-            <div>
-              <Label>Motif</Label>
-              <Select value={reason} onValueChange={setReason}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Vente client">Vente client</SelectItem>
-                  <SelectItem value="Commande en gros">Commande en gros</SelectItem>
-                  <SelectItem value="Usage interne">Usage interne</SelectItem>
-                  <SelectItem value="Destruction / périmé">Destruction / périmé</SelectItem>
-                  <SelectItem value="Perte / vol">Perte / vol</SelectItem>
-                  <SelectItem value="Ajustement inventaire">Ajustement inventaire</SelectItem>
-                  <SelectItem value="Don / cadeau">Don / cadeau</SelectItem>
-                  <SelectItem value="Autre">Autre</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              <Button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white">
-                Confirmer la Sortie
-              </Button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
+//         {isSuccess ? (
+//           <div className="px-6 py-12 text-center">
+//             <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+//               <CheckCircle className="w-8 h-8 text-green-600" />
+//             </div>
+//             <h3 className="font-semibold text-gray-900 mb-1">Sortie enregistrée !</h3>
+//             <p className="text-sm text-gray-500">-{quantity} unités de {APP_CONFIG.sites.find(s => s.id === site)?.name}</p>
+//           </div>
+//         ) : (
+//           <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+//             {error && (
+//               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
+//                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+//                 <span className="text-sm text-red-700">{error}</span>
+//               </div>
+//             )}
+//             <div>
+//               <Label>Site de Départ</Label>
+//               <Select value={site} onValueChange={v => { setSite(v); setError(''); }}>
+//                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+//                 <SelectContent>
+//                   {siteOptions.map(s => (
+//                     <SelectItem key={s.id} value={s.id}>
+//                       {s.name} — disponible: <span className="font-mono font-bold ml-1">{product?.stock?.[s.id] || 0}</span>
+//                     </SelectItem>
+//                   ))}
+//                 </SelectContent>
+//               </Select>
+//             </div>
+//             <div>
+//               <Label>Quantité à Sortir</Label>
+//               <div className="relative mt-1">
+//                 <Input
+//                   type="number"
+//                   placeholder="Ex: 10"
+//                   value={quantity}
+//                   onChange={e => { setQuantity(e.target.value); setError(''); }}
+//                   min="1"
+//                   max={availableStock}
+//                   required
+//                   className="pr-16 font-mono"
+//                 />
+//                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{product?.unit || 'unité(s)'}</span>
+//               </div>
+//               {quantity && parseInt(quantity) > 0 && parseInt(quantity) <= availableStock && (
+//                 <p className="text-xs text-red-600 mt-1">
+//                   Nouveau stock: {availableStock} - {quantity} = <strong>{availableStock - parseInt(quantity)}</strong>
+//                 </p>
+//               )}
+//               <p className="text-xs text-gray-400 mt-1">Stock disponible sur {APP_CONFIG.sites.find(s => s.id === site)?.name}: <strong className="font-mono">{availableStock}</strong></p>
+//             </div>
+//             <div>
+//               <Label>Motif</Label>
+//               <Select value={reason} onValueChange={setReason}>
+//                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+//                 <SelectContent>
+//                   <SelectItem value="Vente client">Vente client</SelectItem>
+//                   <SelectItem value="Commande en gros">Commande en gros</SelectItem>
+//                   <SelectItem value="Usage interne">Usage interne</SelectItem>
+//                   <SelectItem value="Destruction / périmé">Destruction / périmé</SelectItem>
+//                   <SelectItem value="Perte / vol">Perte / vol</SelectItem>
+//                   <SelectItem value="Ajustement inventaire">Ajustement inventaire</SelectItem>
+//                   <SelectItem value="Don / cadeau">Don / cadeau</SelectItem>
+//                   <SelectItem value="Autre">Autre</SelectItem>
+//                 </SelectContent>
+//               </Select>
+//             </div>
+//             <div className="flex gap-2 pt-1">
+//               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
+//               <Button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+//                 Confirmer la Sortie
+//               </Button>
+//             </div>
+//           </form>
+//         )}
+//       </div>
+//     </div>
+//   );
+// }
 
 // ─── Image Upload Modal ────────────────────────────────────────────────────────
 
