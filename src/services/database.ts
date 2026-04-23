@@ -667,49 +667,52 @@ class DatabaseService {
    * createMovement
    *
    * RÈGLE PRINCIPALE :
-   * - status 'confirmed' : stock mis à jour immédiatement (admin/manager direct)
-   * - status 'pending' : stock NON modifié, attend validation
-   *
-   * Types de mouvements pending :
-   * - pending_in  : demande d'entrée
-   * - pending_out : demande de sortie / vente
+   * - EXITS (type='out') : toujours confirmés immédiatement, stock réduit tout de suite
+   * - ENTRIES (type='pending_in') : demande d'approbation, stock n'est affecté que si approuvé
+   * - Autres types : confirmés immédiatement
    */
   createMovement(data: Omit<Movement, 'id' | 'created_at'>): Movement | { error: string } {
-    // Vérification stock uniquement pour les mouvements confirmés directs
-    if (data.status === 'confirmed' && (data.type === 'out' || data.type === 'transfer' || data.type === 'transport_damage')) {
+    // Pour les sorties/ventes, forcer status='confirmed' (pas de pending_out)
+    let finalData = { ...data };
+    if (data.type === 'out') {
+      finalData.status = 'confirmed';
+    }
+
+    // Vérification stock pour mouvements confirmés
+    if (finalData.status === 'confirmed' && (finalData.type === 'out' || finalData.type === 'transfer' || finalData.type === 'transport_damage')) {
       const fromStock = this.cache.stocks.find(
-        s => s.product_id === data.product_id && s.site_id === data.from_site_id
+        s => s.product_id === finalData.product_id && s.site_id === finalData.from_site_id
       );
-      if (!fromStock || fromStock.quantity < data.quantity) {
+      if (!fromStock || fromStock.quantity < finalData.quantity) {
         return { error: `Stock insuffisant. Disponible: ${fromStock?.quantity || 0}` };
       }
     }
 
     const movement: Movement = {
       id: this.nextId(this.cache.movements),
-      ...data,
+      ...finalData,
       created_at: this.now(),
     };
 
-    if (data.status === 'confirmed') {
+    if (movement.status === 'confirmed') {
       // Appliquer immédiatement au stock
       this._applyMovementToStock(movement);
-    } else if (data.status === 'pending') {
-      // Créer une alerte de validation
-      const product = this.cache.products.find(p => p.id === data.product_id);
+    } else if (movement.status === 'pending') {
+      // Créer une alerte de validation (entries uniquement désormais)
+      const product = this.cache.products.find(p => p.id === finalData.product_id);
       if (product) {
-        const isOut = data.type === 'pending_out' || data.type === 'out';
-        const user = this.cache.users.find(u => u.id === data.user_id);
+        const isIn = finalData.type === 'pending_in' || finalData.type === 'in';
+        const user = this.cache.users.find(u => u.id === finalData.user_id);
         const sites = this.getSites();
-        const siteName = sites.find(s => s.id === (data.from_site_id || data.to_site_id))?.name || '';
+        const siteName = sites.find(s => s.id === (finalData.from_site_id || finalData.to_site_id))?.name || '';
         const alert: Alert = {
           id: this.nextId(this.cache.alerts),
           type: 'pending_approval',
-          product_id: data.product_id,
-          site_id: data.to_site_id || data.from_site_id,
-          message: isOut
-            ? `Sortie de ${data.quantity} × ${product.name} demandée par ${user?.full_name || 'Opérateur'} (${siteName})`
-            : `Entrée de ${data.quantity} × ${product.name} demandée par ${user?.full_name || 'Opérateur'} (${siteName})`,
+          product_id: finalData.product_id,
+          site_id: finalData.to_site_id || finalData.from_site_id,
+          message: isIn
+            ? `Entrée de ${finalData.quantity} × ${product.name} demandée par ${user?.full_name || 'Opérateur'} (${siteName})`
+            : `Mouvement de ${finalData.quantity} × ${product.name} en attente (${siteName})`,
           is_read: false,
           created_at: this.now(),
         };
@@ -726,9 +729,8 @@ class DatabaseService {
   /**
    * approveMovement
    *
-   * FIX CRITIQUE : Conversion pending_out → out AVANT _applyMovementToStock
-   * pour que la réduction de stock soit bien appliquée.
-   * Le CA est calculé sur les mouvements type='out' && status='approved'
+   * Approuve les mouvements en attente (entrées uniquement).
+   * Les sorties n'existent pas en mode pending (elles sont confirmées directement).
    */
   approveMovement(movementId: number, approverId: number): boolean {
     const idx = this.cache.movements.findIndex(m => m.id === movementId);
@@ -736,33 +738,20 @@ class DatabaseService {
     const m = this.cache.movements[idx];
     if (m.status !== 'pending') return false;
 
-    // Vérification stock pour les sorties (pending_out)
-    if (m.type === 'pending_out' || m.type === 'out') {
-      const fromStock = this.cache.stocks.find(
-        s => s.product_id === m.product_id && s.site_id === m.from_site_id
-      );
-      if (!fromStock || fromStock.quantity < m.quantity) {
-        // Rejet automatique si stock insuffisant
-        m.status = 'rejected';
-        m.approved_by = approverId;
-        m.approved_at = this.now();
-        m.rejection_reason = `Stock insuffisant lors de la validation : ${fromStock?.quantity || 0} disponible(s)`;
-        idb.put('movements', m);
-        this._removeAlertForMovement(m);
-        return false;
-      }
+    // Vérification stock pour les entrées (pending_in)
+    if (m.type === 'pending_in' || m.type === 'in') {
+      // Les entrées ne nécessitent pas de vérification de stock, juste de confirmation
     }
 
-    // IMPORTANT : convertir le type AVANT d'appliquer au stock
+    // Convertir pending_in → in
     if (m.type === 'pending_in') m.type = 'in';
-    if (m.type === 'pending_out') m.type = 'out';
 
     // Marquer comme approuvé
     m.status = 'approved';
     m.approved_by = approverId;
     m.approved_at = this.now();
 
-    // Appliquer au stock maintenant que le type est correct ('in' ou 'out')
+    // Appliquer au stock maintenant que le type est correct
     this._applyMovementToStock(m);
 
     // Sauvegarder
@@ -852,7 +841,7 @@ class DatabaseService {
     if (m.to_site_id) this._checkAlerts(m.product_id, m.to_site_id);
   }
 
-  // ─── Alerts ───────────────────────────────────────────────────────────────────
+  // ─── Alerts ───────────────────────────────────────────���───────────────────────
 
   getAlerts(isRead?: boolean): Alert[] {
     let alerts = [...this.cache.alerts].sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -952,6 +941,36 @@ class DatabaseService {
   // ─── Reports ──────────────────────────────────────────────────────────────────
 
   getReports(): ReportRecord[] { return [...this.cache.reports].reverse(); }
+
+  /**
+   * getAccessibleReports
+   * Filter reports based on user role and assigned sites
+   * - Operators: only see their own reports
+   * - Managers: see reports for their assigned sites
+   * - Admins: see all reports
+   */
+  getAccessibleReports(userId: number, userRole: string, userSites: string[]): ReportRecord[] {
+    if (userRole === 'admin') {
+      // Admin can see all reports
+      return [...this.cache.reports].reverse();
+    } else if (userRole === 'manager') {
+      // Manager can see reports from their assigned sites, or reports they created
+      return [...this.cache.reports]
+        .filter(r => {
+          // Can see if they created it
+          if (r.created_by === userId) return true;
+          // Can see if it's for one of their sites
+          if (r.site_id === null) return false; // Multi-site reports only for admins
+          return userSites.includes(r.site_id);
+        })
+        .reverse();
+    } else {
+      // Operator can only see reports they created
+      return [...this.cache.reports]
+        .filter(r => r.created_by === userId)
+        .reverse();
+    }
+  }
 
   saveReport(data: Omit<ReportRecord, 'id' | 'created_at'>): ReportRecord {
     const report: ReportRecord = {

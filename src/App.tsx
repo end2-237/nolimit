@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './stores/authStore';
+import { SyncProvider } from './context/SyncProvider';
 import { LoginPage } from './pages/LoginPage';
 import { StockLayout, PageId } from './components/stock/StockLayout';
 import { InventoryDashboard } from './components/stock/InventoryDashboard';
@@ -178,7 +179,9 @@ export default function App() {
   return (
     <DBLoader>
       <AuthProvider>
-        <AppInner />
+        <SyncProvider>
+          <AppInner />
+        </SyncProvider>
       </AuthProvider>
     </DBLoader>
   );
