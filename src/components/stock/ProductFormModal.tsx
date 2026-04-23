@@ -19,6 +19,7 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
     sku: product?.sku || '',
     category: product?.category || 'plante',
     sub_type: product?.sub_type || '',
+    custom_category: product?.custom_category || '',
     description: product?.description || '',
     unit: product?.unit || 'unité',
     price: product?.price?.toString() || '',
@@ -28,6 +29,7 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
   const [skuAuto, setSkuAuto] = useState(!isEdit || !product?.sku);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [showCustomCategory, setShowCustomCategory] = useState(product?.custom_category ? true : false);
 
   const set = (key: string, val: string) => setForm(f => ({ ...f, [key]: val }));
 
@@ -41,11 +43,18 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
   };
 
   const handleCategoryChange = (val: string) => {
-    set('category', val);
-    set('sub_type', '');
-    if (skuAuto && form.name.trim()) {
-      const sku = generateSKU(val, form.name, db.getExistingSkus().filter(s => s !== form.sku));
-      set('sku', sku);
+    if (val === 'autre') {
+      setShowCustomCategory(true);
+      set('custom_category', '');
+    } else {
+      setShowCustomCategory(false);
+      set('category', val);
+      set('custom_category', '');
+      set('sub_type', '');
+      if (skuAuto && form.name.trim()) {
+        const sku = generateSKU(val, form.name, db.getExistingSkus().filter(s => s !== form.sku));
+        set('sku', sku);
+      }
     }
   };
 
@@ -68,15 +77,21 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
       setError('Veuillez remplir tous les champs obligatoires');
       return;
     }
+    if (showCustomCategory && !form.custom_category.trim()) {
+      setError('Veuillez entrer une catégorie personnalisée');
+      return;
+    }
     if (needsSubType && !form.sub_type) {
       setError('Veuillez sélectionner un sous-type');
       return;
     }
 
+    const finalCategory = showCustomCategory ? form.custom_category : form.category;
     const data = {
       name: form.name,
-      sku: form.sku || generateSKU(form.category, form.name, db.getExistingSkus()),
-      category: form.category,
+      sku: form.sku || generateSKU(finalCategory, form.name, db.getExistingSkus()),
+      category: finalCategory,
+      custom_category: showCustomCategory ? form.custom_category : undefined,
       sub_type: form.sub_type || undefined,
       description: form.description,
       unit: form.unit,
@@ -169,7 +184,7 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Catégorie</Label>
-                <Select value={form.category} onValueChange={handleCategoryChange}>
+                <Select value={showCustomCategory ? 'autre' : form.category} onValueChange={handleCategoryChange}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {APP_CONFIG.categories.map(c => (
@@ -177,11 +192,24 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${c.color}`}>{c.name}</span>
                       </SelectItem>
                     ))}
+                    <SelectItem value="autre">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">Autre / Personnalisé</span>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {needsSubType ? (
+              {showCustomCategory ? (
+                <div>
+                  <Label>Nom de la catégorie <span className="text-red-500">*</span></Label>
+                  <Input
+                    className="mt-1"
+                    placeholder="ex: Herbes rares, Supplément"
+                    value={form.custom_category}
+                    onChange={e => set('custom_category', e.target.value)}
+                  />
+                </div>
+              ) : needsSubType ? (
                 <div>
                   <Label>Sous-type <span className="text-red-500">*</span></Label>
                   <Select value={form.sub_type} onValueChange={v => set('sub_type', v)}>

@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "node --watch src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "init-db": "node --loader tsx src/scripts/init-db.ts"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -24,6 +25,7 @@
     "@types/cors": "^2.8.17",
     "@types/pg": "^8.11.3",
     "@types/bcrypt": "^5.0.2",
-    "@types/jsonwebtoken": "^9.0.7"
+    "@types/jsonwebtoken": "^9.0.7",
+    "tsx": "^4.7.0"
   }
 }
