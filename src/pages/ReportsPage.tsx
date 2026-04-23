@@ -151,16 +151,16 @@ function ScheduleReportModal({ onClose, onSaved }: ScheduleModalProps) {
               <Input type="date" className="mt-1" value={form.date_to} onChange={e => setForm(f => ({ ...f, date_to: e.target.value }))} />
             </div>
           </div>
-          <div>
-            <Label className="text-xs">Site (optionnel)</Label>
-            <Select value={form.site_id} onValueChange={v => setForm(f => ({ ...f, site_id: v }))}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les sites</SelectItem>
-                {APP_CONFIG.sites.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+            <div>
+              <Label className="text-xs">Site</Label>
+              <Select value={siteId} onValueChange={setSiteId} disabled={!isAdmin && allowedSites.length === 1}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {isAdmin && <SelectItem value="all">Tous</SelectItem>}
+                  {allowedSites.map(s => { const site = APP_CONFIG.sites.find(ss => ss.id === s); return <SelectItem key={s} value={s}>{site?.name || s}</SelectItem>; })}
+                </SelectContent>
+              </Select>
+            </div>
           <div className="flex gap-2 pt-1">
             <Button variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
             <Button onClick={handleGenerate} disabled={saving} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
@@ -177,17 +177,20 @@ function ScheduleReportModal({ onClose, onSaved }: ScheduleModalProps) {
 // ─── CA Report Modal ──────────────────────────────────────────────────────────
 
 function CAReportModal({ onClose }: { onClose: () => void }) {
-  const { getAllowedSites } = useAuth();
+  const { getAllowedSites, user } = useAuth();
   const allowedSites = getAllowedSites();
+  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
   const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(today());
-  const [siteId, setSiteId] = useState('all');
+  const [siteId, setSiteId] = useState(isAdmin ? 'all' : (allowedSites[0] || 'all'));
   const [report, setReport] = useState<ReturnType<typeof db.getSalesReport> | null>(null);
 
   const generate = useCallback(() => {
-    const r = db.getSalesReport(dateFrom, dateTo, siteId === 'all' ? undefined : siteId);
+    // Non-admins can only see reports for their assigned sites
+    const finalSiteId = !isAdmin && siteId === 'all' ? allowedSites[0] : siteId;
+    const r = db.getSalesReport(dateFrom, dateTo, finalSiteId === 'all' ? undefined : finalSiteId);
     setReport(r);
-  }, [dateFrom, dateTo, siteId]);
+  }, [dateFrom, dateTo, siteId, isAdmin, allowedSites]);
 
   useEffect(() => { generate(); }, [generate]);
 
@@ -314,17 +317,20 @@ function CAReportModal({ onClose }: { onClose: () => void }) {
 // ─── Damage Report Modal ─────────────────────────────────────────────────────
 
 function DamageReportModal({ onClose }: { onClose: () => void }) {
-  const { getAllowedSites } = useAuth();
+  const { getAllowedSites, user } = useAuth();
   const allowedSites = getAllowedSites();
+  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
   const [dateFrom, setDateFrom] = useState(monthStart());
   const [dateTo, setDateTo] = useState(today());
-  const [siteId, setSiteId] = useState('all');
+  const [siteId, setSiteId] = useState(isAdmin ? 'all' : (allowedSites[0] || 'all'));
   const [report, setReport] = useState<ReturnType<typeof db.getDamageReport> | null>(null);
 
   const generate = useCallback(() => {
-    const r = db.getDamageReport(dateFrom, dateTo, siteId === 'all' ? undefined : siteId);
+    // Non-admins can only see reports for their assigned sites
+    const finalSiteId = !isAdmin && siteId === 'all' ? allowedSites[0] : siteId;
+    const r = db.getDamageReport(dateFrom, dateTo, finalSiteId === 'all' ? undefined : finalSiteId);
     setReport(r);
-  }, [dateFrom, dateTo, siteId]);
+  }, [dateFrom, dateTo, siteId, isAdmin, allowedSites]);
 
   useEffect(() => { generate(); }, [generate]);
 
@@ -427,7 +433,7 @@ function DamageReportModal({ onClose }: { onClose: () => void }) {
 // ─── Main Reports Page ────────────────────────────────────────────────────────
 
 export function ReportsPage() {
-  const { hasPermission, getAllowedSites } = useAuth();
+  const { hasPermission, getAllowedSites, user } = useAuth();
   const allowedSites = getAllowedSites();
 
   const [savedReports, setSavedReports] = useState<ReportRecord[]>([]);
@@ -436,8 +442,13 @@ export function ReportsPage() {
   const [showDamageModal, setShowDamageModal] = useState(false);
   const [downloading, setDownloading] = useState('');
 
-  const loadReports = () => setSavedReports(db.getReports());
-  useEffect(loadReports, []);
+  const loadReports = () => {
+    if (user) {
+      const accessible = db.getAccessibleReports(user.id, user.role, allowedSites);
+      setSavedReports(accessible);
+    }
+  };
+  useEffect(loadReports, [user]);
 
   const stats = db.getDashboardStats(allowedSites);
   const movements = db.getMovements();

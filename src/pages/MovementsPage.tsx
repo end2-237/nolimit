@@ -18,7 +18,6 @@ const typeConfig: Record<string, { label: string; icon: any; color: string; icon
   in: { label: 'Entrée', icon: ArrowDownLeft, color: 'bg-green-100 text-green-700', iconColor: 'text-green-600' },
   pending_in: { label: 'Entrée (dem.)', icon: Clock, color: 'bg-yellow-100 text-yellow-700', iconColor: 'text-yellow-600' },
   out: { label: 'Vente/Sortie', icon: ArrowUpRight, color: 'bg-red-100 text-red-700', iconColor: 'text-red-600' },
-  pending_out: { label: 'Sortie (dem.)', icon: Clock, color: 'bg-orange-100 text-orange-700', iconColor: 'text-orange-600' },
   transfer: { label: 'Transfert', icon: RefreshCw, color: 'bg-blue-100 text-blue-700', iconColor: 'text-blue-600' },
   adjustment: { label: 'Ajustement', icon: Package, color: 'bg-orange-100 text-orange-700', iconColor: 'text-orange-600' },
   transport_damage: { label: 'Perte/Dégât', icon: AlertTriangle, color: 'bg-red-100 text-red-800', iconColor: 'text-red-700' },
@@ -333,8 +332,7 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
   };
 
   const pendingIn = pending.filter(m => m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending'));
-  const pendingOut = pending.filter(m => m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending'));
-  const pendingOther = pending.filter(m => !['pending_in', 'pending_out'].includes(m.type) && !['in', 'out'].includes(m.type));
+  const pendingOther = pending.filter(m => m.type !== 'pending_in' && m.type !== 'in');
 
   return (
     <div className="border-l-4 border-orange-400 bg-orange-50 rounded-xl overflow-hidden mb-4">
@@ -345,9 +343,7 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
             {pending.length} demande(s) en attente de validation
           </h3>
           <p className="text-xs text-orange-600">
-            {pendingIn.length > 0 && `${pendingIn.length} entrée(s)`}
-            {pendingIn.length > 0 && pendingOut.length > 0 && ' · '}
-            {pendingOut.length > 0 && `${pendingOut.length} sortie(s)/vente(s)`}
+            {pendingIn.length > 0 && `${pendingIn.length} entrée(s) en attente`}
             {pendingOther.length > 0 && ` · ${pendingOther.length} autre(s)`}
           </p>
         </div>
@@ -358,7 +354,7 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
 
       <div className="divide-y divide-orange-100 max-h-80 overflow-y-auto">
         {pending.map(m => {
-          const isOut = m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending');
+          const isOut = false; // No more pending_out - exits are immediate
           const isIn = m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending');
           const site = APP_CONFIG.sites.find(s => s.id === (isOut ? m.from_site_id : m.to_site_id) || s.id === m.from_site_id || s.id === m.to_site_id);
           const product = db.getProductById(m.product_id);
@@ -373,8 +369,8 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
                     <span className="font-semibold text-gray-900 text-sm">{m.product_name}</span>
-                    <Badge className={isOut ? 'bg-red-100 text-red-700 text-[10px]' : 'bg-green-100 text-green-700 text-[10px]'}>
-                      {isOut ? 'Sortie demandée' : isIn ? 'Entrée demandée' : m.type}
+                    <Badge className={'bg-green-100 text-green-700 text-[10px]'}>
+                      {isIn ? 'Entrée demandée' : m.type}
                     </Badge>
                     {site && <Badge variant="outline" className="text-[10px]">{site.name}</Badge>}
                   </div>
