@@ -28,6 +28,7 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
   const [skuAuto, setSkuAuto] = useState(!isEdit || !product?.sku);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [customSubType, setCustomSubType] = useState('');
 
   const set = (key: string, val: string) => setForm(f => ({ ...f, [key]: val }));
 
@@ -61,6 +62,8 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
   const subTypeOptions = form.category === 'test'
     ? (APP_CONFIG as any).testTypes || []
     : (APP_CONFIG as any).materialTypes || [];
+  
+  const isCustomSubType = form.sub_type === 'Autre' || (form.sub_type && !subTypeOptions.includes(form.sub_type));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,12 +75,18 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
       setError('Veuillez sélectionner un sous-type');
       return;
     }
+    if (form.sub_type === 'Autre' && !customSubType.trim()) {
+      setError('Veuillez entrer la sous-catégorie personnalisée');
+      return;
+    }
 
+    const finalSubType = form.sub_type === 'Autre' ? customSubType.trim() : form.sub_type;
+    
     const data = {
       name: form.name,
       sku: form.sku || generateSKU(form.category, form.name, db.getExistingSkus()),
       category: form.category,
-      sub_type: form.sub_type || undefined,
+      sub_type: finalSubType || undefined,
       description: form.description,
       unit: form.unit,
       price: parseFloat(form.price),
@@ -184,14 +193,27 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
               {needsSubType ? (
                 <div>
                   <Label>Sous-type <span className="text-red-500">*</span></Label>
-                  <Select value={form.sub_type} onValueChange={v => set('sub_type', v)}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                    <SelectContent>
-                      {subTypeOptions.map((st: string) => (
-                        <SelectItem key={st} value={st}>{st}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {form.sub_type === 'Autre' ? (
+                    <Input
+                      className="mt-1"
+                      value={customSubType}
+                      onChange={e => setCustomSubType(e.target.value)}
+                      placeholder="Entrez la sous-catégorie personnalisée"
+                      autoFocus
+                    />
+                  ) : (
+                    <Select value={form.sub_type} onValueChange={v => {
+                      set('sub_type', v);
+                      if (v !== 'Autre') setCustomSubType('');
+                    }}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                      <SelectContent>
+                        {subTypeOptions.map((st: string) => (
+                          <SelectItem key={st} value={st}>{st}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               ) : (
                 <div>
