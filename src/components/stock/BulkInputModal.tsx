@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Package, AlertCircle, CheckCircle, Truck, Clock, ArrowUpRight, ArrowDownLeft, ShoppingCart } from 'lucide-react';
+import { X, Package, AlertCircle, CheckCircle, Truck, ArrowUpRight, ArrowDownLeft, ShoppingCart } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -24,34 +24,30 @@ interface BulkInputModalProps {
 }
 
 export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModalProps) {
-  const { user, hasPermission } = useAuth();
+  const { user } = useAuth();
   const siteOptions = getActiveSiteOptions(allowedSites);
   const [site, setSite] = useState(siteOptions[0]?.id || allowedSites[0] || 'DLA');
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('Livraison fournisseur');
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState('');
 
-  const canConfirmDirectly = user?.role === 'admin' || user?.role === 'manager';
-
-  const handleSubmit = (e: React.FormEvent, forcePending = false) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const qty = parseInt(quantity);
     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
     if (!product) { setError('Aucun produit sélectionné'); return; }
 
-    const isPendingMode = !canConfirmDirectly || forcePending;
-
+    // Les entrées sont TOUJOURS confirmées immédiatement (pas de mode soumission)
     const result = db.createMovement({
-      type: isPendingMode ? 'pending_in' : 'in',
-      status: isPendingMode ? 'pending' : 'confirmed',
+      type: 'in',
+      status: 'confirmed',
       product_id: product.id,
       from_site_id: null,
       to_site_id: site,
       quantity: qty,
       reason,
-      reference: `${isPendingMode ? 'DEM' : 'ENT'}-${Date.now().toString(36).toUpperCase()}`,
+      reference: `ENT-${Date.now().toString(36).toUpperCase()}`,
       user_id: user?.id || 1,
     });
 
@@ -59,7 +55,7 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
       setError(result.error);
     } else {
       setIsSuccess(true);
-      setIsPending(isPendingMode);
+      setIsPending(false);
       setTimeout(onClose, 1500);
     }
   };
@@ -71,8 +67,8 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${canConfirmDirectly ? 'bg-blue-100' : 'bg-orange-100'}`}>
-              <ArrowDownLeft className={`w-4 h-4 ${canConfirmDirectly ? 'text-blue-600' : 'text-orange-600'}`} />
+            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
+              <ArrowDownLeft className="w-4 h-4 text-blue-600" />
             </div>
             <div>
               <h2 className="text-base font-semibold">Entrée de Stock</h2>
@@ -84,24 +80,16 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
           </button>
         </div>
 
-        {!canConfirmDirectly && (
-          <div className="mx-6 mt-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">
-            <strong>ℹ️ Mode opérateur :</strong> Votre demande sera soumise à l'approbation d'un responsable avant d'être appliquée au stock.
-          </div>
-        )}
-
         {isSuccess ? (
           <div className="px-6 py-12 text-center">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${isPending ? 'bg-orange-100' : 'bg-green-100'}`}>
-              {isPending ? <Clock className="w-8 h-8 text-orange-600" /> : <CheckCircle className="w-8 h-8 text-green-600" />}
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-green-100">
+              <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">
-              {isPending ? 'Demande envoyée !' : 'Stock mis à jour !'}
+              Stock mis à jour !
             </h3>
             <p className="text-sm text-gray-500">
-              {isPending
-                ? `Demande de +${quantity} unités en attente d'approbation`
-                : `+${quantity} unités ajoutées sur ${siteOptions.find(s => s.id === site)?.name}`}
+              +{quantity} unités ajoutées sur {siteOptions.find(s => s.id === site)?.name}
             </p>
           </div>
         ) : (
@@ -175,22 +163,9 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              {canConfirmDirectly ? (
-                <>
-                  <Button type="button" variant="outline"
-                    className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-50"
-                    onClick={(e) => handleSubmit(e as any, true)}>
-                    <Clock className="w-3.5 h-3.5 mr-1.5" /> Soumettre
-                  </Button>
-                  <Button type="submit" className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]">
-                    <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Confirmer
-                  </Button>
-                </>
-              ) : (
-                <Button type="submit" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
-                  <Clock className="w-3.5 h-3.5 mr-1.5" /> Soumettre la demande
-                </Button>
-              )}
+              <Button type="submit" className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]">
+                <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Valider l'entrée
+              </Button>
             </div>
           </form>
         )}
@@ -214,7 +189,6 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('Vente client');
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState('');
 
   const availableStock = product?.stock?.[site] || 0;
@@ -248,7 +222,6 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
       setError(result.error);
     } else {
       setIsSuccess(true);
-      setIsPending(false);
       setTimeout(onClose, 1500);
     }
   };
@@ -280,7 +253,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
             <p className="text-sm text-gray-500">
               -{quantity} unités de {siteOptions.find(s => s.id === site)?.name}
             </p>
-            {!isPending && estimatedCA > 0 && (
+            {estimatedCA > 0 && (
               <p className="text-sm font-semibold text-green-600 mt-1">
                 CA enregistré: {estimatedCA.toLocaleString('fr-FR')} XAF
               </p>
@@ -419,8 +392,7 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
       setError(result.error);
     } else {
       setIsSuccess(true);
-      setIsPending(isPendingMode);
-      setTimeout(onClose, 1400);
+      setTimeout(onClose, 1500);
     }
   };
 
