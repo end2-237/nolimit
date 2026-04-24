@@ -37,9 +37,12 @@ export const APP_CONFIG = {
     { id: 'test', name: 'Test', color: 'bg-purple-100 text-purple-700' },
   ],
   // Sub-types for "Test" category
-  testTypes: ['Chlamydia', 'Hépatite', 'VIH', 'Syphilis', 'Paludisme', 'Grossesse', 'Glycémie'],
+  testTypes: ['Chlamydia', 'Hépatite', 'VIH', 'Syphilis', 'Paludisme', 'Grossesse', 'Glycémie', 'Autre'],
   // Sub-types for "Matériel" category
   materialTypes: ['Carnet', 'Seringue', 'Facturier', 'Gants', 'Masque', 'Compresse', 'Autre'],
+  
+  // For storing custom subtypes
+  customSubTypes: [] as string[],
   settings: {
     currency: 'XAF',
     currencySymbol: 'FCFA',
