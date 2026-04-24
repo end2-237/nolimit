@@ -56,34 +56,56 @@ export class ChunkedSyncService {
   }
 
   /**
-   * Envoie un chunk avec retry
+   * Envoie les données compressées à l'API externe (Supabase)
    */
-  private async uploadChunk(
-    chunk: Uint8Array,
-    metadata: ChunkMetadata,
+  private async uploadToExternalAPI(
+    compressedData: Uint8Array,
     apiUrl: string,
     apiKey: string,
-    retries = 0
+    siteId: string,
+    onProgress?: (progress: ChunkedUploadProgress) => void
   ): Promise<boolean> {
     try {
-      const chunkBase64 = btoa(String.fromCharCode(...chunk));
+      // Convertir en base64 pour JSON
+      const dataBase64 = btoa(String.fromCharCode(...compressedData));
       
-      const response = await fetch(`${apiUrl}/api/sync/chunk`, {
+      console.log(`[v0] Uploading ${(compressedData.length / 1024 / 1024).toFixed(2)} MB to ${apiUrl}`);
+      
+      const response = await fetch(`${apiUrl}/api/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-API-KEY': apiKey,
         },
         body: JSON.stringify({
-          ...metadata,
-          data: chunkBase64,
+          data: dataBase64,
+          siteId: siteId,
+          timestamp: new Date().toISOString(),
         }),
       });
-
+      
       if (!response.ok) {
-        if (response.status === 413) {
-          throw new Error('Chunk too large (HTTP 413)');
-        }
+        throw new Error(`Upload failed: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('[v0] Upload successful:', result);
+      
+      if (onProgress) {
+        onProgress({
+          totalChunks: 1,
+          uploadedChunks: 1,
+          percentage: 100,
+          currentChunk: 1,
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('[v0] Upload error:', error);
+      throw error;
+    }
+  }
         throw new Error(`Upload failed: ${response.status}`);
       }
 
@@ -100,7 +122,7 @@ export class ChunkedSyncService {
   }
 
   /**
-   * Synchronise les données avec chunking + compression
+   * Synchronise les données (compression + upload vers Supabase)
    */
   async syncData(
     data: any,
@@ -112,61 +134,19 @@ export class ChunkedSyncService {
     this.progressCallback = onProgress;
 
     try {
-      console.log('[v0] Démarrage du sync chunked...');
+      console.log('[v0] Starting sync to Supabase...');
       
-      // Compression et chunking
-      const chunks = await this.compressAndChunk(data);
-      const totalSize = JSON.stringify(data).length;
+      // Compression
+      const jsonString = JSON.stringify(data);
+      const jsonBytes = new TextEncoder().encode(jsonString);
+      console.log(`[v0] Original size: ${(jsonBytes.length / 1024 / 1024).toFixed(2)} MB`);
+      
+      const compressed = pako.gzip(jsonBytes, { level: 6 });
+      console.log(`[v0] Compressed size: ${(compressed.length / 1024 / 1024).toFixed(2)} MB`);
 
-      // Début du upload
-      console.log(`[v0] Upload de ${chunks.length} chunks vers ${apiUrl}`);
-
-      for (let i = 0; i < chunks.length; i++) {
-        const metadata: ChunkMetadata = {
-          sessionId: this.sessionId,
-          totalChunks: chunks.length,
-          chunkNumber: i + 1,
-          chunkSize: chunks[i].length,
-          totalSize,
-          timestamp: new Date().toISOString(),
-        };
-
-        await this.uploadChunk(chunks[i], metadata, apiUrl, apiKey);
-
-        // Mise à jour du progrès
-        const progress: ChunkedUploadProgress = {
-          totalChunks: chunks.length,
-          uploadedChunks: i + 1,
-          percentage: Math.round(((i + 1) / chunks.length) * 100),
-          currentChunk: i + 1,
-        };
-
-        if (this.progressCallback) {
-          this.progressCallback(progress);
-        }
-
-        console.log(`[v0] Chunk ${i + 1}/${chunks.length} uploaded (${progress.percentage}%)`);
-      }
-
-      // Finalisation du upload
-      console.log('[v0] Finalisation du sync...');
-      const finalizeResponse = await fetch(`${apiUrl}/api/sync/finalize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-KEY': apiKey,
-        },
-        body: JSON.stringify({
-          sessionId: this.sessionId,
-          siteId,
-          totalChunks: chunks.length,
-          timestamp: new Date().toISOString(),
-        }),
-      });
-
-      if (!finalizeResponse.ok) {
-        throw new Error(`Finalize failed: ${finalizeResponse.status}`);
-      }
+      // Upload
+      console.log(`[v0] Uploading to ${apiUrl}/api/sync`);
+      await this.uploadToExternalAPI(compressed, apiUrl, apiKey, siteId, onProgress);
 
       console.log('[v0] Sync completed successfully');
       return { success: true, sessionId: this.sessionId };
@@ -177,7 +157,7 @@ export class ChunkedSyncService {
   }
 
   /**
-   * Télécharge les données depuis le serveur avec décompression
+   * Télécharge les données depuis Supabase avec décompression
    */
   async downloadData(
     apiUrl: string,
@@ -186,63 +166,47 @@ export class ChunkedSyncService {
     onProgress?: (progress: ChunkedUploadProgress) => void
   ): Promise<any> {
     try {
-      console.log('[v0] Téléchargement des données...');
+      console.log('[v0] Downloading data from Supabase...');
 
-      // Récupère les informations du backup
-      const metaResponse = await fetch(
-        `${apiUrl}/api/sync/download?siteId=${siteId}&meta=true`,
+      // GET /api/sync?siteId=xxx retourne { data: base64, timestamp }
+      const response = await fetch(
+        `${apiUrl}/api/sync?siteId=${siteId}`,
         {
           headers: { 'X-API-KEY': apiKey },
         }
       );
 
-      if (!metaResponse.ok) {
-        throw new Error(`Download failed: ${metaResponse.status}`);
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
       }
 
-      const { totalChunks, timestamp } = await metaResponse.json();
+      const { data: dataBase64, timestamp } = await response.json();
 
-      console.log(`[v0] Téléchargement de ${totalChunks} chunks`);
-
-      // Télécharge les chunks
-      const chunks: Uint8Array[] = [];
-
-      for (let i = 0; i < totalChunks; i++) {
-        const response = await fetch(
-          `${apiUrl}/api/sync/chunk?siteId=${siteId}&chunkNumber=${i + 1}`,
-          {
-            headers: { 'X-API-KEY': apiKey },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Chunk download failed: ${response.status}`);
-        }
-
-        const { data } = await response.json();
-        const bytes = new Uint8Array(atob(data).split('').map(c => c.charCodeAt(0)));
-        chunks.push(bytes);
-
-        if (onProgress) {
-          onProgress({
-            totalChunks,
-            uploadedChunks: i + 1,
-            percentage: Math.round(((i + 1) / totalChunks) * 100),
-            currentChunk: i + 1,
-          });
-        }
+      if (!dataBase64) {
+        console.log('[v0] No backup found for site');
+        return null;
       }
 
-      // Assemble et décompresse
-      console.log('[v0] Assemblage et décompression...');
-      const compressed = new Uint8Array(
-        chunks.reduce((acc, chunk) => [...acc, ...chunk], [] as number[])
-      );
+      console.log('[v0] Decompressing data...');
+      
+      // Convertir base64 en Uint8Array
+      const compressed = new Uint8Array(atob(dataBase64).split('').map(c => c.charCodeAt(0)));
+      
+      // Décompresser
       const decompressed = pako.ungzip(compressed);
       const jsonString = new TextDecoder().decode(decompressed);
       const data = JSON.parse(jsonString);
 
-      console.log('[v0] Données téléchargées avec succès');
+      if (onProgress) {
+        onProgress({
+          totalChunks: 1,
+          uploadedChunks: 1,
+          percentage: 100,
+          currentChunk: 1,
+        });
+      }
+
+      console.log('[v0] Download completed successfully');
       return data;
     } catch (error) {
       console.error('[v0] Download error:', error);

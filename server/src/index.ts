@@ -10,8 +10,6 @@ import movementsRouter from './routes/movements';
 import productsRouter from './routes/products';
 import stocksRouter from './routes/stocks';
 import reportsRouter from './routes/reports';
-import syncRouter from './routes/sync';
-import chunkedSyncRouter from './routes/chunkedSync';
 
 dotenv.config();
 
@@ -43,8 +41,6 @@ app.use('/api/movements', movementsRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/stocks', stocksRouter);
 app.use('/api/reports', reportsRouter);
-app.use('/api/sync', syncRouter);
-app.use('/api/sync', chunkedSyncRouter);
 
 // Start server
 async function start() {
