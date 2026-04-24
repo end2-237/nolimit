@@ -217,33 +217,30 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState('');
 
-  const canConfirmDirectly = user?.role === 'admin' || user?.role === 'manager';
   const availableStock = product?.stock?.[site] || 0;
   const estimatedCA = product && parseInt(quantity) > 0 ? parseInt(quantity) * product.price : 0;
 
-  const handleSubmit = (e: React.FormEvent, forcePending = false) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const qty = parseInt(quantity);
     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
     if (!product) { setError('Aucun produit sélectionné'); return; }
 
-    const isPendingMode = !canConfirmDirectly || forcePending;
-
-    // Vérification stock uniquement pour confirmation directe
-    if (!isPendingMode && qty > availableStock) {
+    // Les sorties sont TOUJOURS confirmées immédiatement (pas de mode soumission)
+    if (qty > availableStock) {
       setError(`Stock insuffisant: ${availableStock} disponible(s) sur ${siteOptions.find(s => s.id === site)?.name}`);
       return;
     }
 
     const result = db.createMovement({
-      type: isPendingMode ? 'pending_out' : 'out',
-      status: isPendingMode ? 'pending' : 'confirmed',
+      type: 'out',
+      status: 'confirmed',
       product_id: product.id,
       from_site_id: site,
       to_site_id: null,
       quantity: qty,
       reason,
-      reference: `${isPendingMode ? 'VTE' : 'SRT'}-${Date.now().toString(36).toUpperCase()}`,
+      reference: `SRT-${Date.now().toString(36).toUpperCase()}`,
       user_id: user?.id || 1,
     });
 
@@ -251,7 +248,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
       setError(result.error);
     } else {
       setIsSuccess(true);
-      setIsPending(isPendingMode);
+      setIsPending(false);
       setTimeout(onClose, 1500);
     }
   };
@@ -272,24 +269,16 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
 
-        {!canConfirmDirectly && (
-          <div className="mx-6 mt-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800">
-            <strong>ℹ️ Mode opérateur :</strong> Votre demande de vente sera soumise à validation. Le stock ne sera débité qu'après approbation.
-          </div>
-        )}
-
         {isSuccess ? (
           <div className="px-6 py-12 text-center">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${isPending ? 'bg-orange-100' : 'bg-green-100'}`}>
-              {isPending ? <Clock className="w-8 h-8 text-orange-600" /> : <CheckCircle className="w-8 h-8 text-green-600" />}
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-green-100">
+              <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">
-              {isPending ? 'Vente soumise !' : 'Sortie enregistrée !'}
+              Sortie enregistrée !
             </h3>
             <p className="text-sm text-gray-500">
-              {isPending
-                ? `Vente de ${quantity} unités en attente de validation`
-                : `-${quantity} unités de ${siteOptions.find(s => s.id === site)?.name}`}
+              -{quantity} unités de {siteOptions.find(s => s.id === site)?.name}
             </p>
             {!isPending && estimatedCA > 0 && (
               <p className="text-sm font-semibold text-green-600 mt-1">
@@ -367,22 +356,9 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              {canConfirmDirectly ? (
-                <>
-                  <Button type="button" variant="outline"
-                    className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-50"
-                    onClick={(e) => handleSubmit(e as any, true)}>
-                    <Clock className="w-3.5 h-3.5 mr-1.5" /> Soumettre
-                  </Button>
-                  <Button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white">
-                    <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Confirmer vente
-                  </Button>
-                </>
-              ) : (
-                <Button type="submit" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
-                  <Clock className="w-3.5 h-3.5 mr-1.5" /> Soumettre la vente
-                </Button>
-              )}
+              <Button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+                <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Enregistrer la sortie
+              </Button>
             </div>
           </form>
         )}

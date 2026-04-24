@@ -45,7 +45,9 @@ function toCSV(headers: string[], rows: any[][]): string {
 interface ScheduleModalProps { onClose: () => void; onSaved: () => void; }
 
 function ScheduleReportModal({ onClose, onSaved }: ScheduleModalProps) {
-  const { user } = useAuth();
+  const { user, getAllowedSites } = useAuth();
+  const allowedSites = getAllowedSites();
+  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
   const [form, setForm] = useState({
     type: 'inventory' as ReportRecord['type'],
     name: '',
@@ -153,7 +155,7 @@ function ScheduleReportModal({ onClose, onSaved }: ScheduleModalProps) {
           </div>
             <div>
               <Label className="text-xs">Site</Label>
-              <Select value={siteId} onValueChange={setSiteId} disabled={!isAdmin && allowedSites.length === 1}>
+              <Select value={form.site_id} onValueChange={v => setForm(f => ({ ...f, site_id: v }))} disabled={!isAdmin && allowedSites.length === 1}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {isAdmin && <SelectItem value="all">Tous</SelectItem>}
@@ -314,7 +316,7 @@ function CAReportModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Damage Report Modal ─────────────────────────────────────────────────────
+// ─── Damage Report Modal ───────────────────────���─────────────────────────────
 
 function DamageReportModal({ onClose }: { onClose: () => void }) {
   const { getAllowedSites, user } = useAuth();
