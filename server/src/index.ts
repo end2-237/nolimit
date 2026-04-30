@@ -18,8 +18,9 @@ const httpServer = createServer(app);
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: frontendUrl === '*' ? true : frontendUrl,
   credentials: true,
 }));
 app.use(express.json());

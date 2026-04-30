@@ -5,8 +5,17 @@ dotenv.config();
 
 const { Pool } = pg;
 
+const dbUrl = process.env.DATABASE_URL || '';
+
+// Supabase self-hosted uses SSL; disable cert validation for self-signed certs
+const isSupabase = dbUrl.includes('supabase') || process.env.SUPABASE_URL;
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: dbUrl,
+  ssl: isSupabase ? { rejectUnauthorized: false } : false,
+  min: parseInt(process.env.DB_POOL_MIN || '2'),
+  max: parseInt(process.env.DB_POOL_MAX || '20'),
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
 });
 
 pool.on('error', (err) => {
