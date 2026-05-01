@@ -44,8 +44,8 @@ export async function backupLocalDatabase(options: DbSyncOptions = {}) {
     `);
 
     // Envoie avec chunking
-    const apiUrl = options.apiUrl || process.env.REACT_APP_API_URL || 'http://localhost:3001';
-    const apiKey = options.apiKey || process.env.REACT_APP_API_KEY || '';
+    const apiUrl = options.apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const apiKey = options.apiKey || import.meta.env.VITE_API_KEY|| '';
     const siteId = options.siteId || 'default';
 
     const result = await chunkedSync.syncData(

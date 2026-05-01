@@ -5,7 +5,7 @@ const MAX_PAYLOAD_SIZE = 4 * 1024 * 1024; // 4 MB max par requête (sûr pour AP
 const COMPRESSION_LEVEL = 9; // Max compression (90% réduction)
 const MAX_RETRIES = 3;
 
-interface ChunkedUploadProgress {
+export interface ChunkedUploadProgress {
   totalChunks: number;
   uploadedChunks: number;
   percentage: number;

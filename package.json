@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "dev:web": "vite --config vite.web.config.ts",
+    "build:web": "vite build --config vite.web.config.ts",
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "vite build && electron-builder --config electron-builder.json",
     "electron:pack": "electron-builder --dir --config electron-builder.json",
