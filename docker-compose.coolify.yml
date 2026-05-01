@@ -1,0 +1,63 @@
+version: '3.8'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SNL Backend — Docker Compose pour Coolify
+#
+# Ce fichier déploie UNIQUEMENT le backend (API + WebSocket).
+# Les Electron apps sur chaque machine se connectent à ce backend.
+#
+# Variables à configurer dans Coolify (UI > Environment Variables) :
+#   Voir .env.coolify.example
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: snl-backend
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      # Server
+      - PORT=3001
+      - NODE_ENV=${NODE_ENV:-production}
+
+      # CORS — mettre l'adresse IP/domaine de chaque machine Electron
+      # Exemple : http://192.168.1.10,http://192.168.1.11
+      # Ou '*' pour tout autoriser (réseau interne sécurisé)
+      - FRONTEND_URL=${FRONTEND_URL:-*}
+
+      # Sécurité Socket.io — même valeur côté Electron dans la config cloud
+      - SOCKET_SECRET=${SOCKET_SECRET}
+
+      # JWT (pour auth API optionnelle)
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+
+      # Base de données PostgreSQL (optionnel — app marche sans)
+      - DATABASE_URL=${DATABASE_URL:-}
+
+      # Logs
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+    volumes:
+      # Logs persistants (optionnel)
+      - snl_logs:/app/logs
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+    networks:
+      - snl_network
+
+volumes:
+  snl_logs:
+
+networks:
+  snl_network:
+    driver: bridge

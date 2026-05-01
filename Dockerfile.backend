@@ -1,0 +1,29 @@
+# ─── Dockerfile.backend ──────────────────────────────────────────────────────
+# Backend SNL — Express + Socket.io
+# À placer à la RACINE du projet
+# Build : docker build -f Dockerfile.backend -t snl-backend .
+
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Installer tsx pour exécuter TypeScript directement (plus simple que tsc)
+RUN npm install -g tsx
+
+# Dépendances
+COPY server/package*.json ./
+RUN npm install
+
+# Code source
+COPY server/src ./src
+COPY server/tsconfig.json ./
+
+# Port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:3001/health || exit 1
+
+# Démarrage
+CMD ["tsx", "src/index.ts"]
