@@ -15,6 +15,7 @@ import { notifService, ScheduledTask } from '../services/notifications';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 import { CloudSyncPanel } from '../components/stock/CloudSyncPanel';
+import { ServerStatus } from '../components/stock/ServerStatus';
 
 // ─── Sites Manager (avec propagation sur toute l'app) ──────────────────────
 
@@ -613,6 +614,7 @@ export function SettingsPage() {
       <div className="flex-1 overflow-auto px-6 py-6 space-y-4 max-w-3xl">
         {activeTab === 'general' && (
           <>
+          <ServerStatus />
             <Card>
               <CardHeader><CardTitle className="text-base">Informations</CardTitle></CardHeader>
               <CardContent className="space-y-2.5">

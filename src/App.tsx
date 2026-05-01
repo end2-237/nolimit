@@ -13,6 +13,7 @@ import { DBLoader } from './components/DBLoader';
 import { db } from './services/database';
 import { ProductsPage } from './pages/ProductsPage';
 import { notifService } from './services/notifications';
+import { SyncProvider } from './context/SyncProvider';
 
 function AppInner() {
   const { user, isLoading } = useAuth();
@@ -178,7 +179,9 @@ export default function App() {
   return (
     <DBLoader>
       <AuthProvider>
-        <AppInner />
+        <SyncProvider>
+          <AppInner />
+        </SyncProvider>
       </AuthProvider>
     </DBLoader>
   );
