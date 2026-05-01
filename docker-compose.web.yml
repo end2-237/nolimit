@@ -1,0 +1,18 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        - VITE_API_URL=${VITE_API_URL:-https://snl-api.vps.buyticle.com/api}
+        - VITE_WS_URL=${VITE_WS_URL:-https://snl-api.vps.buyticle.com}
+        - VITE_SOCKET_SECRET=${VITE_SOCKET_SECRET:-}
+        - VITE_API_KEY=${VITE_API_KEY:-}
+    container_name: snl-frontend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
