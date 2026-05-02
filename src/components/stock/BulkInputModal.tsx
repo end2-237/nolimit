@@ -42,7 +42,7 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
     const movementType = canConfirmDirectly ? 'in' : 'pending_in';
     const movementStatus = canConfirmDirectly ? 'confirmed' : 'pending';
 
-    const result = db.createMovement({
+    const result = await db.createMovement({
       type: movementType,
       status: movementStatus,
       product_id: product.id,
@@ -55,7 +55,7 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
     });
 
     if ('error' in result) {
-      setError(result.error);
+      setError((result as { error: string }).error);
       return;
     }
 
@@ -232,7 +232,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
       return;
     }
 
-    const result = db.createMovement({
+    const result = await db.createMovement({
       type: 'out',
       status: 'confirmed',
       product_id: product.id,
@@ -245,7 +245,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
     });
 
     if ('error' in result) {
-      setError(result.error);
+      setError((result as { error: string }).error);
       return;
     }
 
@@ -401,7 +401,7 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
       return;
     }
 
-    const result = db.createMovement({
+    const result = await db.createMovement({
       type: isPendingMode ? 'pending_out' : 'transport_damage',
       status: isPendingMode ? 'pending' : 'confirmed',
       product_id: product.id,
@@ -415,7 +415,7 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
     });
 
     if ('error' in result) {
-      setError(result.error);
+      setError((result as { error: string }).error);
       return;
     }
 

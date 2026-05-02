@@ -79,7 +79,7 @@ export function PendingApprovalsPanel() {
     if (!user) return;
     const m = pending.find(p => p.id === id);
     const reason = rejectReason[id] || 'Refusé par le responsable';
-    await db.rejectMovement(id, user.id, reason);db.rejectMovement(id, user.id, reason);
+    await db.rejectMovement(id, user.id, reason);
     await notifyServer('movement:updated', {
       movementId: id,
       status: 'rejected',
