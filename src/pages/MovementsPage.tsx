@@ -317,15 +317,15 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
 
   if (pending.length === 0) return null;
 
-  const handleApprove = (id: number) => {
+  const handleApprove = async (id: number) => {
     if (!user) return;
-    db.approveMovement(id, user.id);
+    await db.approveMovement(id, user.id);
     load(); onRefresh();
   };
 
-  const handleReject = (id: number) => {
+  const handleReject = async (id: number) => {
     if (!user) return;
-    db.rejectMovement(id, user.id, rejectReason[id] || 'Refusé');
+    await db.rejectMovement(id, user.id, rejectReason[id] || 'Refusé');
     setRejectingId(null);
     setRejectReason(r => { const n = { ...r }; delete n[id]; return n; });
     load(); onRefresh();

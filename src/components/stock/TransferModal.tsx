@@ -27,7 +27,7 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
   const selectedProduct = products.find(p => p.id.toString() === productId);
   const availableStock = selectedProduct?.stock?.[fromSite] || 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const qty = parseInt(quantity);
     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
@@ -35,7 +35,7 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
     if (fromSite === toSite) { setError('Les sites de départ et d\'arrivée doivent être différents'); return; }
     if (qty > availableStock) { setError(`Stock insuffisant sur ${fromSite}: ${availableStock} disponible(s)`); return; }
 
-    const result = db.createMovement({
+    const result = await db.createMovement({
       type: 'transfer',
       product_id: parseInt(productId),
       from_site_id: fromSite,
@@ -47,7 +47,7 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
     });
 
     if ('error' in result) {
-      setError(result.error);
+      setError((result as { error: string }).error);
     } else {
       setIsSuccess(true);
       setTimeout(onClose, 1500);
