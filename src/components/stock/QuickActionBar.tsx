@@ -114,8 +114,8 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
   const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
 
   useEffect(() => {
-    db.getDashboardStats().then(setStats).catch(() => {});
-    const t = setInterval(() => db.getDashboardStats().then(setStats).catch(() => {}), 30000);
+    setStats(db.getDashboardStats());
+    const t = setInterval(() => setStats(db.getDashboardStats()), 30000);
     return () => clearInterval(t);
   }, []);
 

@@ -19,7 +19,7 @@ export  function LoginPage() {
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   useEffect(() => {
-    db.getDashboardStats().then(setStats).catch(() => {});
+    setStats(db.getDashboardStats());
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
