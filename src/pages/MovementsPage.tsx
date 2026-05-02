@@ -457,6 +457,12 @@ export function MovementsPage() {
 
   useEffect(() => { load(); }, [siteFilter, dateFrom, dateTo]);
 
+  useEffect(() => {
+    const handler = () => load();
+    window.addEventListener('snl:data-refreshed', handler);
+    return () => window.removeEventListener('snl:data-refreshed', handler);
+  }, []);
+
   const displayMovements = movements.filter(m => {
     const matchSearch = !searchQuery ||
       (m.product_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||

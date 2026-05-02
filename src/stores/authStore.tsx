@@ -61,6 +61,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (result) {
       setUser(result.user as any);
       sessionStorage.setItem(SESSION_KEY, result.user.id.toString());
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
       return { success: true };
     }
     return { success: false, error: "Identifiants incorrects. Vérifiez votre nom d'utilisateur et mot de passe." };
