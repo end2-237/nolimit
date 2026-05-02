@@ -168,6 +168,10 @@ class DatabaseService {
   }
 
   private async _load(): Promise<void> {
+    if (!localStorage.getItem('snl_token')) {
+      this.cache.loaded = true;
+      return;
+    }
     try {
       const [products, stocks, users, movements, alerts, reports] = await Promise.all([
         Products.getAll().catch(() => []),

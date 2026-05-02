@@ -35,7 +35,9 @@ async function request(endpoint: string, options: RequestInit = {}) {
 
   if (response.status === 401) {
     clearAuthToken();
-    window.location.href = '/login';
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
   }
 
   if (!response.ok) {

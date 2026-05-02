@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, User } from '../services/database';
+import { Users as ApiUsers, clearAuthToken } from '../services/api';
 import { APP_CONFIG } from '../config/app.config';
 
 const ALL_PERMISSIONS = ['view', 'create', 'edit', 'delete', 'export', 'manage_users'] as const;

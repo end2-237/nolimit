@@ -1,9 +1,10 @@
+
 import { useState } from 'react';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 import { db } from '../services/database';
 
-export function LoginPage() {
+export async function LoginPage() {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -88,7 +89,7 @@ export function LoginPage() {
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: 'Produits', value: products.length.toString(), sub: 'références' },
-              { label: 'Valeur', value: stats.totalValue > 999999 ? (stats.totalValue / 1000000).toFixed(1) + 'M' : stats.totalValue.toLocaleString('fr-FR'), sub: 'XAF' },
+              { label: 'Valeur', value: (await stats).totalValue > 999999 ? ((await stats).totalValue / 1000000).toFixed(1) + 'M' : (await stats).totalValue.toLocaleString('fr-FR'), sub: 'XAF' },
               { label: 'Alertes', value: alerts.length.toString(), sub: `dont ${criticalCount} critique(s)`, warn: alerts.length > 0 },
             ].map(s => (
               <div key={s.label}
