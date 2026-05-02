@@ -57,8 +57,7 @@ export function InventoryDashboard() {
   const load = useCallback(async () => {
     const prods = db.getStocksGroupedByProduct(allowedSites);
     setProducts(prods);
-    const s = await db.getDashboardStats(allowedSites);
-    setStats(s);
+    setStats(db.getDashboardStats(allowedSites));
   }, [allowedSites.join(',')]);
 
   useEffect(() => {

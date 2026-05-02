@@ -464,35 +464,30 @@ class DatabaseService {
 
   // ─── Stats ─────────────────────────────────────────────────────────────────
 
-  async getDashboardStats(allowedSites?: string[]): Promise<{
+  getDashboardStats(allowedSites?: string[]): {
     totalProducts: number; totalValue: number; todayMovements: number;
     alertCount: number; criticalProducts: number; pendingCount: number;
-  }> {
-    try {
-      return await Stats.dashboard();
-    } catch {
-      // Fallback: compute from local cache
-      const activeSiteIds = this.getSites().map(s => s.id);
-      const sites = allowedSites ? allowedSites.filter(s => activeSiteIds.includes(s)) : activeSiteIds;
-      const stocks = this.cache.stocks.filter(s => sites.includes(s.site_id));
-      const totalValue = stocks.reduce((sum, s) => {
-        const p = this.cache.products.find(p => p.id === s.product_id);
-        return sum + (s.quantity * (p?.price || 0));
-      }, 0);
-      const today = new Date().toISOString().split('T')[0];
-      const todayMovements = this.cache.movements.filter(
-        m => m.created_at.startsWith(today) && (m.status === 'confirmed' || m.status === 'approved')
-      ).length;
-      const alertCount = this.cache.alerts.filter(a => !a.is_read).length;
-      const pendingCount = this.cache.movements.filter(m => m.status === 'pending').length;
-      const criticalProducts = this.cache.products.filter(p => {
-        const total = this.cache.stocks
-          .filter(s => s.product_id === p.id && sites.includes(s.site_id))
-          .reduce((sum, s) => sum + s.quantity, 0);
-        return total < p.threshold;
-      }).length;
-      return { totalProducts: this.cache.products.length, totalValue, todayMovements, alertCount, criticalProducts, pendingCount };
-    }
+  } {
+    const activeSiteIds = this.getSites().map(s => s.id);
+    const sites = allowedSites ? allowedSites.filter(s => activeSiteIds.includes(s)) : activeSiteIds;
+    const stocks = this.cache.stocks.filter(s => sites.includes(s.site_id));
+    const totalValue = stocks.reduce((sum, s) => {
+      const p = this.cache.products.find(p => p.id === s.product_id);
+      return sum + (s.quantity * (p?.price || 0));
+    }, 0);
+    const today = new Date().toISOString().split('T')[0];
+    const todayMovements = this.cache.movements.filter(
+      m => m.created_at.startsWith(today) && (m.status === 'confirmed' || m.status === 'approved')
+    ).length;
+    const alertCount = this.cache.alerts.filter(a => !a.is_read).length;
+    const pendingCount = this.cache.movements.filter(m => m.status === 'pending').length;
+    const criticalProducts = this.cache.products.filter(p => {
+      const total = this.cache.stocks
+        .filter(s => s.product_id === p.id && sites.includes(s.site_id))
+        .reduce((sum, s) => sum + s.quantity, 0);
+      return total < p.threshold;
+    }).length;
+    return { totalProducts: this.cache.products.length, totalValue, todayMovements, alertCount, criticalProducts, pendingCount };
   }
 
   // ─── Sales / Damage reports (computed from cache) ──────────────────────────
