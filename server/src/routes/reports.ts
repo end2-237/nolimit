@@ -15,13 +15,12 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
     
     // Role-based filtering
     if (req.user?.role === 'operator') {
-      whereClause += ` AND user_id = $${paramIndex++}`;
+      whereClause += ` AND r.user_id = $${paramIndex++}`;
       params.push(req.user.userId);
     } else if (req.user?.role === 'manager') {
-      // Manager can see reports for their assigned sites
-      whereClause += ` AND (site_id = ANY($${paramIndex}::text[]) OR user_id IN (SELECT id FROM users WHERE site_ids @> $${paramIndex}))`;
+      whereClause += ` AND (r.user_id = $${paramIndex} OR r.site_id IS NULL)`;
       paramIndex++;
-      params.push(['douala', 'bafoussam']); // Should come from user.site_ids
+      params.push(req.user.userId);
     }
     // Admin sees all (no additional filter)
     
@@ -34,7 +33,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
       params.push(site_id);
     }
     if (user_id && req.user?.role === 'admin') {
-      whereClause += ` AND user_id = $${paramIndex++}`;
+      whereClause += ` AND r.user_id = $${paramIndex++}`;
       params.push(user_id);
     }
     
