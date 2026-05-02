@@ -1,10 +1,10 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 import { db } from '../services/database';
 
-export async function LoginPage() {
+export  function LoginPage() {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -12,11 +12,15 @@ export async function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const stats = db.getDashboardStats();
+  const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
   const alerts = db.getAlerts(false);
   const products = db.getProducts();
   const criticalCount = alerts.filter(a => a.type === 'critical_stock').length;
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  useEffect(() => {
+    db.getDashboardStats().then(setStats).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +28,7 @@ export async function LoginPage() {
     setIsLoading(true);
     setError('');
     await new Promise(r => setTimeout(r, 500));
-    const result = login(username, password);
+    const result = await login(username, password);
     setIsLoading(false);
     if (!result.success) setError(result.error || 'Identifiants incorrects');
   };
@@ -89,7 +93,7 @@ export async function LoginPage() {
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: 'Produits', value: products.length.toString(), sub: 'références' },
-              { label: 'Valeur', value: (await stats).totalValue > 999999 ? ((await stats).totalValue / 1000000).toFixed(1) + 'M' : (await stats).totalValue.toLocaleString('fr-FR'), sub: 'XAF' },
+              { label: 'Valeur', value: stats.totalValue > 999999 ? (stats.totalValue / 1000000).toFixed(1) + 'M' : stats.totalValue.toLocaleString('fr-FR'), sub: 'XAF' },
               { label: 'Alertes', value: alerts.length.toString(), sub: `dont ${criticalCount} critique(s)`, warn: alerts.length > 0 },
             ].map(s => (
               <div key={s.label}

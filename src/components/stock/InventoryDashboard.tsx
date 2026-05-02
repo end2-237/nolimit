@@ -54,10 +54,11 @@ export function InventoryDashboard() {
   const [sortField, setSortField] = useState<string>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     const prods = db.getStocksGroupedByProduct(allowedSites);
     setProducts(prods);
-    setStats(db.getDashboardStats(allowedSites));
+    const s = await db.getDashboardStats(allowedSites);
+    setStats(s);
   }, [allowedSites.join(',')]);
 
   useEffect(() => {
@@ -91,9 +92,9 @@ export function InventoryDashboard() {
     return { color: 'bg-[#0284C7]', label: 'OK', pct: Math.min(pct * 100, 100) };
   };
 
-  const handleDeleteProduct = (id: number) => {
+  const handleDeleteProduct = async (id: number) => {
     if (!confirm('Supprimer ce produit ? Cette action est irréversible.')) return;
-    db.deleteProduct(id);
+    await db.deleteProduct(id);
     load();
   };
 
