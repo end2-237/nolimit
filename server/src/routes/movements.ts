@@ -112,6 +112,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
         [quantity, product_id, from_site_id]
       );
     }
+
+    // For confirmed inputs (admin/manager direct entry), update stock immediately
+    if (type === 'in' && status === 'confirmed' && to_site_id) {
+      await client.query(
+        'UPDATE stocks SET quantity = quantity + $1, last_delivery = NOW(), updated_at = NOW() WHERE product_id = $2 AND site_id = $3',
+        [quantity, product_id, to_site_id]
+      );
+    }
     
     // For pending inputs, create alert for admin approval
     if (type === 'in' && status === 'pending') {

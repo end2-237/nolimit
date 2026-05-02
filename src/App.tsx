@@ -13,16 +13,74 @@ import { DBLoader } from './components/DBLoader';
 import { db } from './services/database';
 import { ProductsPage } from './pages/ProductsPage';
 import { notifService } from './services/notifications';
-import { SyncProvider } from './context/SyncProvider';
+import { SyncProvider, useSync } from './context/SyncProvider';
+
+function showBrowserNotif(title: string, body: string) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/icons/nol.png' });
+  }
+}
 
 function AppInner() {
   const { user, isLoading } = useAuth();
+  const { socket } = useSync();
   const [showSplash, setShowSplash] = useState(true);
   // Toujours démarrer sur le dashboard — jamais de restauration de page
   const [activePage, setActivePage] = useState<PageId>('dashboard');
   const [alertCount, setAlertCount] = useState(0);
   const schedulerStarted = useRef(false);
   const prevUser = useRef<typeof user>(null);
+
+  // ── Real-time socket → refresh cache + dispatch window events ──────────────
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    const refreshAll = async () => {
+      await db.refresh();
+      window.dispatchEvent(new CustomEvent('snl:stock-updated'));
+      window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+      setAlertCount(db.getAlerts(false).length);
+    };
+
+    const onStockUpdated = (data: any) => {
+      refreshAll();
+    };
+
+    const onMovementPending = (data: any) => {
+      refreshAll();
+      if (user.role === 'admin' || user.role === 'manager') {
+        showBrowserNotif(
+          '📦 Nouvelle demande d\'entrée',
+          `${data?.product_name || 'Produit'} — ${data?.quantity || ''} unité(s) · ${data?.user_name || ''}`
+        );
+      }
+    };
+
+    const onMovementApproved = (data: any) => {
+      refreshAll();
+      showBrowserNotif(
+        '✅ Demande approuvée',
+        `${data?.product_name || 'Mouvement'} validé par ${data?.approved_by || 'admin'}`
+      );
+    };
+
+    const onMovementCreated = () => refreshAll();
+    const onMovementUpdated = () => refreshAll();
+
+    socket.on('stock:updated', onStockUpdated);
+    socket.on('movement:pending', onMovementPending);
+    socket.on('movement:approved', onMovementApproved);
+    socket.on('movement:created', onMovementCreated);
+    socket.on('movement:updated', onMovementUpdated);
+
+    return () => {
+      socket.off('stock:updated', onStockUpdated);
+      socket.off('movement:pending', onMovementPending);
+      socket.off('movement:approved', onMovementApproved);
+      socket.off('movement:created', onMovementCreated);
+      socket.off('movement:updated', onMovementUpdated);
+    };
+  }, [socket, user]);
 
   useEffect(() => {
     const t = setTimeout(() => setShowSplash(false), 1800);
