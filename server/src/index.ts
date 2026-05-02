@@ -12,6 +12,7 @@ import stocksRouter from './routes/stocks';
 import reportsRouter from './routes/reports';
 import notifyRouter from './routes/notify';
 import statsRouter from './routes/stats';
+import alertsRouter from './routes/alerts';
 dotenv.config();
 
 const app = express();
@@ -60,8 +61,9 @@ app.use('/api/movements', movementsRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/stocks', stocksRouter);
 app.use('/api/reports', reportsRouter);
-app.use('/api/notify', notifyRouter);  
-app.use('/api/stats', statsRouter); // ← Broadcast Socket.io
+app.use('/api/notify', notifyRouter);
+app.use('/api/alerts', alertsRouter);
+app.use('/api/stats', statsRouter);
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 
