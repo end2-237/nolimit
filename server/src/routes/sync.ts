@@ -11,8 +11,8 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { query, getClient } from '../db.js';
-import { verifyToken } from '../auth.js';
+import { query, getClient } from '../db';
+import { verifyToken } from '../auth';
 import { existsSync, mkdirSync } from 'fs';
 import fs from 'fs/promises';
 import path from 'path';

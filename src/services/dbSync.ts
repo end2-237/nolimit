@@ -26,17 +26,25 @@ export async function backupLocalDatabase(options: DbSyncOptions = {}) {
   const apiUrl = resolveApiUrl(options);
   const siteId = options.siteId || 'local';
 
-  const [movements, users, stocks, products, reports] = await Promise.all([
-    db.getAllMovements(),
-    db.getAllUsers(),
-    db.getAllStocks(),
-    db.getAllProducts(),
-    db.getAllReports?.() ?? Promise.resolve([]),
-  ]);
+  // Toutes ces méthodes sont synchrones (IndexedDB en mémoire)
+  const movements = db.getMovements();
+  const users     = db.getUsers();
+  const products  = db.getProducts();
+  const reports   = db.getReports();
+
+  // Convertit le format groupé {product_id, stock:{siteId:qty}} en tableau plat
+  const stocksGrouped = db.getStocksGroupedByProduct();
+  const stocks = stocksGrouped.flatMap((item: any) =>
+    Object.entries((item.stock ?? {}) as Record<string, number>).map(([site_id, quantity]) => ({
+      product_id: item.id as number,
+      site_id,
+      quantity,
+    }))
+  );
 
   console.log(
     `[Sync] Backup — ${movements.length} mvts, ${products.length} produits, ` +
-    `${users.length} utilisateurs`,
+    `${stocks.length} stocks, ${users.length} utilisateurs`,
   );
 
   const payload = {
@@ -63,33 +71,51 @@ export async function restoreLocalDatabase(options: DbSyncOptions = {}) {
   const remoteData = await chunkedSync.downloadData(apiUrl, siteId, options.onProgress);
   if (!remoteData) return null;
 
-  // Appliquer produits
+  // ── Produits ────────────────────────────────────────────────────────────────
   if (Array.isArray(remoteData.products)) {
+    const localProducts = db.getProducts();
     for (const p of remoteData.products) {
-      try { await db.createProduct(p); } catch {}
+      const existing = localProducts.find(lp => lp.sku === p.sku);
+      if (existing) {
+        // Mettre à jour sans toucher à l'id local
+        try { db.updateProduct(existing.id, p); } catch {}
+      } else {
+        // createProduct attend Omit<Product, 'id'|'created_at'|'updated_at'>
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, created_at, updated_at, ...rest } = p;
+        try { db.createProduct(rest); } catch {}
+      }
     }
   }
 
-  // Appliquer stocks (tableau [{product_id, site_id, quantity}])
+  // ── Stocks ──────────────────────────────────────────────────────────────────
+  // Le serveur retourne [{product_id, site_id, quantity}]
   if (Array.isArray(remoteData.stocks)) {
+    const localProducts = db.getProducts();
     for (const s of remoteData.stocks) {
-      try { await db.updateStock(String(s.product_id), s.site_id, s.quantity); } catch {}
+      // Résoudre l'id local à partir du product_id serveur via SKU si possible
+      const productId = Number(s.product_id);
+      if (!isNaN(productId) && productId > 0) {
+        try { db.updateStock(productId, s.site_id, s.quantity); } catch {}
+      }
     }
   }
 
-  // Appliquer mouvements
+  // ── Mouvements ──────────────────────────────────────────────────────────────
+  // N'importer que les références absentes localement
   if (Array.isArray(remoteData.movements)) {
+    const localRefs = new Set(db.getMovements().map(m => m.reference));
     for (const m of remoteData.movements) {
-      try { await db.createMovement(m); } catch {}
+      if (!m.reference || localRefs.has(m.reference)) continue;
+      // createMovement attend Omit<Movement, 'id'|'created_at'>
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, created_at, ...rest } = m;
+      try { db.createMovement(rest); } catch {}
     }
   }
 
-  // Appliquer utilisateurs
-  if (Array.isArray(remoteData.users)) {
-    for (const u of remoteData.users) {
-      try { await db.createUser(u); } catch {}
-    }
-  }
+  // ── Utilisateurs : on ne restaure pas les mots de passe ─────────────────────
+  // Les comptes locaux sont gérés indépendamment du serveur.
 
   return remoteData;
 }
