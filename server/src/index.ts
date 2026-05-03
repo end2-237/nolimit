@@ -11,6 +11,7 @@ import productsRouter from './routes/products';
 import stocksRouter from './routes/stocks';
 import reportsRouter from './routes/reports';
 import notifyRouter from './routes/notify';
+import syncRouter, { cleanupExpiredSessions } from './routes/sync';
 
 dotenv.config();
 
@@ -36,7 +37,9 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json({ limit: '50mb' }));
+// Les chunks de sync sont du JSON base64 (~5.5 MB pour un chunk de 4 MB binaire)
+app.use('/api/sync/chunk', express.json({ limit: '8mb' }));
+app.use(express.json({ limit: '2mb' }));
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 
@@ -60,7 +63,8 @@ app.use('/api/movements', movementsRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/stocks', stocksRouter);
 app.use('/api/reports', reportsRouter);
-app.use('/api/notify', notifyRouter);   // ← Broadcast Socket.io
+app.use('/api/notify', notifyRouter);
+app.use('/api/sync',   syncRouter);
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 
@@ -76,6 +80,10 @@ async function start() {
       console.log(`[Server] Origins autorisées: ${allowedOrigins.join(', ')}`);
       console.log(`[WebSocket] ✅ Prêt`);
     });
+
+    // Nettoyage des sessions de sync expirées au démarrage puis toutes les heures
+    cleanupExpiredSessions();
+    setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
   } catch (error) {
     console.error('Erreur démarrage:', error);
     process.exit(1);

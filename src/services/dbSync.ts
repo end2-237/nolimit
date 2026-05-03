@@ -2,143 +2,103 @@ import { chunkedSync } from './chunkedSync';
 import { db } from './database';
 import type { ChunkedUploadProgress } from './chunkedSync';
 
+export type { ChunkedUploadProgress };
+
 interface DbSyncOptions {
   apiUrl?: string;
-  apiKey?: string;
   siteId?: string;
   onProgress?: (progress: ChunkedUploadProgress) => void;
 }
 
+function resolveApiUrl(options: DbSyncOptions): string {
+  if (options.apiUrl) return options.apiUrl;
+  try {
+    const cfg = JSON.parse(localStorage.getItem('snl_cloud_config') || '{}');
+    if (cfg.url) return cfg.url.replace(/\/api\/?$/, '');
+  } catch {}
+  return (import.meta as any).env?.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:3001';
+}
+
 /**
- * Exporte la base de données locale complète et l'envoie au serveur
- * avec chunking + compression pour supporter de grandes données
+ * Exporte la base locale vers le serveur (upload chunké + compression gzip)
  */
 export async function backupLocalDatabase(options: DbSyncOptions = {}) {
-  console.log('[v0] Starting local database backup...');
+  const apiUrl = resolveApiUrl(options);
+  const siteId = options.siteId || 'local';
 
-  try {
-    // Récupère toutes les données locales
-    const movements = await db.getAllMovements();
-    const users = await db.getAllUsers();
-    const stocks = await db.getAllStocks();
-    const products = await db.getAllProducts();
-    const reports = await db.getAllReports?.() || [];
+  const [movements, users, stocks, products, reports] = await Promise.all([
+    db.getAllMovements(),
+    db.getAllUsers(),
+    db.getAllStocks(),
+    db.getAllProducts(),
+    db.getAllReports?.() ?? Promise.resolve([]),
+  ]);
 
-    const backupData = {
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      siteId: options.siteId || 'local',
-      movements,
-      users,
-      stocks,
-      products,
-      reports,
-    };
+  console.log(
+    `[Sync] Backup — ${movements.length} mvts, ${products.length} produits, ` +
+    `${users.length} utilisateurs`,
+  );
 
-    console.log(`[v0] Backup data prepared:
-      - Movements: ${movements.length}
-      - Users: ${users.length}
-      - Stocks: ${Object.keys(stocks).length} sites
-      - Products: ${products.length}
-      - Reports: ${reports.length}
-    `);
+  const payload = {
+    version: '2.0',
+    timestamp: new Date().toISOString(),
+    siteId,
+    movements,
+    users,
+    stocks,
+    products,
+    reports,
+  };
 
-    // Envoie avec chunking
-    const apiUrl = options.apiUrl || process.env.REACT_APP_API_URL || 'http://localhost:3001';
-    const apiKey = options.apiKey || process.env.REACT_APP_API_KEY || '';
-    const siteId = options.siteId || 'default';
-
-    const result = await chunkedSync.syncData(
-      backupData,
-      apiUrl,
-      apiKey,
-      siteId,
-      options.onProgress
-    );
-
-    console.log('[v0] Database backup completed:', result);
-    return result;
-  } catch (error) {
-    console.error('[v0] Database backup failed:', error);
-    throw error;
-  }
+  return chunkedSync.syncData(payload, apiUrl, siteId, options.onProgress);
 }
 
 /**
- * Télécharge la base de données depuis le serveur et la restaure localement
+ * Télécharge les données du serveur et les applique à la base locale
  */
 export async function restoreLocalDatabase(options: DbSyncOptions = {}) {
-  console.log('[v0] Starting local database restore...');
+  const apiUrl = resolveApiUrl(options);
+  const siteId = options.siteId || 'local';
 
-  try {
-    const apiUrl = options.apiUrl || process.env.REACT_APP_API_URL || 'http://localhost:3001';
-    const apiKey = options.apiKey || process.env.REACT_APP_API_KEY || '';
-    const siteId = options.siteId || 'default';
+  const remoteData = await chunkedSync.downloadData(apiUrl, siteId, options.onProgress);
+  if (!remoteData) return null;
 
-    const backupData = await chunkedSync.downloadData(
-      apiUrl,
-      apiKey,
-      siteId,
-      options.onProgress
-    );
-
-    console.log('[v0] Backup data downloaded:', backupData);
-
-    // Restaure les données dans la DB locale
-    if (backupData.movements) {
-      for (const movement of backupData.movements) {
-        await db.createMovement(movement);
-      }
+  // Appliquer produits
+  if (Array.isArray(remoteData.products)) {
+    for (const p of remoteData.products) {
+      try { await db.createProduct(p); } catch {}
     }
-
-    if (backupData.stocks) {
-      for (const [siteId, siteStocks] of Object.entries(backupData.stocks)) {
-        // Restaure les stocks par site
-        for (const [productId, quantity] of Object.entries(siteStocks as Record<string, number>)) {
-          await db.updateStock(productId, siteId, quantity);
-        }
-      }
-    }
-
-    if (backupData.products) {
-      for (const product of backupData.products) {
-        await db.createProduct(product);
-      }
-    }
-
-    if (backupData.users) {
-      for (const user of backupData.users) {
-        await db.createUser(user);
-      }
-    }
-
-    console.log('[v0] Database restore completed');
-    return backupData;
-  } catch (error) {
-    console.error('[v0] Database restore failed:', error);
-    throw error;
   }
+
+  // Appliquer stocks (tableau [{product_id, site_id, quantity}])
+  if (Array.isArray(remoteData.stocks)) {
+    for (const s of remoteData.stocks) {
+      try { await db.updateStock(String(s.product_id), s.site_id, s.quantity); } catch {}
+    }
+  }
+
+  // Appliquer mouvements
+  if (Array.isArray(remoteData.movements)) {
+    for (const m of remoteData.movements) {
+      try { await db.createMovement(m); } catch {}
+    }
+  }
+
+  // Appliquer utilisateurs
+  if (Array.isArray(remoteData.users)) {
+    for (const u of remoteData.users) {
+      try { await db.createUser(u); } catch {}
+    }
+  }
+
+  return remoteData;
 }
 
 /**
- * Effectue une synchronisation complète bidirectionnelle
+ * Sync bidirectionnel : upload local → téléchargement distant
  */
 export async function syncDatabase(options: DbSyncOptions = {}) {
-  console.log('[v0] Starting bidirectional database sync...');
-
-  try {
-    // 1. Upload les données locales
-    console.log('[v0] Phase 1: Uploading local changes...');
-    await backupLocalDatabase(options);
-
-    // 2. Télécharge les données distantes
-    console.log('[v0] Phase 2: Downloading remote changes...');
-    const remoteData = await restoreLocalDatabase(options);
-
-    console.log('[v0] Database sync completed successfully');
-    return { success: true, remoteData };
-  } catch (error) {
-    console.error('[v0] Database sync failed:', error);
-    throw error;
-  }
+  await backupLocalDatabase(options);
+  const remoteData = await restoreLocalDatabase(options);
+  return { success: true, remoteData };
 }

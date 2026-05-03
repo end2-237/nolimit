@@ -1,9 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const HARD_URL = 'https://snl-api.vps.buyticle.com';
-const HARD_SECRET = 'e4d1cf57954005b1792e8b49ac70268bdb42e05b26da7b8fecb03c1120040ff1';
-
 interface SyncContextType {
   socket: Socket | null;
   isConnected: boolean;
@@ -18,18 +15,25 @@ export const SyncContext = createContext<SyncContextType>({
 
 function getWsUrl(): string {
   try {
-    const direct = localStorage.getItem('snl_ws_url');
-    if (direct && direct.startsWith('http')) return direct;
+    const override = localStorage.getItem('snl_ws_url');
+    if (override?.startsWith('http')) return override;
   } catch {}
-  return HARD_URL;
+  // Env var injectée au build (Vite) ou définie dans Coolify
+  const envUrl = (import.meta as any).env?.VITE_WS_URL
+    || (import.meta as any).env?.VITE_API_URL?.replace(/\/api\/?$/, '');
+  if (envUrl) return envUrl;
+  return 'http://localhost:3001';
 }
 
 function getSecret(): string {
   try {
-    return localStorage.getItem('snl_ws_secret') || HARD_SECRET;
-  } catch {
-    return HARD_SECRET;
-  }
+    const override = localStorage.getItem('snl_ws_secret');
+    if (override) return override;
+    // Lire depuis la config cloud si disponible
+    const cfg = JSON.parse(localStorage.getItem('snl_cloud_config') || '{}');
+    if (cfg.socketSecret) return cfg.socketSecret;
+  } catch {}
+  return (import.meta as any).env?.VITE_SOCKET_SECRET || '';
 }
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
@@ -45,14 +49,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-
-    const secret = getSecret();
+    socketRef.current?.disconnect();
 
     const s = io(serverUrl, {
-      auth: { secret },
+      auth: { secret: getSecret() },
       reconnection: true,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 15000,
@@ -60,9 +60,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       transports: ['polling', 'websocket'],
     });
 
-    s.on('connect', () => setIsConnected(true));
-    s.on('disconnect', () => setIsConnected(false));
-    s.on('connect_error', (err) => console.warn('[Sync] Erreur:', err.message));
+    s.on('connect',       () => setIsConnected(true));
+    s.on('disconnect',    () => setIsConnected(false));
+    s.on('connect_error', (err) => console.warn('[Sync] Erreur connexion:', err.message));
 
     socketRef.current = s;
     setSocket(s);
