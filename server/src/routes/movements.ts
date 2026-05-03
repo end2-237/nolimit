@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query, getClient } from '../db';
 import { authMiddleware, AuthRequest, requireRole } from '../auth';
 import { v4 as uuidv4 } from 'uuid';
+import type { Server as SocketIOServer } from 'socket.io';
 
 const router = Router();
 
@@ -131,6 +132,21 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
     }
     
     await client.query('COMMIT');
+
+    // Broadcast via Socket.io so web clients see it immediately
+    const io: SocketIOServer | undefined = req.app.locals.io;
+    if (io && type === 'in') {
+      io.to('admin-room').emit('movement:pending', {
+        ...movement,
+        product_id,
+        to_site_id,
+        from_site_id,
+        user_name: req.user?.username,
+      });
+    } else if (io && type === 'out') {
+      io.emit('stock:updated', { product_id, site_id: from_site_id });
+    }
+
     res.json({ success: true, movement });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -188,6 +204,22 @@ router.post('/:id/approve', authMiddleware, requireRole('admin'), async (req: Au
     }
     
     await client.query('COMMIT');
+
+    const io: SocketIOServer | undefined = req.app.locals.io;
+    if (io) {
+      if (approved) {
+        io.to('admin-room').emit('movement:approved', { id: movementId });
+        if (movement.type === 'pending_in') {
+          io.emit('stock:updated', {
+            product_id: movement.product_id,
+            site_id: movement.to_site_id,
+          });
+        }
+      } else {
+        io.to('admin-room').emit('movement:rejected', { id: movementId });
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     await client.query('ROLLBACK');

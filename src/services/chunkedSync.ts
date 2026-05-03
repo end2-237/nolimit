@@ -1,8 +1,23 @@
-import pako from 'pako';
+/**
+ * chunkedSync.ts — Upload chunké + download streamé pour gros volumes (500 MB+)
+ *
+ * Upload (3 étapes) :
+ *   1. init    → POST /api/sync/init    → retourne sessionId
+ *   2. chunk   → POST /api/sync/chunk   × N (données base64)
+ *   3. finalize → POST /api/sync/finalize
+ *
+ * Download :
+ *   GET /api/sync?siteId=xxx
+ *   Le serveur retourne un JSON gzip (Content-Encoding: gzip).
+ *   fetch() décompresse automatiquement → response.json() suffit.
+ */
 
-// Configuration optimisée pour limites HTTP
-const MAX_PAYLOAD_SIZE = 4 * 1024 * 1024; // 4 MB max par requête (sûr pour API)
-const COMPRESSION_LEVEL = 9; // Max compression (90% réduction)
+import pako from 'pako';
+import { getAuthToken } from './api';
+
+// 4 MB binaire → ~5.5 MB base64 → en dessous de la limite Express (8 MB)
+const CHUNK_SIZE = 4 * 1024 * 1024;
+const COMPRESSION_LEVEL = 9;
 const MAX_RETRIES = 3;
 
 export interface ChunkedUploadProgress {
@@ -14,268 +29,171 @@ export interface ChunkedUploadProgress {
 }
 
 export class ChunkedSyncService {
-  private sessionId: string;
-  private progressCallback?: (progress: ChunkedUploadProgress) => void;
-  private startTime: number = 0;
+  private startTime = 0;
 
-  constructor() {
-    this.sessionId = `sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // ─── Compression ──────────────────────────────────────────────────────────
+
+  private compress(data: unknown): { compressed: Uint8Array; originalBytes: number } {
+    const json = JSON.stringify(data);
+    const bytes = new TextEncoder().encode(json);
+    const compressed = pako.gzip(bytes, { level: COMPRESSION_LEVEL });
+    console.log(
+      `[Sync] Compression : ${(bytes.length / 1024 / 1024).toFixed(2)} MB → ` +
+      `${(compressed.length / 1024 / 1024).toFixed(2)} MB ` +
+      `(${(100 - (compressed.length / bytes.length) * 100).toFixed(1)} % réduction)`,
+    );
+    return { compressed, originalBytes: bytes.length };
   }
 
-  /**
-   * Compresse les données avec gzip (côté client)
-   * Résultat < 4 MB pour fit en une seule requête HTTP
-   */
-  private async compressData(data: any): Promise<{ compressed: Uint8Array; original: number; ratio: number }> {
-    console.log('[v0] Starting client-side compression...');
-    
-    // Sérialiser
-    const jsonString = JSON.stringify(data);
-    const jsonBytes = new TextEncoder().encode(jsonString);
-    const originalSize = jsonBytes.length;
-    
-    console.log(`[v0] Original size: ${(originalSize / 1024 / 1024).toFixed(2)} MB`);
-    
-    // Compression gzip (niveau 9 = maximum)
-    const compressed = pako.gzip(jsonBytes, { level: COMPRESSION_LEVEL });
-    const compressedSize = compressed.length;
-    const ratio = (compressedSize / originalSize) * 100;
-    
-    console.log(`[v0] Compressed size: ${(compressedSize / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`[v0] Compression ratio: ${(100 - ratio).toFixed(1)}%`);
-    
-    if (compressedSize > MAX_PAYLOAD_SIZE) {
-      const chunks = Math.ceil(compressedSize / MAX_PAYLOAD_SIZE);
-      console.warn(`[v0] Compressed data (${(compressedSize / 1024 / 1024).toFixed(2)} MB) exceeds max payload. Need ${chunks} chunks.`);
-    }
-    
-    return { compressed, original: originalSize, ratio };
-  }
-
-  /**
-   * Divise les données compressées en chunks si nécessaire
-   */
-  private chunkCompressedData(compressed: Uint8Array): Uint8Array[] {
+  private chunk(data: Uint8Array): Uint8Array[] {
     const chunks: Uint8Array[] = [];
-    
-    for (let i = 0; i < compressed.length; i += MAX_PAYLOAD_SIZE) {
-      const end = Math.min(i + MAX_PAYLOAD_SIZE, compressed.length);
-      chunks.push(compressed.slice(i, end));
+    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+      chunks.push(data.slice(i, Math.min(i + CHUNK_SIZE, data.length)));
     }
-    
-    console.log(`[v0] Data split into ${chunks.length} chunk(s) (max ${(MAX_PAYLOAD_SIZE / 1024 / 1024).toFixed(1)} MB each)`);
-    
     return chunks;
   }
 
-  /**
-   * Envoie les chunks compressés à l'API externe avec retry automatique
-   */
-  private async uploadToExternalAPI(
-    chunks: Uint8Array[],
-    apiUrl: string,
-    apiKey: string,
-    siteId: string,
-    onProgress?: (progress: ChunkedUploadProgress) => void
-  ): Promise<void> {
-    const totalChunks = chunks.length;
-    
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      const chunkNumber = i + 1;
-      
-      // Convertir chunk en base64
-      const chunkBase64 = btoa(String.fromCharCode(...chunk));
-      
-      console.log(`[v0] Uploading chunk ${chunkNumber}/${totalChunks} (${(chunk.length / 1024 / 1024).toFixed(2)} MB)`);
-      
-      // Retry logic
-      let success = false;
-      let lastError: Error | null = null;
-      
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          const response = await fetch(`${apiUrl}/api/sync`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-API-KEY': apiKey,
-            },
-            body: JSON.stringify({
-              sessionId: this.sessionId,
-              chunkNumber,
-              totalChunks,
-              data: chunkBase64,
-              siteId,
-              timestamp: new Date().toISOString(),
-            }),
-            timeout: 30000, // 30s timeout
-          } as any);
-          
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-          
-          success = true;
-          console.log(`[v0] Chunk ${chunkNumber}/${totalChunks} uploaded successfully`);
-          break;
-        } catch (error) {
-          lastError = error as Error;
-          if (attempt < MAX_RETRIES) {
-            const delay = Math.pow(2, attempt) * 1000; // Backoff: 1s, 2s, 4s
-            console.log(`[v0] Retry ${attempt + 1}/${MAX_RETRIES} for chunk ${chunkNumber} after ${delay}ms`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-        }
-      }
-      
-      if (!success) {
-        throw new Error(`Failed to upload chunk ${chunkNumber}: ${lastError?.message}`);
-      }
-      
-      // Update progress
-      if (onProgress) {
-        const elapsed = Date.now() - this.startTime;
-        const avgSpeed = (i + 1) / (elapsed / 1000); // chunks per second
-        const remaining = (totalChunks - i - 1) / avgSpeed;
-        
-        onProgress({
-          totalChunks,
-          uploadedChunks: chunkNumber,
-          percentage: Math.round((chunkNumber / totalChunks) * 100),
-          currentChunk: chunkNumber,
-          estimatedTimeRemaining: remaining * 1000, // ms
-        });
-      }
-    }
-  }
-        throw new Error(`Upload failed: ${response.status}`);
-      }
+  // ─── Auth header ──────────────────────────────────────────────────────────
 
-      return true;
-    } catch (error) {
-      if (retries < MAX_RETRIES) {
-        console.log(`[v0] Retry ${retries + 1}/${MAX_RETRIES} for chunk ${metadata.chunkNumber}`);
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000));
-        return this.uploadChunk(chunk, metadata, apiUrl, apiKey, retries + 1);
-      }
-      throw error;
+  private authHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    // Préférer JWT (web + Electron connecté au serveur)
+    const jwt = getAuthToken();
+    if (jwt) {
+      headers['Authorization'] = `Bearer ${jwt}`;
+      return headers;
     }
+    // Sinon utiliser le secret de socket configuré dans les paramètres cloud
+    try {
+      const cfg = JSON.parse(localStorage.getItem('snl_cloud_config') || '{}');
+      if (cfg.socketSecret) headers['X-Sync-Secret'] = cfg.socketSecret;
+    } catch {}
+    return headers;
   }
 
-  /**
-   * Lance la synchronisation complète (client-side compression + chunking + upload)
-   */
+  // ─── Upload ───────────────────────────────────────────────────────────────
+
   async syncData(
-    data: any,
+    data: unknown,
     apiUrl: string,
-    apiKey: string,
     siteId: string,
-    onProgress?: (progress: ChunkedUploadProgress) => void
+    onProgress?: (p: ChunkedUploadProgress) => void,
   ): Promise<{ success: boolean; sessionId: string; compressionRatio: number }> {
     this.startTime = Date.now();
-    this.progressCallback = onProgress;
+    const base = apiUrl.replace(/\/api\/?$/, '');
 
-    try {
-      console.log('[v0] Starting client-side sync...');
-      console.log(`[v0] Session ID: ${this.sessionId}`);
-      
-      // 1. Compression côté client (gzip max)
-      const { compressed, original, ratio } = await this.compressData(data);
-      
-      // 2. Chunking si nécessaire
-      const chunks = this.chunkCompressedData(compressed);
-      
-      // 3. Upload chunks vers API externe
-      console.log(`[v0] Uploading ${chunks.length} chunk(s) to ${apiUrl}/api/sync`);
-      await this.uploadToExternalAPI(chunks, apiUrl, apiKey, siteId, onProgress);
+    // 1. Compression + chunking
+    const { compressed, originalBytes } = this.compress(data);
+    const chunks = this.chunk(compressed);
+    const totalChunks = chunks.length;
 
-      const duration = Date.now() - this.startTime;
-      console.log(`[v0] Sync completed successfully in ${(duration / 1000).toFixed(2)}s`);
-      console.log(`[v0] - Original: ${(original / 1024 / 1024).toFixed(2)} MB`);
-      console.log(`[v0] - Compressed: ${(compressed.length / 1024 / 1024).toFixed(2)} MB`);
-      console.log(`[v0] - Ratio: ${(100 - ratio).toFixed(1)}% reduction`);
-      
-      return { 
-        success: true, 
-        sessionId: this.sessionId,
-        compressionRatio: 100 - ratio,
-      };
-    } catch (error) {
-      console.error('[v0] Sync error:', error);
-      throw error;
-    }
-  }
+    console.log(`[Sync] Upload : ${totalChunks} chunk(s) → ${base}`);
 
-  /**
-   * Télécharge et décompresse les données (côté client)
-   */
-  async downloadData(
-    apiUrl: string,
-    apiKey: string,
-    siteId: string,
-    onProgress?: (progress: ChunkedUploadProgress) => void
-  ): Promise<any> {
-    this.startTime = Date.now();
-    
-    try {
-      console.log('[v0] Downloading data from API...');
+    // 2. Init session
+    const initRes = await fetch(`${base}/api/sync/init`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ siteId, totalChunks }),
+    });
+    if (!initRes.ok) throw new Error(`Init échoué : HTTP ${initRes.status}`);
+    const { sessionId } = await initRes.json();
 
-      // GET /api/sync?siteId=xxx
-      const response = await fetch(
-        `${apiUrl}/api/sync?siteId=${siteId}`,
-        {
-          headers: { 'X-API-KEY': apiKey },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
-      }
-
-      const { data: dataBase64, timestamp, compressionRatio } = await response.json();
-
-      if (!dataBase64) {
-        console.log('[v0] No backup found for site');
-        return null;
-      }
-
-      console.log('[v0] Decompressing data client-side...');
-      
-      // Convertir base64 → Uint8Array (côté client)
-      const compressed = new Uint8Array(atob(dataBase64).split('').map(c => c.charCodeAt(0)));
-      
-      // Décompresser (côté client)
-      const decompressed = pako.ungzip(compressed);
-      const jsonString = new TextDecoder().decode(decompressed);
-      const data = JSON.parse(jsonString);
+    // 3. Envoyer les chunks
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkB64 = btoa(String.fromCharCode(...chunks[i]));
+      await this.postWithRetry(`${base}/api/sync/chunk`, {
+        sessionId,
+        chunkIndex: i,
+        data: chunkB64,
+      });
 
       if (onProgress) {
+        const elapsed = (Date.now() - this.startTime) / 1000;
+        const speed = (i + 1) / elapsed;
         onProgress({
-          totalChunks: 1,
-          uploadedChunks: 1,
-          percentage: 100,
-          currentChunk: 1,
-          estimatedTimeRemaining: 0,
+          totalChunks,
+          uploadedChunks: i + 1,
+          percentage: Math.round(((i + 1) / totalChunks) * 100),
+          currentChunk: i + 1,
+          estimatedTimeRemaining: ((totalChunks - i - 1) / speed) * 1000,
         });
       }
+    }
 
-      const duration = Date.now() - this.startTime;
-      console.log(`[v0] Download completed in ${(duration / 1000).toFixed(2)}s`);
-      console.log(`[v0] - Received: ${(compressed.length / 1024 / 1024).toFixed(2)} MB (compressed)`);
-      console.log(`[v0] - Decompressed: ${(decompressed.length / 1024 / 1024).toFixed(2)} MB`);
-      if (compressionRatio) console.log(`[v0] - Compression ratio: ${compressionRatio.toFixed(1)}%`);
-      
-      return data;
-    } catch (error) {
-      console.error('[v0] Download error:', error);
-      throw error;
+    // 4. Finalize
+    const finalRes = await fetch(`${base}/api/sync/finalize`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({ sessionId }),
+    });
+    if (!finalRes.ok) throw new Error(`Finalize échoué : HTTP ${finalRes.status}`);
+
+    const duration = (Date.now() - this.startTime) / 1000;
+    const ratio = 100 - (compressed.length / originalBytes) * 100;
+    console.log(`[Sync] Upload terminé en ${duration.toFixed(2)} s (ratio ${ratio.toFixed(1)} %)`);
+
+    return { success: true, sessionId, compressionRatio: ratio };
+  }
+
+  private async postWithRetry(url: string, body: unknown, attempt = 0): Promise<void> {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: this.authHeaders(),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      if (attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt) * 1000;
+        console.warn(`[Sync] Retry ${attempt + 1}/${MAX_RETRIES} dans ${delay} ms…`);
+        await new Promise(r => setTimeout(r, delay));
+        return this.postWithRetry(url, body, attempt + 1);
+      }
+      throw err;
     }
   }
-}
 
-// Exportation singleton
-export const chunkedSync = new ChunkedSyncService();
+  // ─── Download ─────────────────────────────────────────────────────────────
+  // Le serveur renvoie du JSON avec Content-Encoding: gzip.
+  // fetch() décompresse automatiquement ; response.json() retourne l'objet.
+
+  async downloadData(
+    apiUrl: string,
+    siteId: string,
+    onProgress?: (p: ChunkedUploadProgress) => void,
+  ): Promise<any> {
+    this.startTime = Date.now();
+    const base = apiUrl.replace(/\/api\/?$/, '');
+    const url = `${base}/api/sync?siteId=${encodeURIComponent(siteId)}`;
+
+    console.log(`[Sync] Download site ${siteId}…`);
+
+    const headers: Record<string, string> = {};
+    const jwt = getAuthToken();
+    if (jwt) {
+      headers['Authorization'] = `Bearer ${jwt}`;
+    } else {
+      try {
+        const cfg = JSON.parse(localStorage.getItem('snl_cloud_config') || '{}');
+        if (cfg.socketSecret) headers['X-Sync-Secret'] = cfg.socketSecret;
+      } catch {}
+    }
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`Download échoué : HTTP ${res.status}`);
+
+    const data = await res.json();
+
+    if (onProgress) {
+      onProgress({ totalChunks: 1, uploadedChunks: 1, percentage: 100, currentChunk: 1, estimatedTimeRemaining: 0 });
+    }
+
+    const duration = (Date.now() - this.startTime) / 1000;
+    console.log(`[Sync] Download terminé en ${duration.toFixed(2)} s`);
+
+    return data;
+  }
+}
 
 export const chunkedSync = new ChunkedSyncService();
