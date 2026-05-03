@@ -37,14 +37,9 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
     if (!product) { setError('Aucun produit sélectionné'); return; }
 
-    // Entrée → toujours confirmée directement (admin/manager) ou pending (operator)
-    const canConfirmDirectly = user?.role === 'admin' || user?.role === 'manager';
-    const movementType = canConfirmDirectly ? 'in' : 'pending_in';
-    const movementStatus = canConfirmDirectly ? 'confirmed' : 'pending';
-
-    const result = db.createMovement({
-      type: movementType,
-      status: movementStatus,
+    const result = await db.createMovement({
+      type: 'in',
+      status: 'pending',
       product_id: product.id,
       from_site_id: null,
       to_site_id: site,
@@ -55,17 +50,17 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
     });
 
     if ('error' in result) {
-      setError(result.error);
+      setError((result as { error: string }).error);
       return;
     }
 
     // ── Notification temps réel ──────────────────────────────────────────────
     const siteName = siteOptions.find(s => s.id === site)?.name || site;
+    const isConfirmed = (result as any).status === 'confirmed';
 
-    if (movementStatus === 'pending') {
-      // Notifier les admins d'une nouvelle demande en attente
+    if (!isConfirmed) {
       await notifyServer('movement:pending', {
-        ...result,
+        ...(result as object),
         product_name: product.name,
         product_sku: product.sku,
         user_name: user?.full_name,
@@ -74,7 +69,6 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
         reason,
       }, 'admin-room');
     } else {
-      // Notifier tout le monde d'une entrée confirmée
       await notifyServer('stock:updated', {
         product_id: product.id,
         product_name: product.name,
@@ -232,7 +226,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
       return;
     }
 
-    const result = db.createMovement({
+    const result = await db.createMovement({
       type: 'out',
       status: 'confirmed',
       product_id: product.id,
@@ -245,7 +239,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
     });
 
     if ('error' in result) {
-      setError(result.error);
+      setError((result as { error: string }).error);
       return;
     }
 
@@ -401,7 +395,7 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
       return;
     }
 
-    const result = db.createMovement({
+    const result = await db.createMovement({
       type: isPendingMode ? 'pending_out' : 'transport_damage',
       status: isPendingMode ? 'pending' : 'confirmed',
       product_id: product.id,
@@ -415,7 +409,7 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
     });
 
     if ('error' in result) {
-      setError(result.error);
+      setError((result as { error: string }).error);
       return;
     }
 

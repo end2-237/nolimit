@@ -111,6 +111,13 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [time, setTime] = useState(new Date());
   const searchRef = useRef<HTMLInputElement>(null);
+  const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
+
+  useEffect(() => {
+    setStats(db.getDashboardStats());
+    const t = setInterval(() => setStats(db.getDashboardStats()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -259,7 +266,6 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
     { id: 'outils', label: 'Outils' },
   ];
 
-  const stats = db.getDashboardStats();
 
   return (
     <>

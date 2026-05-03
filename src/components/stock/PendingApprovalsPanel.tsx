@@ -58,7 +58,8 @@ export function PendingApprovalsPanel() {
   const handleApprove = async (id: number) => {
     if (!user) return;
     const m = pending.find(p => p.id === id);
-    const result = db.approveMovement(id, user.id);
+    const result = await db.approveMovement(id, user.id);
+
     if (!result) {
       alert('Mouvement refusé automatiquement : stock insuffisant au moment de la validation.');
     } else {
@@ -78,7 +79,7 @@ export function PendingApprovalsPanel() {
     if (!user) return;
     const m = pending.find(p => p.id === id);
     const reason = rejectReason[id] || 'Refusé par le responsable';
-    db.rejectMovement(id, user.id, reason);
+    await db.rejectMovement(id, user.id, reason);
     await notifyServer('movement:updated', {
       movementId: id,
       status: 'rejected',

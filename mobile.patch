@@ -1,0 +1,55 @@
+From 58a57b94d6a40c9ea394d838070f476cbfbc53c9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 1 May 2026 17:04:40 +0000
+Subject: [PATCH] feat: support web/mobile deployment sans Electron
+
+---
+ .env.web.example       | 27 ++++++++++++++++++
+ nginx.web.conf         | 65 ++++++++++++++++++++++++++++++++++++++++++
+ package.json           |  2 ++
+ src/services/dbSync.ts |  8 +++---
+ vite.web.config.ts     | 46 ++++++++++++++++++++++++++++++
+ 5 files changed, 144 insertions(+), 4 deletions(-)
+ create mode 100644 .env.web.example
+ create mode 100644 nginx.web.conf
+ create mode 100644 vite.web.config.ts
+
+diff --git a/package.json b/package.json
+index ff420f0..c4f7762 100644
+--- a/package.json
++++ b/package.json
+@@ -10,6 +10,8 @@
+   "scripts": {
+     "dev": "vite",
+     "build": "vite build",
++    "dev:web": "vite --config vite.web.config.ts",
++    "build:web": "vite build --config vite.web.config.ts",
+     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+     "electron:build": "vite build && electron-builder --config electron-builder.json",
+     "electron:pack": "electron-builder --dir --config electron-builder.json",
+diff --git a/src/services/dbSync.ts b/src/services/dbSync.ts
+index ffe4329..1351da2 100644
+--- a/src/services/dbSync.ts
++++ b/src/services/dbSync.ts
+@@ -44,8 +44,8 @@ export async function backupLocalDatabase(options: DbSyncOptions = {}) {
+     `);
+ 
+     // Envoie avec chunking
+-    const apiUrl = options.apiUrl || process.env.REACT_APP_API_URL || 'http://localhost:3001';
+-    const apiKey = options.apiKey || process.env.REACT_APP_API_KEY || '';
++    const apiUrl = options.apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:3001';
++    const apiKey = options.apiKey || import.meta.env.VITE_API_KEY || '';
+     const siteId = options.siteId || 'default';
+ 
+     const result = await chunkedSync.syncData(
+@@ -71,8 +71,8 @@ export async function restoreLocalDatabase(options: DbSyncOptions = {}) {
+   console.log('[v0] Starting local database restore...');
+ 
+   try {
+-    const apiUrl = options.apiUrl || process.env.REACT_APP_API_URL || 'http://localhost:3001';
+-    const apiKey = options.apiKey || process.env.REACT_APP_API_KEY || '';
++    const apiUrl = options.apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:3001';
++    const apiKey = options.apiKey || import.meta.env.VITE_API_KEY || '';
+     const siteId = options.siteId || 'default';
+ 
+     const backupData = await chunkedSync.downloadData(

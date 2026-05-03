@@ -86,10 +86,13 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Invalid movement type' });
     }
-    
-    // Determine status based on type
-    const status = type === 'in' ? 'pending' : (type === 'out' ? 'confirmed' : 'pending');
-    const finalType = type === 'in' ? 'pending_in' : type;
+
+    // Determine status based on type and user role
+    const canConfirm = req.user?.role === 'admin' || req.user?.role === 'manager';
+    const status = type === 'in'
+      ? (canConfirm ? 'confirmed' : 'pending')
+      : (type === 'out' ? 'confirmed' : 'pending');
+    const finalType = (type === 'in' && !canConfirm) ? 'pending_in' : type;
     
     const ref = reference || `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -110,13 +113,21 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
         [quantity, product_id, from_site_id]
       );
     }
+
+    // For confirmed inputs (admin/manager direct entry), update stock immediately
+    if (type === 'in' && status === 'confirmed' && to_site_id) {
+      await client.query(
+        'UPDATE stocks SET quantity = quantity + $1, last_delivery = NOW(), updated_at = NOW() WHERE product_id = $2 AND site_id = $3',
+        [quantity, product_id, to_site_id]
+      );
+    }
     
-    // For inputs, create alert for admin approval
-    if (type === 'in') {
+    // For pending inputs, create alert for admin approval
+    if (type === 'in' && status === 'pending') {
       await client.query(
         `INSERT INTO alerts (type, product_id, site_id, message, is_read)
          VALUES ('pending_approval', $1, $2, $3, false)`,
-        [product_id, to_site_id, `Demand for entry from ${req.user?.username}`]
+        [product_id, to_site_id, `Demande d'entrée de ${req.user?.username}`]
       );
     }
     

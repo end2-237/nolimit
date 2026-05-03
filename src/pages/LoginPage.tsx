@@ -1,9 +1,10 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 import { db } from '../services/database';
 
-export function LoginPage() {
+export  function LoginPage() {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -11,11 +12,15 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const stats = db.getDashboardStats();
+  const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
   const alerts = db.getAlerts(false);
   const products = db.getProducts();
   const criticalCount = alerts.filter(a => a.type === 'critical_stock').length;
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  useEffect(() => {
+    setStats(db.getDashboardStats());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +28,7 @@ export function LoginPage() {
     setIsLoading(true);
     setError('');
     await new Promise(r => setTimeout(r, 500));
-    const result = login(username, password);
+    const result = await login(username, password);
     setIsLoading(false);
     if (!result.success) setError(result.error || 'Identifiants incorrects');
   };

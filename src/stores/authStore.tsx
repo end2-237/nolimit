@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, User } from '../services/database';
+import { Users as ApiUsers, clearAuthToken } from '../services/api';
 import { APP_CONFIG } from '../config/app.config';
 
 const ALL_PERMISSIONS = ['view', 'create', 'edit', 'delete', 'export', 'manage_users'] as const;
@@ -17,7 +18,7 @@ const SESSION_KEY = 'snl_user_id';
 
 interface AuthContextType {
   user: (User & { permissions?: string }) | null;
-  login: (username: string, password: string) => { success: boolean; error?: string };
+  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   isLoading: boolean;
   canAccessSite: (siteId: string) => boolean;
@@ -55,18 +56,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = (username: string, password: string) => {
-    const u = db.authenticate(username, password);
-    if (u) {
-      setUser(u as any);
-      // Stocker UNIQUEMENT l'ID — pas de page mémorisée
-      sessionStorage.setItem(SESSION_KEY, u.id.toString());
+  const login = async (username: string, password: string) => {
+    const result = await db.authenticate(username, password);
+    if (result) {
+      setUser(result.user as any);
+      sessionStorage.setItem(SESSION_KEY, result.user.id.toString());
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
       return { success: true };
     }
-    return {
-      success: false,
-      error: "Identifiants incorrects. Vérifiez votre nom d'utilisateur et mot de passe.",
-    };
+    return { success: false, error: "Identifiants incorrects. Vérifiez votre nom d'utilisateur et mot de passe." };
   };
 
   const logout = () => {

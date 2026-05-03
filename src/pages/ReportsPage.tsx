@@ -98,7 +98,7 @@ function ScheduleReportModal({ onClose, onSaved }: ScheduleModalProps) {
       data_csv = toCSV(headers, rows);
     }
 
-    db.saveReport({
+    await db.saveReport({
       type: form.type,
       name: form.name || `${form.type}_${form.date_from}_${form.date_to}`,
       date_from: form.date_from,
