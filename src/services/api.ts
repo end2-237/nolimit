@@ -3,7 +3,7 @@
  * Automatically syncs with WebSocket for real-time updates
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://snl-api.vps.buyticle.com/api';
 
 let authToken: string | null = null;
 
