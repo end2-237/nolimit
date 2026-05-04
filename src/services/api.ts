@@ -3,7 +3,13 @@
  * Automatically syncs with WebSocket for real-time updates
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://snl-api.vps.buyticle.com/api';
+const API_URL = (() => {
+  try {
+    const override = localStorage.getItem('snl_api_url');
+    if (override?.startsWith('http')) return override.replace(/\/+$/, '');
+  } catch {}
+  return (import.meta.env.VITE_API_URL as string) || 'https://snl-api.vps.buyticle.com/api';
+})();
 
 let authToken: string | null = null;
 
