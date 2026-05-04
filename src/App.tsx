@@ -14,6 +14,11 @@ import { db } from './services/database';
 import { ProductsPage } from './pages/ProductsPage';
 import { notifService } from './services/notifications';
 import { SyncProvider, useSync } from './context/SyncProvider';
+import { startConnectivityMonitor } from './services/connectivity';
+import { processOutbox } from './services/outbox';
+
+// Start connectivity monitor as early as possible
+startConnectivityMonitor();
 
 function showBrowserNotif(title: string, body: string) {
   if ('Notification' in window && Notification.permission === 'granted') {
@@ -138,6 +143,27 @@ function AppInner() {
       clearInterval(t);
       window.removeEventListener('snl:stock-updated', handler);
     };
+  }, [user]);
+
+  // ── Reconnexion : vider l'outbox + refresh des données ───────────────────
+  useEffect(() => {
+    if (!user) return;
+    const onOnline = async () => {
+      // Refresh data first
+      await db.refresh();
+      window.dispatchEvent(new CustomEvent('snl:stock-updated'));
+      window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+      setAlertCount(db.getAlerts(false).length);
+      // Then flush outbox
+      const { sent } = await processOutbox();
+      if (sent > 0) {
+        await db.refresh();
+        window.dispatchEvent(new CustomEvent('snl:stock-updated'));
+        window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+      }
+    };
+    window.addEventListener('snl:online', onOnline);
+    return () => window.removeEventListener('snl:online', onOnline);
   }, [user]);
 
   useEffect(() => {

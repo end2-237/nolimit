@@ -1,11 +1,13 @@
 /**
- * Database Service - API proxy layer
- * Remplace IndexedDB par des appels au backend Express + Supabase PostgreSQL.
- * Maintient un cache local pour les lectures synchrones (peuplé depuis l'API au démarrage).
+ * Database Service - API proxy layer with offline fallback.
+ * Online  : charge depuis l'API VPS → persiste dans IndexedDB.
+ * Offline : charge depuis IndexedDB (cache local).
  */
 
 import { APP_CONFIG } from '../config/app.config';
 import { Users, Products, Stocks, Movements, Alerts, Reports, Stats, setAuthToken } from './api';
+import { persistCache, loadCache, saveAuthCache, addToOutbox } from './offlineStorage';
+import { isOnline } from './connectivity';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -172,16 +174,31 @@ class DatabaseService {
       this.cache.loaded = true;
       return;
     }
+
+    // ── Online: fetch from API then persist to IndexedDB ─────────────────────
+    if (isOnline()) {
+      try {
+        const [products, stocks, users, movements, alerts, reports] = await Promise.all([
+          Products.getAll().catch(() => [] as any[]),
+          Stocks.getAll().catch(() => [] as any[]),
+          Users.getAll().catch(() => [] as any[]),
+          Movements.getAll({ limit: 500 }).catch(() => [] as any[]),
+          Alerts.getAll().catch(() => [] as any[]),
+          Reports.getAll().catch(() => [] as any[]),
+        ]);
+        this.cache = { products, stocks, users, movements, alerts, reports, loaded: true };
+        // Persist to IndexedDB for offline use
+        persistCache({ products, stocks, users, movements, alerts }).catch(() => {});
+        return;
+      } catch {
+        // API failed even though we thought we were online — fall through to cache
+      }
+    }
+
+    // ── Offline: load from IndexedDB ─────────────────────────────────────────
     try {
-      const [products, stocks, users, movements, alerts, reports] = await Promise.all([
-        Products.getAll().catch(() => []),
-        Stocks.getAll().catch(() => []),
-        Users.getAll().catch(() => []),
-        Movements.getAll({ limit: 500 }).catch(() => []),
-        Alerts.getAll().catch(() => []),
-        Reports.getAll().catch(() => []),
-      ]);
-      this.cache = { products, stocks, users, movements, alerts, reports, loaded: true };
+      const cached = await loadCache();
+      this.cache = { ...cached, reports: [], loaded: true };
     } catch {
       this.cache.loaded = true;
     }
@@ -212,17 +229,32 @@ class DatabaseService {
   // ─── Auth ──────────────────────────────────────────────────────────────────
 
   async authenticate(username: string, password: string): Promise<{ user: User; token: string } | null> {
-    try {
-      const result = await Users.login(username, password);
-      if (result?.token) {
-        setAuthToken(result.token);
-        localStorage.setItem('snl_token', result.token);
-        return result;
+    // ── Online login ──────────────────────────────────────────────────────────
+    if (isOnline()) {
+      try {
+        const result = await Users.login(username, password);
+        if (result?.token) {
+          setAuthToken(result.token);
+          localStorage.setItem('snl_token', result.token);
+          // Save auth cache for offline login
+          saveAuthCache(username, result.token, result.user || result).catch(() => {});
+          return result;
+        }
+        return null;
+      } catch {
+        return null;
       }
-      return null;
-    } catch {
-      return null;
     }
+
+    // ── Offline login: restore last session for this username ─────────────────
+    const { loadAuthCache } = await import('./offlineStorage');
+    const cached = await loadAuthCache(username);
+    if (cached) {
+      setAuthToken(cached.token);
+      localStorage.setItem('snl_token', cached.token);
+      return { user: cached.user as User, token: cached.token };
+    }
+    return null;
   }
 
   getUserById(id: number): User | null {
@@ -355,22 +387,38 @@ class DatabaseService {
 
   getPendingMovements(): Movement[] { return this.getMovements({ status: 'pending' }); }
 
-  async createMovement(data: Omit<Movement, 'id' | 'created_at'>): Promise<Movement | { error: string }> {
-    try {
-      const result = await Movements.create(data);
-      const movement: Movement = result.movement || result;
-      this.cache.movements.unshift(movement);
-      // Optimistic stock update for exits
-      if (data.type === 'out' && data.from_site_id) {
-        const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
-        if (idx !== -1) {
-          this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - data.quantity);
+  async createMovement(data: Omit<Movement, 'id' | 'created_at'>): Promise<Movement | { error: string; offline?: boolean; localId?: number }> {
+    // ── Online: send directly to API ──────────────────────────────────────────
+    if (isOnline()) {
+      try {
+        const result = await Movements.create(data);
+        const movement: Movement = result.movement || result;
+        this.cache.movements.unshift(movement);
+        if (data.type === 'out' && data.from_site_id) {
+          const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
+          if (idx !== -1) this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - data.quantity);
         }
+        return movement;
+      } catch (e: any) {
+        return { error: e.message || 'Échec création mouvement' };
       }
-      return movement;
-    } catch (e: any) {
-      return { error: e.message || 'Échec création mouvement' };
     }
+
+    // ── Offline: store in outbox + optimistic local update ────────────────────
+    const localId = await addToOutbox(data);
+    const tempMovement: Movement = {
+      id: -localId,
+      ...data,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    } as Movement;
+    this.cache.movements.unshift(tempMovement);
+    // Optimistic stock deduction for exits
+    if (data.type === 'out' && data.from_site_id) {
+      const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
+      if (idx !== -1) this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - data.quantity);
+    }
+    return { error: 'Hors ligne — demande enregistrée et sera envoyée automatiquement', offline: true, localId };
   }
 
   async approveMovement(movementId: number, approverId: number): Promise<boolean> {
