@@ -81,13 +81,22 @@ function AppInner() {
     socket.on('users:updated', onUsersUpdated);
     socket.on('data:sync', onUsersUpdated);
 
-    // Refresh périodique toutes les 2 minutes si connecté
-    const periodicRefresh = setInterval(() => {
-      if (socket.connected) refreshAll();
-    }, 2 * 60 * 1000);
+    // Refresh périodique configurable (défaut 1 minute)
+    const getSyncMs = () => {
+      const v = parseInt(localStorage.getItem('snl_auto_sync_interval') || '60', 10);
+      return (isNaN(v) || v < 10 ? 60 : v) * 1000;
+    };
+    let periodicRefresh = setInterval(() => refreshAll(), getSyncMs());
+
+    const onIntervalChanged = () => {
+      clearInterval(periodicRefresh);
+      periodicRefresh = setInterval(() => refreshAll(), getSyncMs());
+    };
+    window.addEventListener('snl:sync-interval-changed', onIntervalChanged);
 
     return () => {
       clearInterval(periodicRefresh);
+      window.removeEventListener('snl:sync-interval-changed', onIntervalChanged);
       socket.off('connect', onConnect);
       socket.off('stock:updated', onStockUpdated);
       socket.off('movement:pending', onMovementPending);
