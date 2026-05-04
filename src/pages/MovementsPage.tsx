@@ -163,7 +163,7 @@ function CADashboard({
   return (
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-4">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50">
+      <div className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-green-600 flex items-center justify-center">
             <DollarSign className="w-4 h-4 text-white" />
@@ -175,10 +175,10 @@ function CADashboard({
         </div>
         {/* Sélecteur de période — désactivé si filtre externe de date actif */}
         {!hasExternalDate ? (
-          <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1">
+          <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 flex-wrap">
             {(['today', 'week', 'month', 'all'] as const).map(p => (
               <button key={p} onClick={() => setPeriod(p)}
-                className={`px-3 py-1 text-xs rounded-lg font-medium transition-all ${period === p ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                className={`px-2 py-1 text-xs rounded-lg font-medium transition-all ${period === p ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                 {periodLabels[p]}
               </button>
             ))}
@@ -200,7 +200,7 @@ function CADashboard({
 
       <div className="p-5">
         {/* Global KPI */}
-        <div className="grid grid-cols-3 gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
             <div className="text-xs text-gray-500">CA Total</div>
             <div className="text-2xl font-bold text-green-700 font-mono">{totalCA.toLocaleString('fr-FR')}</div>
@@ -221,7 +221,7 @@ function CADashboard({
         {/* CA par ville */}
         <div className="mb-4">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Par Ville</p>
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-3 flex-wrap">
             <button onClick={() => setActiveCity('all')}
               className={`px-3 py-1.5 text-xs rounded-xl font-medium border transition-all ${activeCity === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'}`}>
               Toutes
@@ -234,7 +234,7 @@ function CADashboard({
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {APP_CONFIG.sites.map(site => {
               const data = caByCity[site.id] || { total: 0, qty: 0, count: 0 };
               return (
@@ -480,8 +480,8 @@ export function MovementsPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-[#F1F5F9] bg-white px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-900">
               {isAdmin ? 'Mouvements & Chiffre d\'Affaires' : 'Mes Mouvements'}
@@ -520,7 +520,7 @@ export function MovementsPage() {
         )}
 
         {/* Filters */}
-        <div className="flex gap-3 mb-3 flex-wrap">
+        <div className="flex gap-2 mb-3 flex-wrap">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <Input placeholder="Produit, référence, vendeur..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 h-9 text-sm" />
@@ -571,20 +571,20 @@ export function MovementsPage() {
         </div>
 
         {/* Date range */}
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
           <span className="text-xs text-gray-500 flex-shrink-0">Période :</span>
-          <div className="flex items-center gap-2">
-            <Input type="date" className="h-8 text-xs w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Input type="date" className="h-8 text-xs w-32" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             <span className="text-gray-400 text-xs">→</span>
-            <Input type="date" className="h-8 text-xs w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <Input type="date" className="h-8 text-xs w-32" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
           {(dateFrom || dateTo) && (
             <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-gray-400 hover:text-gray-600 underline">Effacer</button>
           )}
-          <div className="flex gap-2 ml-2">
+          <div className="flex gap-1.5">
             {[
               { label: "Auj.", from: today(), to: today() },
-              { label: 'Semaine', from: weekStart(), to: today() },
+              { label: 'Sem.', from: weekStart(), to: today() },
               { label: 'Mois', from: monthStart(), to: today() },
             ].map(p => (
               <button key={p.label} onClick={() => { setDateFrom(p.from); setDateTo(p.to); }}
@@ -593,15 +593,14 @@ export function MovementsPage() {
               </button>
             ))}
           </div>
-          <div className="flex-1" />
-          <button onClick={load} className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800">
+          <button onClick={load} className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 ml-auto">
             <RefreshCw className="w-3 h-3" /> Actualiser
           </button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto px-6 py-4">
+      <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
 
         {/* CA Tab — passe les filtres externes */}
         {activeTab === 'ca' && isAdmin && (
@@ -624,8 +623,8 @@ export function MovementsPage() {
                 <p className="text-sm">Aucun mouvement trouvé</p>
               </div>
             ) : (
-              <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
-                <table className="w-full text-sm">
+              <div className="border border-[#E2E8F0] rounded-xl overflow-x-auto bg-white shadow-sm">
+                <table className="w-full text-sm min-w-[700px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-[#E2E8F0]">
                       {['Type', 'Statut', 'Référence', 'Produit', 'Qté', 'Site', 'Motif', 'Date', 'Vendeur'].map(h => (

@@ -33,19 +33,19 @@ export function setupWebSocket(httpServer: HTTPServer) {
   io.use((socket, next) => {
     const { token, secret } = socket.handshake.auth;
 
-    // 1. Secret partagé (app Electron configurée)
-    if (SOCKET_SECRET && secret === SOCKET_SECRET) {
-      socket.data.user = { userId: 0, username: 'app-client', role: 'app' };
-      return next();
-    }
-
-    // 2. JWT valide
+    // 1. JWT valide — prioritaire (donne le vrai rôle: admin, manager, operator…)
     if (token) {
       const decoded = verifyToken(token);
       if (decoded) {
         socket.data.user = decoded as SocketUser;
         return next();
       }
+    }
+
+    // 2. Secret partagé (Electron ou app de confiance sans JWT)
+    if (SOCKET_SECRET && secret === SOCKET_SECRET) {
+      socket.data.user = { userId: 0, username: 'app-client', role: 'app' };
+      return next();
     }
 
     // 3. Pas de SOCKET_SECRET configuré → accès libre (dev ou réseau interne)
@@ -61,8 +61,8 @@ export function setupWebSocket(httpServer: HTTPServer) {
     const user = socket.data.user as SocketUser;
     console.log(`[WS] Connexion: ${user.username} (${socket.id})`);
 
-    // Rejoindre la room admin automatiquement
-    if (user.role === 'admin' || user.role === 'manager') {
+    // admin-room : admins, managers ET clients app de confiance (Electron/secret)
+    if (['admin', 'manager', 'app', 'anonymous'].includes(user.role)) {
       socket.join('admin-room');
     }
 

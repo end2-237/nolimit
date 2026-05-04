@@ -280,7 +280,7 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
             {/* Basic info */}
             <div>
               <p className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-3">Informations personnelles</p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs">Nom d'utilisateur *</Label>
                   <Input className="mt-1 font-mono" value={form.username} onChange={e => set('username', e.target.value)} disabled={isEdit} placeholder="jean.dupont" />
@@ -310,7 +310,7 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
             {/* Role */}
             <div>
               <p className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-3">Profil de base</p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {ROLES.filter(r => r.id !== 'custom').map(r => (
                   <button key={r.id} type="button" onClick={() => set('role', r.id)}
                     className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-center transition-all ${form.role === r.id ? 'border-current' : 'border-gray-200 hover:border-gray-300'}`}
@@ -413,8 +413,8 @@ export function UsersPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b border-[#F1F5F9] bg-white px-6 py-4">
-        <div className="flex items-center justify-between">
+      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
               <Users className="w-5 h-5 text-[#0284C7]" />
@@ -432,7 +432,7 @@ export function UsersPage() {
       </div>
 
       {/* Permission legend */}
-      <div className="px-6 py-2.5 bg-gray-50 border-b border-[#F1F5F9]">
+      <div className="px-4 sm:px-6 py-2.5 bg-gray-50 border-b border-[#F1F5F9]">
         <div className="flex gap-3 flex-wrap items-center">
           <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Droits :</span>
           {ALL_PERMISSIONS.map(p => (
@@ -444,7 +444,7 @@ export function UsersPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-6 py-4">
+      <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
         <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead>

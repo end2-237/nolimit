@@ -70,8 +70,8 @@ export function AlertsPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-[#F1F5F9] bg-white px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
               <Bell className="w-5 h-5 text-orange-600" />
@@ -91,7 +91,7 @@ export function AlertsPage() {
           )}
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="w-[180px] h-9">
               <Filter className="w-3.5 h-3.5 mr-1.5" />
@@ -118,8 +118,8 @@ export function AlertsPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="px-6 py-3 bg-gray-50 border-b border-[#F1F5F9]">
-        <div className="grid grid-cols-4 gap-3">
+      <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b border-[#F1F5F9]">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {Object.entries(counts).map(([type, count]) => {
             const cfg = alertTypeConfig[type];
             if (!cfg) return null;
@@ -147,7 +147,7 @@ export function AlertsPage() {
       </div>
 
       {/* Alerts list */}
-      <div className="flex-1 overflow-auto px-6 py-4">
+      <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <Bell className="w-10 h-10 mx-auto mb-3 opacity-20" />

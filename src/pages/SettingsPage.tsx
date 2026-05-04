@@ -349,7 +349,7 @@ function DBExportImport() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
             { label: 'Exporter la BD', sub: 'JSON complet avec sites et produits', icon: Download, color: 'green', action: handleExport, loading: exporting },
             { label: 'Importer une BD', sub: 'Restaurer depuis JSON (sites inclus)', icon: Upload, color: 'blue', action: handleImport, loading: importing },
@@ -589,7 +589,7 @@ export function SettingsPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b border-[#F1F5F9] bg-white px-6 py-4">
+      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
             <Settings className="w-5 h-5 text-gray-600" />
@@ -601,7 +601,7 @@ export function SettingsPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-1 mt-4">
+        <div className="flex gap-1 mt-4 flex-wrap">
           {tabs.filter(t => !t.admin || isSuperAdmin).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
               className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${activeTab === tab.id ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
@@ -611,7 +611,7 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-6 py-6 space-y-4 max-w-3xl">
+      <div className="flex-1 overflow-auto px-4 sm:px-6 py-6 space-y-4 max-w-3xl w-full">
         {activeTab === 'general' && (
           <>
           <ServerStatus />

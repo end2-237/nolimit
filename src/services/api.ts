@@ -9,6 +9,8 @@ let authToken: string | null = null;
 
 export function setAuthToken(token: string) {
   authToken = token;
+  // Expose pour SyncProvider qui ne peut pas importer api.ts (dépendance circulaire)
+  (window as any).__snl_auth_token__ = token;
 }
 
 export function getAuthToken() {

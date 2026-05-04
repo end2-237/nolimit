@@ -222,7 +222,7 @@ function CAReportModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="px-6 py-5 space-y-4">
           {/* Filters */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">Date début</Label>
               <Input type="date" className="mt-1" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
@@ -359,7 +359,7 @@ function DamageReportModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
         <div className="px-6 py-5 space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">Date début</Label>
               <Input type="date" className="mt-1" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
@@ -508,8 +508,8 @@ export function ReportsPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-[#F1F5F9] bg-white px-6 py-4">
-        <div className="flex items-center justify-between">
+      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
               <FileText className="w-5 h-5 text-purple-600" />
@@ -525,9 +525,9 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-6 py-5 space-y-6">
+      <div className="flex-1 overflow-auto px-4 sm:px-6 py-5 space-y-6">
         {/* Quick stats */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Produits', value: stats.totalProducts, sub: 'références', color: 'blue' },
             { label: 'Valeur Stock', value: stats.totalValue.toLocaleString('fr-FR'), sub: 'XAF', color: 'green' },
@@ -545,7 +545,7 @@ export function ReportsPage() {
         {/* Rapports spéciaux */}
         <div>
           <h2 className="text-sm font-semibold text-gray-700 mb-3">Rapports Interactifs</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <button onClick={() => setShowCAModal(true)}
               className="flex items-center gap-4 p-5 bg-white border border-emerald-200 rounded-xl hover:border-emerald-400 hover:shadow-md transition-all text-left group">
               <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-600 transition-colors">
@@ -573,7 +573,7 @@ export function ReportsPage() {
         {hasPermission('export') && (
           <div>
             <h2 className="text-sm font-semibold text-gray-700 mb-3">Exports Rapides (CSV)</h2>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
                 { id: 'inventory', label: 'Inventaire complet', desc: 'Stock par produit et site', icon: BarChart3, color: 'blue', fn: exportInventoryCSV },
                 { id: 'movements', label: 'Mouvements', desc: 'Toutes entrées/sorties/transferts', icon: TrendingUp, color: 'green', fn: exportMovementsCSV },
@@ -601,7 +601,7 @@ export function ReportsPage() {
         )}
 
         {/* Résumé mouvements */}
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-sm">Résumé des Mouvements</CardTitle></CardHeader>
             <CardContent>
