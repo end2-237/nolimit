@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../../stores/authStore';
 import { db } from '../../services/database';
 import { APP_CONFIG } from '../../config/app.config';
+import { OfflineIndicator } from '../OfflineIndicator';
 
 interface QuickActionBarProps {
   onNavigate: (page: string) => void;
@@ -371,6 +372,11 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
             <span className="hidden sm:inline">Rechercher...</span>
             <span className="hidden sm:inline text-[9px] bg-green-800/50 px-1 rounded font-mono">Ctrl+K</span>
           </button>
+
+          {/* Offline indicator */}
+          <div className="hidden sm:block" style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <OfflineIndicator />
+          </div>
 
           {/* Time */}
           <div className="hidden sm:block text-[10px] font-mono text-green-400/60 tabular-nums">

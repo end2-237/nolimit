@@ -5,6 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Button } from '../ui/button';
 import { useAuth } from '../../stores/authStore';
 import { QuickActionBar } from './QuickActionBar';
+import { OfflineIndicator } from '../OfflineIndicator';
 
 export type PageId = 'dashboard' | 'products' | 'movements' | 'alerts' | 'reports' | 'settings' | 'users';
 
@@ -214,15 +215,18 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
               <Menu className="w-5 h-5 text-gray-600" />
             </button>
             <span className="font-semibold text-gray-800 text-sm">{APP_CONFIG.shortName}</span>
-            {alertCount > 0 && (
-              <button
-                onClick={() => handleNavigate('alerts')}
-                className="ml-auto flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-medium"
-              >
-                <Bell className="w-3 h-3" />
-                {alertCount}
-              </button>
-            )}
+            <div className="ml-auto flex items-center gap-2">
+              <OfflineIndicator />
+              {alertCount > 0 && (
+                <button
+                  onClick={() => handleNavigate('alerts')}
+                  className="flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-medium"
+                >
+                  <Bell className="w-3 h-3" />
+                  {alertCount}
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex-1 overflow-auto">
             {children}
