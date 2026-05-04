@@ -147,7 +147,7 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
             {!isEdit && <p className="text-xs text-gray-400 mt-1">SKU attribué : <span className="font-mono font-bold">{form.sku}</span></p>}
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">{error}</div>}
 
             {/* Name */}
@@ -175,7 +175,7 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
             </div>
 
             {/* Category + sub-type */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Catégorie</Label>
                 <Select value={form.category} onValueChange={handleCategoryChange}>
@@ -244,7 +244,7 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Prix Unitaire (XAF) <span className="text-red-500">*</span></Label>
                 <Input className="mt-1 font-mono" type="number" value={form.price} onChange={e => set('price', e.target.value)} placeholder="2500" min="0" required />

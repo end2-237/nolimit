@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard, ShoppingBag, ChevronRight, LogOut, Users, Shield } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard, ShoppingBag, ChevronRight, LogOut, Users, Shield, Menu, X } from 'lucide-react';
 import { APP_CONFIG } from '../../config/app.config';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
@@ -24,7 +24,19 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
 
 export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }: StockLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { user, logout, hasPermission } = useAuth();
+
+  useEffect(() => {
+    const close = () => setIsMobileOpen(false);
+    window.addEventListener('resize', close);
+    return () => window.removeEventListener('resize', close);
+  }, []);
+
+  const handleNavigate = (page: PageId) => {
+    onNavigate(page);
+    setIsMobileOpen(false);
+  };
 
   const navigationItems: { id: PageId; label: string; icon: typeof Package }[] = [
     { id: 'dashboard', label: 'Tableau de Bord', icon: LayoutDashboard },
@@ -42,17 +54,30 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
     <div className="flex flex-col h-screen bg-[#f0fdf4]" style={{ userSelect: 'none' }}>
       {/* Quick Action Bar (remplace la barre de menu native) */}
       <QuickActionBar
-        onNavigate={(page) => onNavigate(page as PageId)}
+        onNavigate={(page) => handleNavigate(page as PageId)}
         alertCount={alertCount}
-        onNewProduct={() => onNavigate('products')}
-        onNewMovement={() => onNavigate('movements')}
+        onNewProduct={() => handleNavigate('products')}
+        onNewMovement={() => handleNavigate('movements')}
       />
 
       {/* Main layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile backdrop */}
+        {isMobileOpen && (
+          <div
+            className="absolute inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setIsMobileOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
         <aside
-          className={`${isCollapsed ? 'w-16' : 'w-64'} flex flex-col transition-all duration-200 flex-shrink-0`}
+          className={`
+            absolute inset-y-0 left-0 z-50 flex flex-col transition-transform duration-200 flex-shrink-0
+            md:relative md:translate-x-0 md:z-auto md:inset-y-auto md:left-auto
+            ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
+            ${isCollapsed ? 'md:w-16' : 'md:w-64'} w-64
+          `}
           style={{ background: 'linear-gradient(180deg, #14532d 0%, #166534 60%, #15803d 100%)' }}
         >
           {/* Logo */}
@@ -83,11 +108,19 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
                 <span className="text-xs text-green-400/70">v{APP_CONFIG.version}</span>
               </div>
             )}
+            {/* Desktop collapse toggle */}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="ml-auto p-1 hover:bg-green-700/50 rounded transition-colors flex-shrink-0"
+              className="ml-auto p-1 hover:bg-green-700/50 rounded transition-colors flex-shrink-0 hidden md:flex"
             >
               <ChevronRight className={`w-4 h-4 text-green-400 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+            </button>
+            {/* Mobile close button */}
+            <button
+              onClick={() => setIsMobileOpen(false)}
+              className="ml-auto p-1 hover:bg-green-700/50 rounded transition-colors flex-shrink-0 md:hidden"
+            >
+              <X className="w-4 h-4 text-green-400" />
             </button>
           </div>
 
@@ -101,7 +134,7 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
               return (
                 <button
                   key={item.id}
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => handleNavigate(item.id)}
                   title={isCollapsed ? item.label : undefined}
                   className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-sm ${
                     isActive
@@ -171,8 +204,29 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto min-w-0">
-          {children}
+        <main className="flex-1 overflow-auto min-w-0 flex flex-col">
+          {/* Mobile header bar with hamburger */}
+          <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100 sticky top-0 z-30">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <Menu className="w-5 h-5 text-gray-600" />
+            </button>
+            <span className="font-semibold text-gray-800 text-sm">{APP_CONFIG.shortName}</span>
+            {alertCount > 0 && (
+              <button
+                onClick={() => handleNavigate('alerts')}
+                className="ml-auto flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-medium"
+              >
+                <Bell className="w-3 h-3" />
+                {alertCount}
+              </button>
+            )}
+          </div>
+          <div className="flex-1 overflow-auto">
+            {children}
+          </div>
         </main>
       </div>
     </div>

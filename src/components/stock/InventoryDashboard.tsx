@@ -112,8 +112,8 @@ export function InventoryDashboard() {
   return (
     <div className="h-full flex flex-col">
       <div className="border-b border-[#F1F5F9] bg-white">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
+        <div className="px-4 sm:px-6 py-4">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <label className="text-sm font-medium text-gray-600">Site:</label>
               <Select value={selectedSite} onValueChange={setSelectedSite}>
@@ -127,7 +127,7 @@ export function InventoryDashboard() {
               </Select>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {hasPermission('create') && (
                 <>
                   <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)}>
@@ -149,7 +149,7 @@ export function InventoryDashboard() {
           </div>
 
           {/* KPI Cards */}
-          <div className="grid grid-cols-5 gap-3 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
             <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-xl border border-blue-100">
               <div className="text-xs text-gray-500 mb-0.5">Valeur du Stock</div>
               <div className="text-xl font-bold text-[#0284C7]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
@@ -209,7 +209,7 @@ export function InventoryDashboard() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-6 py-4">
+      <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
         {/* Pending approvals panel — seulement admin/manager */}
         {isAdmin && <PendingApprovalsPanel />}
 
@@ -230,8 +230,8 @@ export function InventoryDashboard() {
             )}
           </div>
         ) : (
-          <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
-            <table className="w-full">
+          <div className="border border-[#E2E8F0] rounded-xl overflow-x-auto bg-white shadow-sm">
+            <table className="w-full min-w-[540px]">
               <thead>
                 <tr className="bg-gray-50 border-b border-[#E2E8F0]">
                   <th className="px-4 py-3 text-left">

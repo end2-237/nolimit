@@ -57,10 +57,10 @@ function DropdownMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-[9999] min-w-[220px] bg-white border border-gray-200 rounded-lg shadow-xl py-1 overflow-hidden"
+      className="fixed z-[9999] min-w-[200px] bg-white border border-gray-200 rounded-lg shadow-xl py-1 overflow-hidden"
       style={{
         top: anchor.bottom + 4,
-        left: anchor.left,
+        left: Math.min(anchor.left, Math.max(0, window.innerWidth - 220)),
       }}
     >
       {items.map((item, i) => {
@@ -284,7 +284,7 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
 
         {/* Menu tabs */}
         <div
-          className="flex items-center h-full"
+          className="hidden sm:flex items-center h-full"
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
           {tabs.map(tab => (
@@ -308,11 +308,11 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
         </div>
 
         {/* Quick actions — séparateur */}
-        <div className="h-5 w-px bg-green-700/60 mx-2" style={{ WebkitAppRegion: 'no-drag' } as any} />
+        <div className="hidden sm:block h-5 w-px bg-green-700/60 mx-2" style={{ WebkitAppRegion: 'no-drag' } as any} />
 
         {/* Quick action buttons */}
         <div
-          className="flex items-center gap-0.5 h-full px-1"
+          className="hidden sm:flex items-center gap-0.5 h-full px-1"
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
           {[
@@ -347,7 +347,7 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
           {/* Quick stats pills */}
-          <div className="flex items-center gap-1.5">
+          <div className="hidden sm:flex items-center gap-1.5">
             <button
               onClick={() => onNavigate('alerts')}
               className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors
@@ -368,12 +368,12 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
             className="flex items-center gap-1.5 px-2 py-1 rounded bg-green-700/30 text-green-200/70 hover:text-white hover:bg-green-700/50 transition-colors text-[10px]"
           >
             <Search className="w-3 h-3" />
-            <span>Rechercher...</span>
-            <span className="text-[9px] bg-green-800/50 px-1 rounded font-mono">Ctrl+K</span>
+            <span className="hidden sm:inline">Rechercher...</span>
+            <span className="hidden sm:inline text-[9px] bg-green-800/50 px-1 rounded font-mono">Ctrl+K</span>
           </button>
 
           {/* Time */}
-          <div className="text-[10px] font-mono text-green-400/60 tabular-nums">
+          <div className="hidden sm:block text-[10px] font-mono text-green-400/60 tabular-nums">
             {time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
           </div>
 

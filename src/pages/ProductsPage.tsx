@@ -324,8 +324,8 @@ export function ProductsPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-green-100 bg-white px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="border-b border-green-100 bg-white px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
               <ShoppingBag className="w-5 h-5 text-green-700" />
@@ -348,7 +348,7 @@ export function ProductsPage() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           <div className="bg-gradient-to-br from-green-50 to-white p-3 rounded-xl border border-green-100">
             <div className="text-xs text-gray-500">Références</div>
             <div className="text-xl font-bold text-green-700 font-mono">{stats.total}</div>
@@ -369,7 +369,7 @@ export function ProductsPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <Input
@@ -421,7 +421,7 @@ export function ProductsPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto px-6 py-4">
+      <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <Package className="w-10 h-10 mx-auto mb-3 opacity-20" />
@@ -530,8 +530,8 @@ export function ProductsPage() {
           </div>
         ) : (
           /* LIST VIEW */
-          <div className="border border-green-100 rounded-xl overflow-hidden bg-white shadow-sm">
-            <table className="w-full text-sm">
+          <div className="border border-green-100 rounded-xl overflow-x-auto bg-white shadow-sm">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-green-50 border-b border-green-100">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Produit</th>

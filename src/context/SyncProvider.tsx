@@ -51,8 +51,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     socketRef.current?.disconnect();
 
+    // Récupère le JWT stocké par api.ts (setAuthToken) si disponible
+    const jwt = (() => {
+      try { return (window as any).__snl_auth_token__ || ''; } catch { return ''; }
+    })();
+
     const s = io(serverUrl, {
-      auth: { secret: getSecret() },
+      auth: { secret: getSecret(), token: jwt },
       reconnection: true,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 15000,

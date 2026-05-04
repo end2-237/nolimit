@@ -114,7 +114,7 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
             {error && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -287,7 +287,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
             )}
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
             {error && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -459,7 +459,7 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
             <p className="text-sm text-gray-500">-{quantity} unités déclarées par {user?.full_name}</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
             {error && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
