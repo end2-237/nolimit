@@ -6,7 +6,7 @@
 
 import { APP_CONFIG } from '../config/app.config';
 import { Users, Products, Stocks, Movements, Alerts, Reports, Stats, setAuthToken } from './api';
-import { persistCache, loadCache, saveAuthCache, addToOutbox } from './offlineStorage';
+import { persistCache, loadCache, saveAuthCache, loadAuthCache, addToOutbox } from './offlineStorage';
 import { isOnline } from './connectivity';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -236,24 +236,26 @@ class DatabaseService {
         if (result?.token) {
           setAuthToken(result.token);
           localStorage.setItem('snl_token', result.token);
-          // Save auth cache for offline login
-          saveAuthCache(username, result.token, result.user || result).catch(() => {});
-          return result;
+          const userObj = result.user || result;
+          // Always persist auth cache for future offline logins
+          saveAuthCache(username, result.token, userObj);
+          return { user: userObj, token: result.token };
         }
         return null;
       } catch {
-        return null;
+        // Network failure during login → try offline cache
       }
     }
 
     // ── Offline login: restore last session for this username ─────────────────
-    const { loadAuthCache } = await import('./offlineStorage');
-    const cached = await loadAuthCache(username);
-    if (cached) {
-      setAuthToken(cached.token);
-      localStorage.setItem('snl_token', cached.token);
-      return { user: cached.user as User, token: cached.token };
-    }
+    try {
+      const cached = await loadAuthCache(username);
+      if (cached) {
+        setAuthToken(cached.token);
+        localStorage.setItem('snl_token', cached.token);
+        return { user: cached.user as User, token: cached.token };
+      }
+    } catch {}
     return null;
   }
 
@@ -400,7 +402,9 @@ class DatabaseService {
         }
         return movement;
       } catch (e: any) {
-        return { error: e.message || 'Échec création mouvement' };
+        // Network failure even though we thought we were online → outbox
+        const isNetworkError = e instanceof TypeError && e.message.includes('fetch');
+        if (!isNetworkError) return { error: e.message || 'Échec création mouvement' };
       }
     }
 
@@ -413,12 +417,12 @@ class DatabaseService {
       created_at: new Date().toISOString(),
     } as Movement;
     this.cache.movements.unshift(tempMovement);
-    // Optimistic stock deduction for exits
     if (data.type === 'out' && data.from_site_id) {
       const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
       if (idx !== -1) this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - data.quantity);
     }
-    return { error: 'Hors ligne — demande enregistrée et sera envoyée automatiquement', offline: true, localId };
+    window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+    return { error: 'Hors ligne — demande mise en attente, envoi automatique à la reconnexion', offline: true, localId };
   }
 
   async approveMovement(movementId: number, approverId: number): Promise<boolean> {
