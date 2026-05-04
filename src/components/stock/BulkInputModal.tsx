@@ -216,6 +216,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('Vente client');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [error, setError] = useState('');
 
   const availableStock = product?.stock?.[site] || 0;
@@ -226,11 +227,6 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
     const qty = parseInt(quantity);
     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
     if (!product) { setError('Aucun produit sélectionné'); return; }
-
-    if (qty > availableStock) {
-      setError(`Stock insuffisant: ${availableStock} disponible(s) sur ${siteOptions.find(s => s.id === site)?.name}`);
-      return;
-    }
 
     const result = await db.createMovement({
       type: 'out',
@@ -245,20 +241,20 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
     });
 
     if ('error' in result) {
+      if ((result as any).offline) {
+        setIsOffline(true);
+        setIsSuccess(true);
+        setTimeout(onClose, 3000);
+        return;
+      }
       setError((result as { error: string }).error);
       return;
     }
 
-    // Notifier la mise à jour du stock
     await notifyServer('stock:updated', {
-      product_id: product.id,
-      product_name: product.name,
-      site_id: site,
-      quantity: qty,
-      type: 'out',
-      ca: estimatedCA,
+      product_id: product.id, product_name: product.name,
+      site_id: site, quantity: qty, type: 'out', ca: estimatedCA,
     });
-
     setIsSuccess(true);
     setTimeout(onClose, 1500);
   };
@@ -280,6 +276,18 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
         </div>
 
         {isSuccess ? (
+          isOffline ? (
+            <div className="px-6 py-12 text-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-orange-100">
+                <Clock className="w-8 h-8 text-orange-500" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">Sortie enregistrée hors ligne</h3>
+              <p className="text-sm text-gray-500 mb-2">-{quantity} unités · {siteOptions.find(s => s.id === site)?.name}</p>
+              <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2">
+                La sortie sera confirmée et le stock mis à jour automatiquement au retour de la connexion.
+              </p>
+            </div>
+          ) : (
           <div className="px-6 py-12 text-center">
             <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-green-100">
               <CheckCircle className="w-8 h-8 text-green-600" />
@@ -292,6 +300,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
               </p>
             )}
           </div>
+          )
         ) : (
           <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
             {error && (
@@ -382,24 +391,20 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
   const [damageDetails, setDamageDetails] = useState('');
   const [transportRef, setTransportRef] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isPending, setIsPending] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [error, setError] = useState('');
 
   const canConfirmDirectly = user?.role === 'admin' || user?.role === 'manager';
   const availableStock = product?.stock?.[site] || 0;
 
-  const handleSubmit = async (e: React.FormEvent, forcePending = false) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const qty = parseInt(quantity);
     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
     if (!product) { setError('Aucun produit sélectionné'); return; }
 
-    const isPendingMode = !canConfirmDirectly || forcePending;
-
-    if (!isPendingMode && qty > availableStock) {
-      setError(`Stock insuffisant: ${availableStock} disponible(s)`);
-      return;
-    }
+    // Operators always submit as pending; admins/managers confirm directly
+    const isPendingMode = !canConfirmDirectly;
 
     const result = await db.createMovement({
       type: isPendingMode ? 'pending_out' : 'transport_damage',
@@ -415,19 +420,26 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
     });
 
     if ('error' in result) {
+      if ((result as any).offline) {
+        setIsOffline(true);
+        setIsSuccess(true);
+        setTimeout(onClose, 3000);
+        return;
+      }
       setError((result as { error: string }).error);
       return;
     }
 
     if (isPendingMode) {
       await notifyServer('movement:pending', {
-        ...result,
-        product_name: product.name,
-        user_name: user?.full_name,
+        ...result, product_name: product.name, user_name: user?.full_name,
       }, 'admin-room');
+    } else {
+      await notifyServer('stock:updated', {
+        product_id: product.id, site_id: site, quantity: qty, type: 'damage',
+      });
     }
 
-    setIsPending(isPendingMode);
     setIsSuccess(true);
     setTimeout(onClose, 1500);
   };
@@ -455,15 +467,28 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
         )}
 
         {isSuccess ? (
-          <div className="px-6 py-12 text-center">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${isPending ? 'bg-orange-100' : 'bg-red-100'}`}>
-              {isPending ? <Clock className="w-8 h-8 text-orange-600" /> : <CheckCircle className="w-8 h-8 text-red-600" />}
+          isOffline ? (
+            <div className="px-6 py-12 text-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-orange-100">
+                <Clock className="w-8 h-8 text-orange-500" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">Déclaration enregistrée hors ligne</h3>
+              <p className="text-sm text-gray-500 mb-2">-{quantity} unités · {siteOptions.find(s => s.id === site)?.name}</p>
+              <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2">
+                La déclaration sera envoyée automatiquement au retour de la connexion.
+              </p>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-1">
-              {isPending ? 'Déclaration soumise !' : 'Perte enregistrée !'}
-            </h3>
-            <p className="text-sm text-gray-500">-{quantity} unités déclarées par {user?.full_name}</p>
-          </div>
+          ) : (
+            <div className="px-6 py-12 text-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-orange-100">
+                <CheckCircle className="w-8 h-8 text-orange-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">
+                {canConfirmDirectly ? 'Perte enregistrée !' : 'Déclaration soumise !'}
+              </h3>
+              <p className="text-sm text-gray-500">-{quantity} unités déclarées par {user?.full_name}</p>
+            </div>
+          )
         ) : (
           <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
             {error && (
@@ -521,22 +546,12 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              {canConfirmDirectly ? (
-                <>
-                  <Button type="button" variant="outline"
-                    className="border-orange-300 text-orange-700 hover:bg-orange-50"
-                    onClick={(e) => handleSubmit(e as any, true)}>
-                    <Clock className="w-3.5 h-3.5 mr-1.5" /> Soumettre
-                  </Button>
-                  <Button type="submit" className="flex-1 bg-orange-600 hover:bg-orange-700 text-white">
-                    <Truck className="w-3.5 h-3.5 mr-1.5" /> Confirmer perte
-                  </Button>
-                </>
-              ) : (
-                <Button type="submit" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
-                  <Clock className="w-3.5 h-3.5 mr-1.5" /> Soumettre la déclaration
-                </Button>
-              )}
+              <Button type="submit" className="flex-1 bg-orange-600 hover:bg-orange-700 text-white">
+                {canConfirmDirectly
+                  ? <><Truck className="w-3.5 h-3.5 mr-1.5" /> Confirmer la perte</>
+                  : <><Clock className="w-3.5 h-3.5 mr-1.5" /> Soumettre la déclaration</>
+                }
+              </Button>
             </div>
           </form>
         )}

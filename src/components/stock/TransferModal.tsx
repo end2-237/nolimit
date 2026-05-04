@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, ArrowRight, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, ArrowRight, RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -22,6 +22,7 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
   const [quantity, setQuantity] = useState('');
   const [error, setError] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   const siteOptions = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id));
   const selectedProduct = products.find(p => p.id.toString() === productId);
@@ -47,6 +48,12 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
     });
 
     if ('error' in result) {
+      if ((result as any).offline) {
+        setIsOffline(true);
+        setIsSuccess(true);
+        setTimeout(onClose, 3000);
+        return;
+      }
       setError((result as { error: string }).error);
     } else {
       setIsSuccess(true);
@@ -71,13 +78,26 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
         </div>
 
         {isSuccess ? (
-          <div className="px-6 py-12 text-center">
-            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600" />
+          isOffline ? (
+            <div className="px-6 py-12 text-center">
+              <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock className="w-8 h-8 text-orange-500" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">Transfert enregistré hors ligne</h3>
+              <p className="text-sm text-gray-500 mb-3">{quantity} unités: {fromSite} → {toSite}</p>
+              <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2">
+                Le transfert sera envoyé et le stock mis à jour automatiquement au retour de la connexion.
+              </p>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Transfert effectué !</h3>
-            <p className="text-sm text-gray-500">{quantity} unités transférées: {fromSite} → {toSite}</p>
-          </div>
+          ) : (
+            <div className="px-6 py-12 text-center">
+              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">Transfert effectué !</h3>
+              <p className="text-sm text-gray-500">{quantity} unités transférées: {fromSite} → {toSite}</p>
+            </div>
+          )
         ) : (
           <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
             {error && (
