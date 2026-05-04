@@ -22,7 +22,7 @@ function getWsUrl(): string {
   const envUrl = (import.meta as any).env?.VITE_WS_URL
     || (import.meta as any).env?.VITE_API_URL?.replace(/\/api\/?$/, '');
   if (envUrl) return envUrl;
-  return 'http://localhost:3001';
+  return 'https://snl-api.vps.buyticle.com';
 }
 
 function getSecret(): string {
