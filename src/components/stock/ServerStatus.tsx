@@ -11,6 +11,9 @@ export function ServerStatus() {
   const [inputUrl, setInputUrl] = useState(
     () => localStorage.getItem('snl_ws_url') || ''
   );
+  const [inputApiUrl, setInputApiUrl] = useState(
+    () => localStorage.getItem('snl_api_url') || ''
+  );
   const [inputSecret, setInputSecret] = useState(
     () => localStorage.getItem('snl_ws_secret') || ''
   );
@@ -45,19 +48,22 @@ export function ServerStatus() {
 
   const handleSave = () => {
     const url = inputUrl.trim().replace(/\/+$/, '');
-    if (url) {
-      localStorage.setItem('snl_ws_url', url);
-    } else {
-      localStorage.removeItem('snl_ws_url');
-    }
-    if (inputSecret.trim()) {
-      localStorage.setItem('snl_ws_secret', inputSecret.trim());
-    } else {
-      localStorage.removeItem('snl_ws_secret');
-    }
+    const apiUrl = inputApiUrl.trim().replace(/\/+$/, '');
+    const prevApiUrl = localStorage.getItem('snl_api_url') || '';
+
+    if (url) localStorage.setItem('snl_ws_url', url);
+    else localStorage.removeItem('snl_ws_url');
+
+    if (apiUrl) localStorage.setItem('snl_api_url', apiUrl);
+    else localStorage.removeItem('snl_api_url');
+
+    if (inputSecret.trim()) localStorage.setItem('snl_ws_secret', inputSecret.trim());
+    else localStorage.removeItem('snl_ws_secret');
+
     window.dispatchEvent(new CustomEvent('snl:ws-config-updated'));
     setShowConfig(false);
     setTimeout(() => checkHealth(url), 1000);
+    if (apiUrl !== prevApiUrl) setTimeout(() => window.location.reload(), 500);
   };
 
   const pingColor = ping === null ? '' : ping < 100 ? 'text-green-600' : ping < 300 ? 'text-yellow-600' : 'text-red-500';
@@ -145,9 +151,19 @@ export function ServerStatus() {
       {/* Panneau de configuration */}
       {showConfig && (
         <div className="border border-gray-200 rounded-xl p-4 bg-white space-y-3">
-          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Configuration serveur temps réel</p>
+          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Configuration serveur</p>
           <div>
-            <label className="text-[11px] text-gray-500 font-medium">URL du serveur</label>
+            <label className="text-[11px] text-gray-500 font-medium">URL API <span className="text-gray-400">(ex: https://snl-api.vps.buyticle.com/api)</span></label>
+            <input
+              type="text"
+              value={inputApiUrl}
+              onChange={e => setInputApiUrl(e.target.value)}
+              placeholder="https://snl-api.vps.buyticle.com/api"
+              className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono focus:outline-none focus:border-green-400"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-gray-500 font-medium">URL WebSocket <span className="text-gray-400">(sans /api)</span></label>
             <input
               type="text"
               value={inputUrl}
