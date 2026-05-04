@@ -50,6 +50,12 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
     });
 
     if ('error' in result) {
+      if ((result as any).offline) {
+        // Stored in outbox — treat as success with info message
+        setIsSuccess(true);
+        setTimeout(onClose, 2500);
+        return;
+      }
       setError((result as { error: string }).error);
       return;
     }

@@ -1,28 +1,33 @@
 /**
- * Connectivity service — détecte si l'API est réellement joignable.
- * Émet snl:online / snl:offline sur window.
+ * Connectivity service.
+ * Règle : toute réponse HTTP (même 401/403/500) = serveur joignable = online.
+ * Seule une erreur réseau (TypeError / AbortError) = offline.
  */
 
-const HEALTH_URL = 'https://snl-api.vps.buyticle.com/health';
+const CHECK_URL = 'https://snl-api.vps.buyticle.com/health';
 const PING_INTERVAL = 15_000;
-const PING_TIMEOUT = 5_000;
+const PING_TIMEOUT  = 5_000;
 
-let _online = navigator.onLine;
-let _pingTimer: ReturnType<typeof setInterval> | null = null;
+// Commence à false — on confirme via ping avant de déclarer online
+let _online = false;
+let _started = false;
 
 export function isOnline(): boolean {
   return _online;
 }
 
 async function pingServer(): Promise<boolean> {
+  if (!navigator.onLine) return false;
   try {
-    const res = await fetch(HEALTH_URL, {
-      method: 'HEAD',
+    // Toute réponse HTTP = serveur joignable
+    await fetch(CHECK_URL, {
+      method: 'GET',
       signal: AbortSignal.timeout(PING_TIMEOUT),
       cache: 'no-store',
     });
-    return res.ok;
+    return true;
   } catch {
+    // Erreur réseau ou timeout = hors ligne
     return false;
   }
 }
@@ -34,17 +39,19 @@ function setOnline(value: boolean) {
 }
 
 async function check() {
-  if (!navigator.onLine) { setOnline(false); return; }
   const reachable = await pingServer();
   setOnline(reachable);
 }
 
 export function startConnectivityMonitor() {
-  if (_pingTimer) return;
+  if (_started) return;
+  _started = true;
 
-  window.addEventListener('online', () => check());
+  // Écouter les événements navigateur
+  window.addEventListener('online',  () => check());
   window.addEventListener('offline', () => setOnline(false));
 
+  // Premier check immédiat
   check();
-  _pingTimer = setInterval(check, PING_INTERVAL);
+  setInterval(check, PING_INTERVAL);
 }
