@@ -445,8 +445,8 @@ export function UsersPage() {
       </div>
 
       <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
-        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
-          <table className="w-full text-sm">
+        <div className="border border-[#E2E8F0] rounded-xl overflow-x-auto bg-white shadow-sm">
+          <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="bg-gray-50 border-b border-[#E2E8F0]">
                 {['Utilisateur', 'Profil', 'Droits', 'Sites', 'Statut', 'Actions'].map(h => (
@@ -508,7 +508,7 @@ export function UsersPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
                           onClick={() => { setEditUser(u as any); setShowForm(true); }}>
                           <Edit2 className="w-3.5 h-3.5 text-gray-500" />

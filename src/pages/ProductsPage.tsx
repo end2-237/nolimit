@@ -428,7 +428,7 @@ export function ProductsPage() {
             <p className="text-sm">Aucun produit trouvé</p>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
             {filteredProducts.map(product => {
               const status = getStockStatus(product);
               const total = getTotalStock(product);
@@ -492,7 +492,7 @@ export function ProductsPage() {
 
                     {/* Actions */}
                     {hasPermission('create') && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}
                           className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[10px] font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"

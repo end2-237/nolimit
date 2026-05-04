@@ -132,7 +132,7 @@ export  function LoginPage() {
           </div>
 
           <div
-            className="rounded-2xl p-8 shadow-2xl"
+            className="rounded-2xl p-5 sm:p-8 shadow-2xl"
             style={{ background: 'rgba(255,255,255,0.04)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.08)' }}
           >
             <div className="mb-8">

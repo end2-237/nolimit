@@ -149,50 +149,50 @@ export function InventoryDashboard() {
           </div>
 
           {/* KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-            <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-xl border border-blue-100">
-              <div className="text-xs text-gray-500 mb-0.5">Valeur du Stock</div>
-              <div className="text-xl font-bold text-[#0284C7]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-4">
+            <div className="bg-gradient-to-br from-blue-50 to-white p-2.5 sm:p-4 rounded-xl border border-blue-100 min-w-0">
+              <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">Valeur Stock</div>
+              <div className="text-base sm:text-xl font-bold text-[#0284C7] truncate" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {totalValue.toLocaleString('fr-FR')}
               </div>
-              <div className="text-xs text-gray-400">XAF</div>
+              <div className="text-[10px] sm:text-xs text-gray-400">XAF</div>
             </div>
-            <div className="bg-gradient-to-br from-orange-50 to-white p-4 rounded-xl border border-orange-100">
-              <div className="text-xs text-gray-500 mb-0.5">Alertes Actives</div>
-              <div className="text-xl font-bold text-orange-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="bg-gradient-to-br from-orange-50 to-white p-2.5 sm:p-4 rounded-xl border border-orange-100 min-w-0">
+              <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">Alertes</div>
+              <div className="text-base sm:text-xl font-bold text-orange-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {stats.alertCount}
               </div>
-              <div className="text-xs text-gray-400">{stats.criticalProducts} critique(s)</div>
+              <div className="text-[10px] sm:text-xs text-gray-400">{stats.criticalProducts} critique(s)</div>
             </div>
-            <div className="bg-gradient-to-br from-green-50 to-white p-4 rounded-xl border border-green-100">
-              <div className="text-xs text-gray-500 mb-0.5">Mouvements Auj.</div>
-              <div className="text-xl font-bold text-green-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="bg-gradient-to-br from-green-50 to-white p-2.5 sm:p-4 rounded-xl border border-green-100 min-w-0">
+              <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">Mvt. Auj.</div>
+              <div className="text-base sm:text-xl font-bold text-green-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {stats.todayMovements}
               </div>
-              <div className="text-xs text-gray-400">confirmés</div>
+              <div className="text-[10px] sm:text-xs text-gray-400">confirmés</div>
             </div>
-            <div className="bg-gradient-to-br from-purple-50 to-white p-4 rounded-xl border border-purple-100">
-              <div className="text-xs text-gray-500 mb-0.5">Produits</div>
-              <div className="text-xl font-bold text-purple-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="bg-gradient-to-br from-purple-50 to-white p-2.5 sm:p-4 rounded-xl border border-purple-100 min-w-0">
+              <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">Produits</div>
+              <div className="text-base sm:text-xl font-bold text-purple-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                 {stats.totalProducts}
               </div>
-              <div className="text-xs text-gray-400">références</div>
+              <div className="text-[10px] sm:text-xs text-gray-400">réf.</div>
             </div>
             {stats.pendingCount > 0 ? (
-              <div className="bg-gradient-to-br from-yellow-50 to-white p-4 rounded-xl border border-yellow-200 animate-pulse">
-                <div className="text-xs text-gray-500 mb-0.5">En attente</div>
-                <div className="text-xl font-bold text-yellow-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              <div className="bg-gradient-to-br from-yellow-50 to-white p-2.5 sm:p-4 rounded-xl border border-yellow-200 animate-pulse min-w-0">
+                <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">En attente</div>
+                <div className="text-base sm:text-xl font-bold text-yellow-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   {stats.pendingCount}
                 </div>
-                <div className="text-xs text-yellow-600 flex items-center gap-1">
+                <div className="text-[10px] sm:text-xs text-yellow-600 flex items-center gap-1">
                   <Clock className="w-3 h-3" /> à valider
                 </div>
               </div>
             ) : (
-              <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-100">
-                <div className="text-xs text-gray-500 mb-0.5">En attente</div>
-                <div className="text-xl font-bold text-gray-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>0</div>
-                <div className="text-xs text-gray-400">tout validé ✓</div>
+              <div className="bg-gradient-to-br from-gray-50 to-white p-2.5 sm:p-4 rounded-xl border border-gray-100 min-w-0">
+                <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">En attente</div>
+                <div className="text-base sm:text-xl font-bold text-gray-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>0</div>
+                <div className="text-[10px] sm:text-xs text-gray-400">validé ✓</div>
               </div>
             )}
           </div>
@@ -318,7 +318,7 @@ export function InventoryDashboard() {
                       </td>
                       {hasPermission('create') && (
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-end gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             {/* Entrée */}
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-[#0284C7] hover:bg-blue-50"
                               onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}

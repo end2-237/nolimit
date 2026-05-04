@@ -145,7 +145,8 @@ export function PendingApprovalsPanel() {
 
           return (
             <div key={m.id} className="px-4 py-3">
-              <div className="flex items-start gap-3">
+              <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isOut ? 'bg-red-100' : 'bg-green-100'}`}>
                   {isOut
                     ? <ArrowUpRight className="w-4 h-4 text-red-600" />
@@ -187,21 +188,22 @@ export function PendingApprovalsPanel() {
                   </div>
 
                   {rejectingId === m.id && (
-                    <div className="mt-2 flex gap-2">
-                      <Input className="h-7 text-xs flex-1" placeholder="Raison du refus..."
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Input className="h-7 text-xs flex-1 min-w-[140px]" placeholder="Raison du refus..."
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
                         autoFocus />
                       <Button size="sm" className="h-7 bg-red-600 hover:bg-red-700 text-white text-xs px-2"
-                        onClick={() => handleReject(m.id)}>Confirmer refus</Button>
+                        onClick={() => handleReject(m.id)}>Confirmer</Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs px-2"
                         onClick={() => setRejectingId(null)}>Annuler</Button>
                     </div>
                   )}
                 </div>
+                </div>
 
                 {rejectingId !== m.id && (
-                  <div className="flex gap-1.5 flex-shrink-0">
+                  <div className="flex gap-1.5 flex-shrink-0 mt-1 sm:mt-0">
                     <Button size="sm"
                       className={`h-7 text-white text-xs px-2.5 gap-1 ${stockOk ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}
                       onClick={() => handleApprove(m.id)}
