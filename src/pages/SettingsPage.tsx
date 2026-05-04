@@ -17,6 +17,65 @@ import { APP_CONFIG } from '../config/app.config';
 import { CloudSyncPanel } from '../components/stock/CloudSyncPanel';
 import { ServerStatus } from '../components/stock/ServerStatus';
 
+// ─── Auto-Sync Settings ────────────────────────────────────────────────────
+const SYNC_INTERVAL_KEY = 'snl_auto_sync_interval';
+
+function AutoSyncSettings() {
+  const [interval, setInterval_] = useState<string>(() =>
+    localStorage.getItem(SYNC_INTERVAL_KEY) || '60'
+  );
+  const [saved, setSaved] = useState(false);
+
+  const options = [
+    { value: '30', label: '30 secondes' },
+    { value: '60', label: '1 minute (défaut)' },
+    { value: '300', label: '5 minutes' },
+    { value: '900', label: '15 minutes' },
+    { value: '1800', label: '30 minutes' },
+    { value: '3600', label: '1 heure' },
+  ];
+
+  const handleSave = () => {
+    localStorage.setItem(SYNC_INTERVAL_KEY, interval);
+    window.dispatchEvent(new CustomEvent('snl:sync-interval-changed', { detail: { seconds: parseInt(interval) } }));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 text-green-600" /> Synchronisation automatique
+        </CardTitle>
+        <CardDescription>
+          Fréquence de rafraîchissement des données depuis le serveur (Electron et Web partagent la même base PostgreSQL).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Intervalle de sync</Label>
+          <select
+            className="w-full mt-1.5 h-9 border border-gray-200 rounded-lg px-3 text-sm bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+            value={interval}
+            onChange={e => setInterval_(e.target.value)}
+          >
+            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 space-y-1">
+          <p>• Les données (produits, stocks, mouvements, utilisateurs) sont rechargées automatiquement selon cette fréquence.</p>
+          <p>• Les demandes d'entrée depuis Electron apparaissent en temps réel via les notifications socket.</p>
+          <p>• En cas de conflit, la version la plus récente (last-write-wins) est conservée.</p>
+        </div>
+        <Button size="sm" onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white">
+          {saved ? <><CheckCircle className="w-3.5 h-3.5 mr-1.5" />Sauvegardé</> : <><Save className="w-3.5 h-3.5 mr-1.5" />Appliquer</>}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Sites Manager (avec propagation sur toute l'app) ──────────────────────
 
 interface Site {
@@ -696,7 +755,12 @@ export function SettingsPage() {
 
         {activeTab === 'database' && isSuperAdmin && <DBExportImport />}
         {activeTab === 'sites' && isSuperAdmin && <SitesManager />}
-        {activeTab === 'cloud' && isSuperAdmin && <CloudSyncPanel />}
+        {activeTab === 'cloud' && isSuperAdmin && (
+          <div className="space-y-4">
+            <AutoSyncSettings />
+            <CloudSyncPanel />
+          </div>
+        )}
         {activeTab === 'tasks' && <ScheduledTasksPanel />}
       </div>
     </div>
