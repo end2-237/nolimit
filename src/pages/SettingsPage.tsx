@@ -158,7 +158,7 @@ function SitesManager() {
                       <div className="text-xs text-gray-400">{site.manager || 'Aucun responsable'}</div>
                     </div>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
                       onClick={() => setEditingSite(site)}>
                       <Edit2 className="w-3.5 h-3.5 text-gray-500" />

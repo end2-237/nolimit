@@ -66,19 +66,36 @@ function AppInner() {
 
     const onMovementCreated = () => refreshAll();
     const onMovementUpdated = () => refreshAll();
+    const onUsersUpdated = () => refreshAll();
+    const onConnect = () => {
+      // Recharger toutes les données au (re)connexion
+      refreshAll();
+    };
 
+    socket.on('connect', onConnect);
     socket.on('stock:updated', onStockUpdated);
     socket.on('movement:pending', onMovementPending);
     socket.on('movement:approved', onMovementApproved);
     socket.on('movement:created', onMovementCreated);
     socket.on('movement:updated', onMovementUpdated);
+    socket.on('users:updated', onUsersUpdated);
+    socket.on('data:sync', onUsersUpdated);
+
+    // Refresh périodique toutes les 2 minutes si connecté
+    const periodicRefresh = setInterval(() => {
+      if (socket.connected) refreshAll();
+    }, 2 * 60 * 1000);
 
     return () => {
+      clearInterval(periodicRefresh);
+      socket.off('connect', onConnect);
       socket.off('stock:updated', onStockUpdated);
       socket.off('movement:pending', onMovementPending);
       socket.off('movement:approved', onMovementApproved);
       socket.off('movement:created', onMovementCreated);
       socket.off('movement:updated', onMovementUpdated);
+      socket.off('users:updated', onUsersUpdated);
+      socket.off('data:sync', onUsersUpdated);
     };
   }, [socket, user]);
 

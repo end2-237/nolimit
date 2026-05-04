@@ -40,12 +40,20 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [serverUrl, setServerUrl] = useState<string>(getWsUrl());
+  const [authVersion, setAuthVersion] = useState(0);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     const handler = () => setServerUrl(getWsUrl());
     window.addEventListener('snl:ws-config-updated', handler);
     return () => window.removeEventListener('snl:ws-config-updated', handler);
+  }, []);
+
+  // Reconnecter le socket quand le token JWT change (login/logout)
+  useEffect(() => {
+    const handler = () => setAuthVersion(v => v + 1);
+    window.addEventListener('snl:auth-changed', handler);
+    return () => window.removeEventListener('snl:auth-changed', handler);
   }, []);
 
   useEffect(() => {
@@ -78,7 +86,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setSocket(null);
       setIsConnected(false);
     };
-  }, [serverUrl]);
+  }, [serverUrl, authVersion]);
 
   return (
     <SyncContext.Provider value={{ socket, isConnected, serverUrl }}>

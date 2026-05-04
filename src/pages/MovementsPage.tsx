@@ -362,7 +362,8 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
 
           return (
             <div key={m.id} className="px-4 py-3">
-              <div className="flex items-start gap-3">
+              <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isOut ? 'bg-red-100' : isIn ? 'bg-green-100' : 'bg-blue-100'}`}>
                   {isOut ? <ArrowUpRight className="w-4 h-4 text-red-600" /> : <ArrowDownLeft className="w-4 h-4 text-green-600" />}
                 </div>
@@ -374,16 +375,14 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
                     </Badge>
                     {site && <Badge variant="outline" className="text-[10px]">{site.name}</Badge>}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-600">
+                  <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
                     <span className={`font-mono font-bold ${isOut ? 'text-red-600' : 'text-green-600'}`}>
                       {isOut ? '-' : '+'}{m.quantity} unités
                     </span>
                     {isOut && estimatedCA > 0 && (
                       <span className="text-green-700 font-semibold">≈ {estimatedCA.toLocaleString('fr-FR')} XAF</span>
                     )}
-                    <span>·</span>
-                    <span className="text-gray-400">{m.reason}</span>
-                    <span>·</span>
+                    <span className="text-gray-400 truncate">{m.reason}</span>
                     <span className="font-medium text-gray-700 flex items-center gap-1">
                       <User className="w-3 h-3" />{m.user_name}
                     </span>
@@ -393,8 +392,8 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
                   </div>
 
                   {rejectingId === m.id && (
-                    <div className="mt-2 flex gap-2">
-                      <Input className="h-7 text-xs flex-1" placeholder="Raison du refus..."
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Input className="h-7 text-xs flex-1 min-w-[140px]" placeholder="Raison du refus..."
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
                         autoFocus />
@@ -403,9 +402,10 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
                     </div>
                   )}
                 </div>
+                </div>
 
                 {rejectingId !== m.id && (
-                  <div className="flex gap-1.5 flex-shrink-0">
+                  <div className="flex gap-1.5 flex-shrink-0 mt-1 sm:mt-0">
                     <Button size="sm" className="h-7 bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 gap-1"
                       onClick={() => handleApprove(m.id)}>
                       <CheckCircle className="w-3 h-3" /> Valider

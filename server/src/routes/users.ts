@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db';
 import { hashPassword, verifyPassword, generateToken, authMiddleware, AuthRequest, requireRole } from '../auth';
+import type { Server as SocketIOServer } from 'socket.io';
 
 const router = Router();
 
@@ -86,6 +87,9 @@ router.post('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, 
       [username, passwordHash, full_name, email, role, siteIdsJson, permissionsJson]
     );
     
+    const io: SocketIOServer | undefined = req.app.locals.io;
+    if (io) io.emit('users:updated', { action: 'created' });
+
     res.json({ success: true, user: result.rows[0] });
   } catch (error: any) {
     console.error('Create user error:', error);
@@ -153,10 +157,30 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
+    const io: SocketIOServer | undefined = req.app.locals.io;
+    if (io) io.emit('users:updated', { action: 'updated', id: userId });
+
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Update user error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete user (admin only)
+router.delete('/:id', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    if (userId === req.user?.userId) {
+      return res.status(400).json({ error: 'Cannot delete yourself' });
+    }
+    await query('DELETE FROM users WHERE id = $1', [userId]);
+    const io: SocketIOServer | undefined = req.app.locals.io;
+    if (io) io.emit('users:updated', { action: 'deleted', id: userId });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete user error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

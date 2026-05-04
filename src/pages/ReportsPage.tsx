@@ -646,7 +646,7 @@ export function ReportsPage() {
                           <div className="text-xs font-medium text-gray-800 truncate">{r.name}</div>
                           <div className="text-[10px] text-gray-400">{r.date_from} → {r.date_to}</div>
                         </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           <button onClick={() => downloadCSV(r.data_csv, `${r.name}.csv`)} title="CSV"
                             className="p-1 hover:bg-gray-200 rounded text-gray-500">
                             <FileSpreadsheet className="w-3 h-3" />
