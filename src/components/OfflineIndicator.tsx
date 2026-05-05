@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { WifiOff, Clock, CheckCircle, Upload } from 'lucide-react';
 import { isOnline } from '../services/connectivity';
 import { getOutboxCount } from '../services/outbox';
+import { OutboxPanel } from './OutboxPanel';
 
 export function OfflineIndicator() {
-  const [online, setOnline]           = useState(isOnline());
-  const [outboxCount, setOutboxCount] = useState(0);
-  const [showFlushed, setShowFlushed] = useState(false);
+  const [online, setOnline]             = useState(isOnline());
+  const [outboxCount, setOutboxCount]   = useState(0);
+  const [showFlushed, setShowFlushed]   = useState(false);
   const [flushedCount, setFlushedCount] = useState(0);
+  const [panelOpen, setPanelOpen]       = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const refresh = async () => {
@@ -16,7 +19,6 @@ export function OfflineIndicator() {
     };
 
     refresh();
-    // Poll toutes les 2s pour rattraper les événements manqués
     const t = setInterval(refresh, 2000);
 
     const onOnline  = () => { setOnline(true);  getOutboxCount().then(setOutboxCount); };
@@ -57,25 +59,37 @@ export function OfflineIndicator() {
 
   if (!online) {
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-200 text-[11px] font-semibold">
-        <WifiOff className="w-3 h-3" />
-        <span>Hors ligne</span>
-        {outboxCount > 0 && (
-          <span className="flex items-center gap-0.5 bg-orange-500/30 px-1.5 py-0.5 rounded-full">
-            <Clock className="w-2.5 h-2.5" />
-            {outboxCount}
-          </span>
-        )}
+      <div className="relative" ref={wrapperRef}>
+        <button
+          onClick={() => outboxCount > 0 && setPanelOpen(p => !p)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-200 text-[11px] font-semibold transition-colors ${outboxCount > 0 ? 'cursor-pointer hover:bg-orange-500/30' : 'cursor-default'}`}
+        >
+          <WifiOff className="w-3 h-3" />
+          <span>Hors ligne</span>
+          {outboxCount > 0 && (
+            <span className="flex items-center gap-0.5 bg-orange-500/30 px-1.5 py-0.5 rounded-full">
+              <Clock className="w-2.5 h-2.5" />
+              {outboxCount}
+            </span>
+          )}
+        </button>
+        {panelOpen && <OutboxPanel onClose={() => setPanelOpen(false)} />}
       </div>
     );
   }
 
   if (outboxCount > 0) {
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-semibold">
-        <Upload className="w-3 h-3 animate-bounce" />
-        <span>Envoi…</span>
-        <span className="bg-blue-500/30 px-1.5 py-0.5 rounded-full">{outboxCount}</span>
+      <div className="relative" ref={wrapperRef}>
+        <button
+          onClick={() => setPanelOpen(p => !p)}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-semibold cursor-pointer hover:bg-blue-500/30 transition-colors"
+        >
+          <Upload className="w-3 h-3 animate-bounce" />
+          <span>Envoi…</span>
+          <span className="bg-blue-500/30 px-1.5 py-0.5 rounded-full">{outboxCount}</span>
+        </button>
+        {panelOpen && <OutboxPanel onClose={() => setPanelOpen(false)} />}
       </div>
     );
   }
