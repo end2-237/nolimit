@@ -47,8 +47,9 @@ async function request(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
+    const hadToken = !!authToken;
     clearAuthToken();
-    if (window.location.pathname !== '/login') {
+    if (hadToken && window.location.pathname !== '/login') {
       window.location.href = '/login';
     }
   }

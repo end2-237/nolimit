@@ -280,6 +280,15 @@ export function ProductsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const name = (e as CustomEvent).detail?.name;
+      if (name) setSearchQuery(name);
+    };
+    window.addEventListener('snl:highlight-product', handler);
+    return () => window.removeEventListener('snl:highlight-product', handler);
+  }, []);
+
   const filteredProducts = products.filter(p => {
     const matchSearch = !searchQuery ||
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -304,9 +313,10 @@ export function ProductsPage() {
     return sites.reduce((sum: number, s: string) => sum + (product.stock[s] || 0), 0);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (!confirm('Supprimer ce produit et tout son stock ?')) return;
-    db.deleteProduct(id);
+    const ok = await db.deleteProduct(id);
+    if (!ok) { alert('Erreur lors de la suppression du produit.'); return; }
     load();
   };
 
