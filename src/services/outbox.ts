@@ -3,7 +3,7 @@
  * quand la connexion est rétablie. Retry exponentiel.
  */
 
-import { getOutbox, removeFromOutbox, incrementOutboxRetry, getOutboxCount } from './offlineStorage';
+import { getOutbox, removeFromOutbox, incrementOutboxRetry, resetOutboxRetry, getOutboxCount } from './offlineStorage';
 import { Movements } from './api';
 
 const MAX_RETRIES = 5;
@@ -20,15 +20,16 @@ export async function processOutbox(): Promise<{ sent: number; failed: number }>
 
   for (const item of items) {
     if (item.retryCount >= MAX_RETRIES) {
-      // Abandon après trop de tentatives — garder pour inspection manuelle
-      failed++;
-      continue;
+      // Reset stuck items — previous failures may have been caused by a since-fixed bug
+      await resetOutboxRetry(item.localId!);
+      item.retryCount = 0;
     }
     try {
       // Normalize frontend-only types to API-accepted values before sending
       const apiData = { ...item.data };
-      if (apiData.type === 'pending_out') apiData.type = 'out';
-      if (apiData.type === 'pending_in')  apiData.type = 'in';
+      if (apiData.type === 'pending_out')       apiData.type = 'out';
+      if (apiData.type === 'pending_in')        apiData.type = 'in';
+      if (apiData.type === 'transport_damage')  apiData.type = 'out';
       await Movements.create(apiData);
       await removeFromOutbox(item.localId!);
       sent++;

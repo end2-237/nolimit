@@ -158,6 +158,15 @@ export async function incrementOutboxRetry(localId: number): Promise<void> {
   }
 }
 
+export async function resetOutboxRetry(localId: number): Promise<void> {
+  const s = await tx('outbox', 'readwrite');
+  const item = await promisify<OutboxItem>(s.get(localId));
+  if (item) {
+    item.retryCount = 0;
+    await promisify(s.put(item));
+  }
+}
+
 export async function getOutboxCount(): Promise<number> {
   const s = await tx('outbox');
   return promisify(s.count());
