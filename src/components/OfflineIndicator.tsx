@@ -10,7 +10,8 @@ export function OfflineIndicator() {
   const [showFlushed, setShowFlushed]   = useState(false);
   const [flushedCount, setFlushedCount] = useState(0);
   const [panelOpen, setPanelOpen]       = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor]             = useState({ top: 0, right: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const refresh = async () => {
@@ -48,6 +49,15 @@ export function OfflineIndicator() {
     };
   }, []);
 
+  const openPanel = () => {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setAnchor({ top: rect.bottom, right: window.innerWidth - rect.right });
+    }
+    setPanelOpen(true);
+  };
+
+  // ── "N envoyés" toast ────────────────────────────────────────────────────────
   if (showFlushed) {
     return (
       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/20 border border-green-400/40 text-green-200 text-[11px] font-semibold">
@@ -57,12 +67,14 @@ export function OfflineIndicator() {
     );
   }
 
+  // ── Offline ──────────────────────────────────────────────────────────────────
   if (!online) {
     return (
-      <div className="relative" ref={wrapperRef}>
+      <>
         <button
-          onClick={() => outboxCount > 0 && setPanelOpen(p => !p)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-200 text-[11px] font-semibold transition-colors ${outboxCount > 0 ? 'cursor-pointer hover:bg-orange-500/30' : 'cursor-default'}`}
+          ref={btnRef}
+          onClick={openPanel}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-200 text-[11px] font-semibold cursor-pointer hover:bg-orange-500/30 transition-colors"
         >
           <WifiOff className="w-3 h-3" />
           <span>Hors ligne</span>
@@ -73,24 +85,26 @@ export function OfflineIndicator() {
             </span>
           )}
         </button>
-        {panelOpen && <OutboxPanel onClose={() => setPanelOpen(false)} />}
-      </div>
+        {panelOpen && <OutboxPanel anchorTop={anchor.top} anchorRight={anchor.right} onClose={() => setPanelOpen(false)} />}
+      </>
     );
   }
 
+  // ── En ligne avec items en attente ───────────────────────────────────────────
   if (outboxCount > 0) {
     return (
-      <div className="relative" ref={wrapperRef}>
+      <>
         <button
-          onClick={() => setPanelOpen(p => !p)}
+          ref={btnRef}
+          onClick={openPanel}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-semibold cursor-pointer hover:bg-blue-500/30 transition-colors"
         >
           <Upload className="w-3 h-3 animate-bounce" />
           <span>Envoi…</span>
           <span className="bg-blue-500/30 px-1.5 py-0.5 rounded-full">{outboxCount}</span>
         </button>
-        {panelOpen && <OutboxPanel onClose={() => setPanelOpen(false)} />}
-      </div>
+        {panelOpen && <OutboxPanel anchorTop={anchor.top} anchorRight={anchor.right} onClose={() => setPanelOpen(false)} />}
+      </>
     );
   }
 
