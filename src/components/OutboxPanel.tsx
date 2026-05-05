@@ -92,6 +92,7 @@ export function OutboxPanel({ onClose, anchorTop, anchorRight }: OutboxPanelProp
         zIndex: 9999,
         WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
+      onContextMenu={e => e.preventDefault()}
       className="w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
     >
       {/* Header */}
