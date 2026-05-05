@@ -49,13 +49,15 @@ export function OfflineIndicator() {
     };
   }, []);
 
-  const openPanel = () => {
+  const openPanel = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     const rect = btnRef.current?.getBoundingClientRect();
     setAnchor({
       top:   rect ? rect.bottom : 40,
       right: rect ? window.innerWidth - rect.right : 16,
     });
-    setPanelOpen(true);
+    setPanelOpen(p => !p);
   };
 
   if (showFlushed) {
@@ -74,6 +76,7 @@ export function OfflineIndicator() {
           ref={btnRef}
           style={NO_DRAG}
           onClick={openPanel}
+          onContextMenu={openPanel}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-200 text-[11px] font-semibold hover:bg-orange-500/30 transition-colors"
         >
           <WifiOff className="w-3 h-3" />
@@ -99,6 +102,7 @@ export function OfflineIndicator() {
           ref={btnRef}
           style={NO_DRAG}
           onClick={openPanel}
+          onContextMenu={openPanel}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-semibold hover:bg-blue-500/30 transition-colors"
         >
           <Upload className="w-3 h-3 animate-bounce" />
