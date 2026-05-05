@@ -129,6 +129,7 @@ export interface OutboxItem {
   data: any;
   createdAt: string;
   retryCount: number;
+  lastError?: string;
 }
 
 export async function addToOutbox(data: any): Promise<number> {
@@ -163,6 +164,16 @@ export async function resetOutboxRetry(localId: number): Promise<void> {
   const item = await promisify<OutboxItem>(s.get(localId));
   if (item) {
     item.retryCount = 0;
+    item.lastError = undefined;
+    await promisify(s.put(item));
+  }
+}
+
+export async function setOutboxError(localId: number, error: string): Promise<void> {
+  const s = await tx('outbox', 'readwrite');
+  const item = await promisify<OutboxItem>(s.get(localId));
+  if (item) {
+    item.lastError = error;
     await promisify(s.put(item));
   }
 }
