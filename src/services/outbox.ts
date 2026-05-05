@@ -25,7 +25,11 @@ export async function processOutbox(): Promise<{ sent: number; failed: number }>
       continue;
     }
     try {
-      await Movements.create(item.data);
+      // Normalize frontend-only types to API-accepted values before sending
+      const apiData = { ...item.data };
+      if (apiData.type === 'pending_out') apiData.type = 'out';
+      if (apiData.type === 'pending_in')  apiData.type = 'in';
+      await Movements.create(apiData);
       await removeFromOutbox(item.localId!);
       sent++;
     } catch {

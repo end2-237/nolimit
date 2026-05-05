@@ -408,8 +408,7 @@ class DatabaseService {
       }
     }
 
-    // ── Offline: store in outbox, NO optimistic stock change ─────────────────
-    // Stock stays frozen at last sync — server recalculates on reconnect
+    // ── Offline: store in outbox + deduct stock locally ──────────────────────
     const localId = await addToOutbox(data);
     const tempMovement: Movement = {
       id: -localId,
@@ -418,6 +417,16 @@ class DatabaseService {
       created_at: new Date().toISOString(),
     } as Movement;
     this.cache.movements.unshift(tempMovement);
+
+    // Deduct from local stock to prevent over-selling during offline session
+    const isOutType = data.type === 'out' || data.type === 'transport_damage' || data.type === 'pending_out';
+    if (isOutType && data.from_site_id) {
+      const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
+      if (idx !== -1) this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - data.quantity);
+    }
+    // Persist so deduction survives db.refresh() while still offline
+    persistCache({ stocks: this.cache.stocks }).catch(() => {});
+
     window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
     return { error: 'Hors ligne — demande mise en attente, envoi automatique à la reconnexion', offline: true, localId };
   }
