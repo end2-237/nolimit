@@ -604,8 +604,30 @@ class DatabaseService {
     return JSON.stringify(data);
   }
 
-  async importDatabase(_jsonStr: string): Promise<void> {
-    throw new Error('Import direct non supporté en mode API. Utilisez la sync.');
+  async importDatabase(jsonStr: string): Promise<void> {
+    const data = JSON.parse(jsonStr);
+    const { products = [], stocks = [], _custom_sites } = data;
+
+    if (_custom_sites) {
+      localStorage.setItem('snl_custom_sites', JSON.stringify(_custom_sites));
+    }
+
+    const existingSkus = new Set(this.cache.products.map((p: any) => p.sku));
+
+    for (const product of products) {
+      const { id: oldId, ...productData } = product;
+      if (existingSkus.has(productData.sku)) continue;
+      existingSkus.add(productData.sku);
+
+      const created = await this.createProduct(productData);
+
+      const productStocks = stocks.filter((s: any) => s.product_id === oldId);
+      for (const stock of productStocks) {
+        if (stock.quantity > 0) {
+          await this.updateStock(created.id, stock.site_id, stock.quantity);
+        }
+      }
+    }
   }
 
   getProductsForExport() { return this.getStocksGroupedByProduct(); }

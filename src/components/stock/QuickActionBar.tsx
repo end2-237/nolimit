@@ -440,7 +440,12 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
               <div className="py-1 max-h-72 overflow-y-auto">
                 {searchResults.map(p => (
                   <button key={p.id}
-                    onClick={() => { onNavigate('products'); setSearchOpen(false); setSearchQuery(''); }}
+                    onClick={() => {
+                      onNavigate('products');
+                      window.dispatchEvent(new CustomEvent('snl:highlight-product', { detail: { name: p.name } }));
+                      setSearchOpen(false);
+                      setSearchQuery('');
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left">
                     <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
                       <Package className="w-4 h-4 text-green-600" />
