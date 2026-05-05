@@ -47,11 +47,10 @@ async function request(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
-    const hadToken = !!authToken;
     clearAuthToken();
-    if (hadToken && window.location.pathname !== '/login') {
-      window.location.href = '/login';
-    }
+    // Don't use window.location.href — the app is a SPA and clearAuthToken()
+    // dispatches snl:auth-changed which AuthProvider handles to show LoginPage.
+    // A file:// redirect crashes Electron.
   }
 
   if (!response.ok) {
