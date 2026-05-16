@@ -13,6 +13,13 @@ import { Badge } from '../components/ui/badge';
 import { db, ReportRecord } from '../services/database';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
+import {
+  exportInventoryXLSX,
+  exportMovementsXLSX,
+  exportAlertsXLSX,
+  exportSalesXLSX,
+  exportDamageXLSX,
+} from '../services/excelExport';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,6 +63,38 @@ function ScheduleReportModal({ onClose, onSaved }: ScheduleModalProps) {
     site_id: 'all',
   });
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const getExportOpts = () => ({
+    dateFrom:    form.date_from,
+    dateTo:      form.date_to,
+    siteId:      form.site_id === 'all' ? null : form.site_id,
+    generatedBy: (user as any)?.full_name || (user as any)?.username || 'SNL',
+    reportName:  form.name || `${form.type} · ${form.date_from} → ${form.date_to}`,
+  });
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const siteId = form.site_id === 'all' ? null : form.site_id;
+      const opts   = getExportOpts();
+      if (form.type === 'inventory') {
+        await exportInventoryXLSX(db.getProductsForExport(), opts);
+      } else if (form.type === 'movements') {
+        await exportMovementsXLSX(db.getMovements({ date_from: form.date_from, date_to: form.date_to, site_id: siteId || undefined }), opts);
+      } else if (form.type === 'sales') {
+        await exportSalesXLSX(db.getSalesReport(form.date_from, form.date_to, siteId || undefined), opts);
+      } else if (form.type === 'damage') {
+        await exportDamageXLSX(
+          db.getDamageReport(form.date_from, form.date_to, siteId || undefined),
+          (id) => { const p = db.getProductById(id); return p ? { sku: p.sku, price: p.price } : undefined; },
+          opts,
+        );
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleGenerate = async () => {
     setSaving(true);
@@ -114,62 +153,119 @@ function ScheduleReportModal({ onClose, onSaved }: ScheduleModalProps) {
     onClose();
   };
 
+  const TYPE_CONFIG = {
+    inventory: { label: 'Inventaire complet',           icon: Package,    color: 'text-teal-600',   desc: 'Multi-feuilles · par site · alertes · top valeurs' },
+    movements: { label: 'Mouvements de stock',          icon: TrendingUp, color: 'text-emerald-600', desc: 'Par type · par user · par site · chronologie'       },
+    sales:     { label: 'Chiffre d\'affaires',          icon: DollarSign, color: 'text-green-600',   desc: 'CA par produit · évolution journalière · classement' },
+    damage:    { label: 'Dégâts de transport',          icon: Truck,      color: 'text-orange-600',  desc: 'Par site · par produit · analyse pertes'            },
+  };
+  const currentType = TYPE_CONFIG[form.type as keyof typeof TYPE_CONFIG];
+  const CurrentIcon = currentType?.icon || FileText;
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
               <FileText className="w-4 h-4 text-purple-600" />
             </div>
-            <h2 className="text-base font-semibold">Générer un Rapport</h2>
+            <div>
+              <h2 className="text-base font-semibold">Générer un Rapport</h2>
+              <p className="text-xs text-gray-400">Configurer · Télécharger Excel · Sauvegarder</p>
+            </div>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
+
         <div className="px-6 py-5 space-y-4">
+          {/* Type */}
           <div>
-            <Label className="text-xs">Type de rapport</Label>
+            <Label className="text-xs font-semibold text-gray-600">Type de rapport</Label>
             <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as any }))}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="inventory">Inventaire complet</SelectItem>
-                <SelectItem value="movements">Mouvements</SelectItem>
+                <SelectItem value="movements">Mouvements de stock</SelectItem>
                 <SelectItem value="sales">Chiffre d'affaires (Sorties)</SelectItem>
                 <SelectItem value="damage">Dégâts de transport</SelectItem>
               </SelectContent>
             </Select>
+            {/* Aperçu du type sélectionné */}
+            {currentType && (
+              <div className="mt-2 flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                <CurrentIcon className={`w-4 h-4 shrink-0 ${currentType.color}`} />
+                <div>
+                  <p className="text-xs font-medium text-gray-800">{currentType.label}</p>
+                  <p className="text-[10px] text-gray-500">{currentType.desc}</p>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Nom */}
           <div>
-            <Label className="text-xs">Nom du rapport</Label>
-            <Input className="mt-1" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={`Rapport ${form.type} ${form.date_from}`} />
+            <Label className="text-xs font-semibold text-gray-600">Nom du rapport</Label>
+            <Input className="mt-1" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder={`${currentType?.label ?? form.type} · ${form.date_from}`} />
           </div>
+
+          {/* Dates */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Date début</Label>
+              <Label className="text-xs font-semibold text-gray-600">Date début</Label>
               <Input type="date" className="mt-1" value={form.date_from} onChange={e => setForm(f => ({ ...f, date_from: e.target.value }))} />
             </div>
             <div>
-              <Label className="text-xs">Date fin</Label>
+              <Label className="text-xs font-semibold text-gray-600">Date fin</Label>
               <Input type="date" className="mt-1" value={form.date_to} onChange={e => setForm(f => ({ ...f, date_to: e.target.value }))} />
             </div>
           </div>
-            <div>
-              <Label className="text-xs">Site</Label>
-              <Select value={form.site_id} onValueChange={v => setForm(f => ({ ...f, site_id: v }))} disabled={!isAdmin && allowedSites.length === 1}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {isAdmin && <SelectItem value="all">Tous</SelectItem>}
-                  {allowedSites.map(s => { const site = APP_CONFIG.sites.find(ss => ss.id === s); return <SelectItem key={s} value={s}>{site?.name || s}</SelectItem>; })}
-                </SelectContent>
-              </Select>
-            </div>
-          <div className="flex gap-2 pt-1">
-            <Button variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-            <Button onClick={handleGenerate} disabled={saving} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
-              {saving ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-              Générer & Sauvegarder
+
+          {/* Site */}
+          <div>
+            <Label className="text-xs font-semibold text-gray-600">Site</Label>
+            <Select value={form.site_id} onValueChange={v => setForm(f => ({ ...f, site_id: v }))}
+              disabled={!isAdmin && allowedSites.length === 1}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {isAdmin && <SelectItem value="all">Tous les sites</SelectItem>}
+                {allowedSites.map(s => { const site = APP_CONFIG.sites.find(ss => ss.id === s); return <SelectItem key={s} value={s}>{site?.name || s}</SelectItem>; })}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Séparateur */}
+          <div className="border-t border-gray-100 pt-1" />
+
+          {/* Bouton principal Excel */}
+          <Button
+            onClick={handleExportExcel}
+            disabled={exporting || saving}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl shadow-sm"
+          >
+            {exporting
+              ? <><RefreshCw className="w-4 h-4 animate-spin mr-2" /> Génération en cours…</>
+              : <><FileSpreadsheet className="w-4 h-4 mr-2" /> Télécharger Excel (.xlsx)</>
+            }
+          </Button>
+
+          {/* Boutons secondaires */}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} className="flex-1 text-gray-500">
+              Annuler
+            </Button>
+            <Button onClick={handleGenerate} disabled={saving || exporting}
+              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
+              {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
+              Sauvegarder en BD
             </Button>
           </div>
+          <p className="text-[10px] text-center text-gray-400">
+            «&nbsp;Télécharger Excel&nbsp;» génère le fichier instantanément · «&nbsp;Sauvegarder en BD&nbsp;» l'enregistre dans vos rapports
+          </p>
         </div>
       </div>
     </div>
@@ -196,11 +292,14 @@ function CAReportModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => { generate(); }, [generate]);
 
-  const exportCSV = () => {
+  const exportXLSX = () => {
     if (!report) return;
-    const headers = ['Produit', 'SKU', 'Quantité vendue', 'CA (XAF)'];
-    const rows = report.byProduct.map(p => [p.name, p.sku, p.qty, p.ca]);
-    downloadCSV(toCSV(headers, rows), `ca_${dateFrom}_${dateTo}.csv`);
+    exportSalesXLSX(report, {
+      dateFrom, dateTo,
+      siteId: siteId === 'all' ? null : siteId,
+      generatedBy: (user as any)?.full_name || (user as any)?.username || 'SNL',
+      reportName: `Chiffre d'Affaires · ${dateFrom} → ${dateTo}`,
+    });
   };
 
   const exportJSON = () => {
@@ -302,8 +401,8 @@ function CAReportModal({ onClose }: { onClose: () => void }) {
           )}
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={exportCSV} disabled={!report} className="flex-1">
-              <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" /> CSV
+            <Button variant="outline" onClick={exportXLSX} disabled={!report} className="flex-1 border-green-300 text-green-700 hover:bg-green-50">
+              <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" /> Excel (.xlsx)
             </Button>
             <Button variant="outline" onClick={exportJSON} disabled={!report} className="flex-1">
               <FileText className="w-3.5 h-3.5 mr-1.5" /> JSON
@@ -336,14 +435,18 @@ function DamageReportModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => { generate(); }, [generate]);
 
-  const exportCSV = () => {
+  const exportXLSX = () => {
     if (!report) return;
-    const headers = ['Ref', 'Produit', 'SKU', 'Qté', 'Perte (XAF)', 'Site', 'Détails', 'Date'];
-    const rows = report.movements.map(m => {
-      const p = db.getProductById(m.product_id);
-      return [m.reference, m.product_name || '', p?.sku || '', m.quantity, m.quantity * (p?.price || 0), m.from_site_id || '', m.damage_details || m.reason, m.created_at.split('T')[0]];
-    });
-    downloadCSV(toCSV(headers, rows), `degats_${dateFrom}_${dateTo}.csv`);
+    exportDamageXLSX(
+      report,
+      (id) => { const p = db.getProductById(id); return p ? { sku: p.sku, price: p.price } : undefined; },
+      {
+        dateFrom, dateTo,
+        siteId: siteId === 'all' ? null : siteId,
+        generatedBy: (user as any)?.full_name || (user as any)?.username || 'SNL',
+        reportName: `Dégâts Transport · ${dateFrom} → ${dateTo}`,
+      },
+    );
   };
 
   return (
@@ -421,8 +524,8 @@ function DamageReportModal({ onClose }: { onClose: () => void }) {
           )}
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={exportCSV} disabled={!report} className="flex-1">
-              <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" /> Exporter CSV
+            <Button variant="outline" onClick={exportXLSX} disabled={!report} className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-50">
+              <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" /> Excel (.xlsx)
             </Button>
             <Button onClick={onClose} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white">Fermer</Button>
           </div>
@@ -462,40 +565,25 @@ export function ReportsPage() {
     transfers: movements.filter(m => m.type === 'transfer').length,
   };
 
-  const quickExport = async (type: string, fn: () => void) => {
+  const exportOpts = (extra?: Partial<{ dateFrom: string; dateTo: string; siteId: string | null }>) => ({
+    generatedBy: (user as any)?.full_name || (user as any)?.username || 'SNL',
+    siteId: null,
+    ...extra,
+  });
+
+  const quickExport = async (type: string, fn: () => Promise<void>) => {
     setDownloading(type);
-    await new Promise(r => setTimeout(r, 200));
-    fn();
-    setDownloading('');
+    try { await fn(); } finally { setDownloading(''); }
   };
 
-  const exportInventoryCSV = () => {
-    const products = db.getProductsForExport();
-    const sites = APP_CONFIG.sites.map(s => s.id);
-    const headers = ['SKU', 'Produit', 'Catégorie', 'Prix (XAF)', 'Unité', 'Seuil', ...sites.map(s => `Stock ${s}`), 'Total', 'Valeur (XAF)', 'Statut'];
-    const rows = products.map(p => {
-      const siteStocks = sites.map(s => p.stock[s] || 0);
-      const total = siteStocks.reduce((a: number, b: number) => a + b, 0);
-      const status = total < p.threshold * 0.3 ? 'Critique' : total < p.threshold ? 'Alerte' : 'OK';
-      return [p.sku, p.name, p.category, p.price, p.unit, p.threshold, ...siteStocks, total, total * p.price, status];
-    });
-    downloadCSV(toCSV(headers, rows), `inventaire_${today()}.csv`);
-  };
+  const exportInventoryXLSXQuick = () =>
+    exportInventoryXLSX(db.getProductsForExport(), exportOpts());
 
-  const exportMovementsCSV = () => {
-    const all = db.getMovements();
-    const headers = ['ID', 'Type', 'Produit', 'Qté', 'De', 'Vers', 'Motif', 'Référence', 'Date', 'User'];
-    const typeLabels: Record<string, string> = { in: 'Entrée', out: 'Sortie', transfer: 'Transfert', adjustment: 'Ajustement', transport_damage: 'Dégât transport' };
-    const rows = all.map(m => [m.id, typeLabels[m.type] || m.type, m.product_name || '', m.quantity, m.from_site_id || '', m.to_site_id || '', m.reason, m.reference, m.created_at.split('T')[0], m.user_name || '']);
-    downloadCSV(toCSV(headers, rows), `mouvements_${today()}.csv`);
-  };
+  const exportMovementsXLSXQuick = () =>
+    exportMovementsXLSX(db.getMovements(), exportOpts());
 
-  const exportAlertsCSV = () => {
-    const alerts = db.getAlerts();
-    const headers = ['ID', 'Type', 'Produit', 'Site', 'Message', 'Lu', 'Date'];
-    const rows = alerts.map(a => [a.id, a.type, a.product_name || '', a.site_id || '', a.message, a.is_read ? 'Oui' : 'Non', a.created_at.split('T')[0]]);
-    downloadCSV(toCSV(headers, rows), `alertes_${today()}.csv`);
-  };
+  const exportAlertsXLSXQuick = () =>
+    exportAlertsXLSX(db.getAlerts(), exportOpts());
 
   const typeConfig: Record<string, { label: string; color: string; icon: any }> = {
     inventory: { label: 'Inventaire', color: 'bg-blue-100 text-blue-700', icon: Package },
@@ -572,12 +660,12 @@ export function ReportsPage() {
         {/* Quick exports */}
         {hasPermission('export') && (
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Exports Rapides (CSV)</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Exports Rapides (Excel)</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
-                { id: 'inventory', label: 'Inventaire complet', desc: 'Stock par produit et site', icon: BarChart3, color: 'blue', fn: exportInventoryCSV },
-                { id: 'movements', label: 'Mouvements', desc: 'Toutes entrées/sorties/transferts', icon: TrendingUp, color: 'green', fn: exportMovementsCSV },
-                { id: 'alerts', label: 'Alertes', desc: 'Stock faible et expirations', icon: AlertTriangle, color: 'orange', fn: exportAlertsCSV },
+                { id: 'inventory', label: 'Inventaire complet', desc: 'Multi-feuilles : résumé, stock par site', icon: BarChart3, color: 'blue', fn: exportInventoryXLSXQuick },
+                { id: 'movements', label: 'Mouvements', desc: 'Par type, colorisé, feuilles séparées', icon: TrendingUp, color: 'green', fn: exportMovementsXLSXQuick },
+                { id: 'alerts', label: 'Alertes', desc: 'Code couleur par sévérité', icon: AlertTriangle, color: 'orange', fn: exportAlertsXLSXQuick },
               ].map(r => {
                 const Icon = r.icon;
                 return (
@@ -591,7 +679,7 @@ export function ReportsPage() {
                       <div className="text-xs text-gray-400">{r.desc}</div>
                     </div>
                     <div className="flex items-center gap-1 text-xs text-gray-400">
-                      <FileSpreadsheet className="w-3 h-3" /> Télécharger CSV
+                      <FileSpreadsheet className="w-3 h-3" /> Télécharger Excel (.xlsx)
                     </div>
                   </button>
                 );

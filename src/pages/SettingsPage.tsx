@@ -16,6 +16,7 @@ import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 import { CloudSyncPanel } from '../components/stock/CloudSyncPanel';
 import { ServerStatus } from '../components/stock/ServerStatus';
+import { JSONImportModal } from '../components/stock/JSONImportModal';
 
 // ─── Auto-Sync Settings ────────────────────────────────────────────────────
 const SYNC_INTERVAL_KEY = 'snl_auto_sync_interval';
@@ -292,12 +293,10 @@ function SitesManager() {
 // ─── DB Export/Import ─────────────────────────────────────────────────────────
 
 function DBExportImport() {
-  const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [importError, setImportError] = useState('');
-  const [importSuccess, setImportSuccess] = useState('');
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [demoLoaded, setDemoLoaded] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const handleExport = async () => {
     setExporting(true);
@@ -318,35 +317,6 @@ function DBExportImport() {
     } finally {
       setExporting(false);
     }
-  };
-
-  const handleImport = () => {
-    setImportError('');
-    setImportSuccess('');
-    setImporting(true);
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) { setImporting(false); return; }
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        try {
-          const str = ev.target?.result as string;
-          JSON.parse(str);
-          await db.importDatabase(str);
-          setImportSuccess('Base importée avec succès. Rechargement...');
-          setTimeout(() => window.location.reload(), 1500);
-        } catch (err: any) {
-          setImportError(`Erreur: ${err.message}`);
-        } finally {
-          setImporting(false);
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
   };
 
   const handleLocalBackup = async () => {
@@ -379,78 +349,75 @@ function DBExportImport() {
   })();
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-            <HardDrive className="w-4 h-4 text-purple-600" />
-          </div>
-          <div>
-            <CardTitle className="text-sm">Base de Données</CardTitle>
-            <CardDescription className="text-xs">Export/Import JSON complet — produits, stocks, sites, mouvements inclus</CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {importError && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />{importError}
-          </div>
-        )}
-        {importSuccess && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 flex-shrink-0" />{importSuccess}
-          </div>
-        )}
-        {demoLoaded && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700 flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 flex-shrink-0" />Données de démo chargées ! Rechargement...
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[
-            { label: 'Exporter la BD', sub: 'JSON complet avec sites et produits', icon: Download, color: 'green', action: handleExport, loading: exporting },
-            { label: 'Importer une BD', sub: 'Restaurer depuis JSON (sites inclus)', icon: Upload, color: 'blue', action: handleImport, loading: importing },
-            { label: 'Sauvegarde locale', sub: `${backups.length}/10 sauvegardes`, icon: Save, color: 'purple', action: handleLocalBackup, loading: false },
-            { label: 'Données démo', sub: 'Charger des données de test', icon: TestTube, color: 'orange', action: handleLoadDemo, loading: loadingDemo },
-          ].map(b => {
-            const Icon = b.icon;
-            return (
-              <button key={b.label} onClick={b.action} disabled={b.loading}
-                className={`flex items-center gap-3 p-4 border-2 border-${b.color}-200 rounded-xl hover:border-${b.color}-400 hover:bg-${b.color}-50 transition-all text-left disabled:opacity-50 group`}>
-                <div className={`w-9 h-9 rounded-xl bg-${b.color}-100 flex items-center justify-center flex-shrink-0 group-hover:bg-${b.color}-200`}>
-                  <Icon className={`w-4 h-4 text-${b.color}-600`} />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-gray-900">{b.label}</div>
-                  <div className="text-xs text-gray-400">{b.sub}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700">
-          <p className="font-semibold mb-1">💡 L'application démarre vide</p>
-          <p>Aucune donnée n'est pré-remplie. Utilisez "Données démo" pour charger des produits de test. L'export inclut aussi la configuration des sites personnalisés.</p>
-        </div> */}
-
-        {backups.length > 0 && (
-          <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-xs font-medium text-gray-600 mb-2">Sauvegardes récentes</p>
-            <div className="space-y-1.5">
-              {backups.slice(-5).reverse().map((b: any, i: number) => (
-                <div key={i} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">{new Date(b.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                  <span className="text-gray-400 font-mono">{(b.size / 1024).toFixed(1)} KB</span>
-                </div>
-              ))}
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+              <HardDrive className="w-4 h-4 text-purple-600" />
+            </div>
+            <div>
+              <CardTitle className="text-sm">Base de Données</CardTitle>
+              <CardDescription className="text-xs">Export/Import JSON complet — produits, stocks, mouvements, alertes, utilisateurs, rapports</CardDescription>
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {demoLoaded && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />Données de démo chargées ! Rechargement...
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              { label: 'Exporter la BD', sub: 'JSON complet — tous les données', icon: Download, color: 'green', action: handleExport, loading: exporting },
+              { label: 'Importer une BD', sub: 'Restaurer depuis un fichier JSON SNL', icon: Upload, color: 'blue', action: () => setShowImportModal(true), loading: false },
+              { label: 'Sauvegarde locale', sub: `${backups.length}/10 sauvegardes`, icon: Save, color: 'purple', action: handleLocalBackup, loading: false },
+              { label: 'Données démo', sub: 'Charger des données de test', icon: TestTube, color: 'orange', action: handleLoadDemo, loading: loadingDemo },
+            ].map(b => {
+              const Icon = b.icon;
+              return (
+                <button key={b.label} onClick={b.action} disabled={b.loading}
+                  className={`flex items-center gap-3 p-4 border-2 border-${b.color}-200 rounded-xl hover:border-${b.color}-400 hover:bg-${b.color}-50 transition-all text-left disabled:opacity-50 group`}>
+                  <div className={`w-9 h-9 rounded-xl bg-${b.color}-100 flex items-center justify-center flex-shrink-0 group-hover:bg-${b.color}-200`}>
+                    <Icon className={`w-4 h-4 text-${b.color}-600`} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{b.label}</div>
+                    <div className="text-xs text-gray-400">{b.sub}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {backups.length > 0 && (
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-xs font-medium text-gray-600 mb-2">Sauvegardes récentes</p>
+              <div className="space-y-1.5">
+                {backups.slice(-5).reverse().map((b: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">{new Date(b.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-gray-400 font-mono">{(b.size / 1024).toFixed(1)} KB</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {showImportModal && (
+        <JSONImportModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false);
+            setTimeout(() => window.location.reload(), 500);
+          }}
+        />
+      )}
+    </>
   );
 }
 
