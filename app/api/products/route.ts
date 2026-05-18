@@ -12,7 +12,7 @@ export async function GET() {
     const result = await pool.query(`
       SELECT
         id, name, sku, category, sub_type,
-        description, unit, price, image_url, barcode
+        description, unit, price, image_url
       FROM products
       WHERE is_published = true
       ORDER BY name

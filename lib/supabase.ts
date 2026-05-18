@@ -8,7 +8,6 @@ export interface PublishedProduct {
   unit: string;
   price: number;
   image_url?: string;
-  barcode?: string;
 }
 
 export async function fetchPublishedProducts(): Promise<PublishedProduct[]> {
