@@ -6,7 +6,7 @@ import { useReveal } from './hooks';
 interface RevealProps {
   children: React.ReactNode;
   delay?: number;
-  as?: keyof JSX.IntrinsicElements;
+  as?: React.ElementType;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -26,7 +26,7 @@ export function Reveal({ children, delay = 0, as: As = 'div', className = '', st
   );
 }
 
-export function WordsReveal({ text, className = '', as: As = 'span' }: { text: string; className?: string; as?: keyof JSX.IntrinsicElements }) {
+export function WordsReveal({ text, className = '', as: As = 'span' }: { text: string; className?: string; as?: React.ElementType }) {
   const ref = useRef<HTMLElement>(null);
   const seen = useReveal(ref as React.RefObject<Element>);
   const words = text.split(' ');
