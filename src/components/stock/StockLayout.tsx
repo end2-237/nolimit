@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard, ShoppingBag, ChevronRight, LogOut, Users, Shield, Menu, X } from 'lucide-react';
+import { Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard, ShoppingBag, ChevronRight, LogOut, Users, Shield, Menu, X, Globe } from 'lucide-react';
 import { APP_CONFIG } from '../../config/app.config';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
@@ -7,7 +7,7 @@ import { useAuth } from '../../stores/authStore';
 import { QuickActionBar } from './QuickActionBar';
 import { OfflineIndicator } from '../OfflineIndicator';
 
-export type PageId = 'dashboard' | 'products' | 'movements' | 'alerts' | 'reports' | 'settings' | 'users';
+export type PageId = 'dashboard' | 'products' | 'movements' | 'alerts' | 'reports' | 'settings' | 'users' | 'site';
 
 interface StockLayoutProps {
   children: React.ReactNode;
@@ -47,6 +47,7 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
     { id: 'reports', label: 'Rapports', icon: FileText },
     { id: 'settings', label: 'Paramètres', icon: Settings },
     ...(hasPermission('manage_users') ? [{ id: 'users' as PageId, label: 'Utilisateurs', icon: Users }] : []),
+    ...(hasPermission('manage_users') ? [{ id: 'site' as PageId, label: 'Site Vitrine', icon: Globe }] : []),
   ];
 
   const roleInfo = user ? ROLE_LABELS[user.role] : null;

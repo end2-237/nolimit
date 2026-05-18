@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Search, Plus, Filter, Grid3X3, List, Package,
   Edit2, Trash2, ArrowUpRight, ArrowDownLeft, RefreshCw,
-  Image as ImageIcon, X, CheckCircle, AlertCircle, Upload
+  Image as ImageIcon, X, CheckCircle, AlertCircle, Upload, Scan, Barcode,
 } from 'lucide-react';
 
 import { Button } from '../components/ui/button';
@@ -15,6 +15,8 @@ import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 import { ProductFormModal } from '../components/stock/ProductFormModal';
 import { BulkInputModal, StockOutModal } from '../components/stock/BulkInputModal';
+import { BarcodeScannerModal } from '../components/stock/BarcodeScannerModal';
+import { ProductBarcodeModal } from '../components/stock/ProductBarcodeModal';
 
 // ─── Stock Out Modal ──────────────────────────────────────────────────────────
 
@@ -269,10 +271,14 @@ export function ProductsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [scannedInitialSku, setScannedInitialSku] = useState<string | undefined>();
+  const [scannedHint, setScannedHint] = useState<any | undefined>();
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [showBulkInput, setShowBulkInput] = useState(false);
   const [showStockOut, setShowStockOut] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
 
   const load = useCallback(() => {
     setProducts(db.getStocksGroupedByProduct(allowedSites));
@@ -313,6 +319,33 @@ export function ProductsPage() {
     return sites.reduce((sum: number, s: string) => sum + (product.stock[s] || 0), 0);
   };
 
+  /** Appelé quand le scanner trouve un produit : action rapide */
+  const handleScanProductAction = (product: any, action: 'view' | 'in' | 'out') => {
+    setSelectedProduct(product);
+    if (action === 'view') {
+      setSearchQuery(product.sku);
+    } else if (action === 'in') {
+      setSelectedProduct(product);
+      setShowBulkInput(true);
+    } else if (action === 'out') {
+      setSelectedProduct(product);
+      setShowStockOut(true);
+    }
+  };
+
+  /** Appelé quand le scanner ne trouve pas le produit : créer avec SKU + hint pré-remplis */
+  const handleCreateWithSku = (sku: string, hint?: any) => {
+    setScannedInitialSku(sku);
+    setScannedHint(hint ?? undefined);
+    setEditingProduct(null);
+    setShowProductForm(true);
+  };
+
+  const handleTogglePublish = async (product: any) => {
+    await db.updateProduct(product.id, { is_published: !product.is_published });
+    load();
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Supprimer ce produit et tout son stock ?')) return;
     const ok = await db.deleteProduct(id);
@@ -345,16 +378,27 @@ export function ProductsPage() {
               <p className="text-gray-500 text-sm">{filteredProducts.length} / {products.length} produits</p>
             </div>
           </div>
-          {hasPermission('create') && (
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
-              onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
-              className="bg-green-600 hover:bg-green-700 text-white"
+              variant="outline"
+              onClick={() => setShowScanner(true)}
+              className="border-blue-200 text-blue-700 hover:bg-blue-50"
             >
-              <Plus className="w-3.5 h-3.5 mr-1.5" />
-              Nouveau Produit
+              <Scan className="w-3.5 h-3.5 mr-1.5" />
+              Scanner
             </Button>
-          )}
+            {hasPermission('create') && (
+              <Button
+                size="sm"
+                onClick={() => { setScannedInitialSku(undefined); setEditingProduct(null); setShowProductForm(true); }}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Nouveau Produit
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* KPIs */}
@@ -533,6 +577,36 @@ export function ProductsPage() {
                         )}
                       </div>
                     )}
+
+                    {/* Code-barre — toujours visible en bas de la carte */}
+                    <button
+                      onClick={() => { setSelectedProduct(product); setShowBarcodeModal(true); }}
+                      className="w-full mt-1.5 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-semibold text-slate-500 bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-lg transition-colors"
+                    >
+                      <Barcode className="w-3 h-3" />
+                      <span className="font-mono tracking-wider text-[9px] text-slate-400">
+                        {product.barcode ? product.barcode.slice(0, 6) + '…' : 'Code-barre'}
+                      </span>
+                    </button>
+
+                    {/* Publier sur le site vitrine */}
+                    {hasPermission('edit') && (
+                      <button
+                        onClick={() => handleTogglePublish(product)}
+                        title={product.is_published ? 'Retirer du site vitrine' : 'Publier sur le site vitrine'}
+                        className={`w-full mt-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-semibold rounded-lg border transition-colors ${
+                          product.is_published
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100'
+                        }`}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2" />
+                          {product.is_published && <circle cx="5" cy="5" r="2" fill="currentColor" />}
+                        </svg>
+                        {product.is_published ? 'Publié sur le site' : 'Publier sur le site'}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -550,6 +624,8 @@ export function ProductsPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Prix</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Valeur</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Barcode</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Site</th>
                   {hasPermission('create') && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>}
                 </tr>
               </thead>
@@ -629,6 +705,37 @@ export function ProductsPage() {
                       <td className="px-4 py-3 text-right font-mono text-gray-600">
                         {(total * product.price).toLocaleString('fr-FR')}
                       </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => { setSelectedProduct(product); setShowBarcodeModal(true); }}
+                          title={product.barcode || 'Code-barre'}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-semibold text-slate-500 bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-lg transition-colors"
+                        >
+                          <Barcode className="w-3.5 h-3.5" />
+                          <span className="font-mono tracking-wider text-[9px] hidden sm:inline">
+                            {product.barcode ? product.barcode.slice(0, 8) + '…' : '—'}
+                          </span>
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {hasPermission('edit') ? (
+                          <button
+                            onClick={() => handleTogglePublish(product)}
+                            title={product.is_published ? 'Retirer du site' : 'Publier sur le site'}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-colors ${
+                              product.is_published
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-gray-50 text-gray-400 border-gray-200'
+                            }`}
+                          >
+                            {product.is_published ? '● Publié' : '○ Non publié'}
+                          </button>
+                        ) : (
+                          <span className={`text-[10px] ${product.is_published ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {product.is_published ? '● Publié' : '—'}
+                          </span>
+                        )}
+                      </td>
                       {hasPermission('create') && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -690,7 +797,16 @@ export function ProductsPage() {
       {showProductForm && (
         <ProductFormModal
           product={editingProduct}
-          onClose={() => { setShowProductForm(false); setEditingProduct(null); load(); }}
+          initialSku={!editingProduct ? scannedInitialSku : undefined}
+          initialHint={!editingProduct ? scannedHint : undefined}
+          onClose={() => { setShowProductForm(false); setEditingProduct(null); setScannedInitialSku(undefined); setScannedHint(undefined); load(); }}
+        />
+      )}
+      {showScanner && (
+        <BarcodeScannerModal
+          onClose={() => setShowScanner(false)}
+          onCreateWithSku={handleCreateWithSku}
+          onProductAction={handleScanProductAction}
         />
       )}
       {showImageModal && (
@@ -698,6 +814,13 @@ export function ProductsPage() {
           product={selectedProduct}
           onClose={() => { setShowImageModal(false); setSelectedProduct(null); }}
           onSaved={load}
+        />
+      )}
+      {showBarcodeModal && selectedProduct && (
+        <ProductBarcodeModal
+          product={selectedProduct}
+          onClose={() => { setShowBarcodeModal(false); setSelectedProduct(null); }}
+          onUpdated={load}
         />
       )}
     </div>

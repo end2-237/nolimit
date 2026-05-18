@@ -8,6 +8,7 @@ import { AlertsPage } from './pages/AlertsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { UsersPage } from './pages/UsersPage';
+import { SiteManagementPage } from './pages/SiteManagementPage';
 import { SplashScreen } from './components/SplashScreen';
 import { DBLoader } from './components/DBLoader';
 import { db } from './services/database';
@@ -274,6 +275,7 @@ function AppInner() {
       case 'reports': return <ReportsPage />;
       case 'settings': return <SettingsPage />;
       case 'users': return <UsersPage />;
+      case 'site': return <SiteManagementPage />;
       default: return <InventoryDashboard />;
     }
   };

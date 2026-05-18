@@ -29,6 +29,7 @@ export interface Product {
   id: number;
   name: string;
   sku: string;
+  barcode?: string;          // Code128 barcode value (généré automatiquement si absent)
   category: string;
   sub_type?: string;
   description: string;
@@ -37,6 +38,7 @@ export interface Product {
   threshold: number;
   expiry_date: string | null;
   image_url?: string | null;
+  is_published?: boolean;    // Visible sur le site vitrine
   created_at: string;
   updated_at: string;
   count: number;
@@ -147,6 +149,20 @@ export function generateSKU(category: string, name: string, existingSkus: string
   return sku;
 }
 
+// ─── Barcode Generation ───────────────────────────────────────────────────────
+// Génère un code-barre Code128 numérique à 12 chiffres unique (préfixe SNL = 306)
+// Format : 306 + 9 chiffres aléatoires. Unique parmi les codes existants.
+
+export function generateBarcode(existingBarcodes: string[]): string {
+  const set = new Set(existingBarcodes);
+  let code: string;
+  do {
+    const rand = Math.floor(Math.random() * 1_000_000_000).toString().padStart(9, '0');
+    code = `306${rand}`;
+  } while (set.has(code));
+  return code;
+}
+
 // ─── Cache type ───────────────────────────────────────────────────────────────
 
 interface DBCache {
@@ -197,6 +213,7 @@ class DatabaseService {
           Reports.getAll().catch(() => [] as any[]),
         ]);
         this.cache = { products, stocks, users, movements, alerts, reports, loaded: true };
+        this.ensureAllBarcodesAssigned();
         // Persist to IndexedDB for offline use
         persistCache({ products, stocks, users, movements, alerts }).catch(() => {});
         return;
@@ -209,6 +226,7 @@ class DatabaseService {
     try {
       const cached = await loadCache();
       this.cache = { ...cached, reports: [], loaded: true };
+      this.ensureAllBarcodesAssigned();
     } catch {
       this.cache.loaded = true;
     }
@@ -309,14 +327,57 @@ class DatabaseService {
     return this.cache.products.find(p => p.id === id) || null;
   }
 
+  /** Recherche par SKU exact ou partiel (insensible à la casse) */
+  getProductBySku(sku: string): Product | null {
+    const upper = sku.trim().toUpperCase();
+    return this.cache.products.find(p => p.sku.toUpperCase() === upper)
+      ?? this.cache.products.find(p => p.sku.toUpperCase().includes(upper))
+      ?? null;
+  }
+
+  /** Recherche par barcode exact, puis par SKU, puis partiel — ordre de priorité optimal */
+  findProductByCode(code: string): { product: Product | null; matchType: 'barcode' | 'sku' | 'partial' | null } {
+    const q = code.trim().toUpperCase();
+    // 1. Barcode exact
+    let p = this.cache.products.find(r => r.barcode?.toUpperCase() === q);
+    if (p) return { product: p, matchType: 'barcode' };
+    // 2. SKU exact
+    p = this.cache.products.find(r => r.sku.toUpperCase() === q);
+    if (p) return { product: p, matchType: 'sku' };
+    // 3. Barcode partiel (sous-chaîne)
+    p = this.cache.products.find(r => r.barcode?.toUpperCase().includes(q));
+    if (p) return { product: p, matchType: 'partial' };
+    // 4. SKU partiel
+    p = this.cache.products.find(r => r.sku.toUpperCase().includes(q));
+    if (p) return { product: p, matchType: 'partial' };
+    return { product: null, matchType: null };
+  }
+
   getExistingSkus(): string[] { return this.cache.products.map(p => p.sku); }
+  getExistingBarcodes(): string[] { return this.cache.products.map(p => p.barcode).filter(Boolean) as string[]; }
+
+  /** Assigne un code-barre à tous les produits qui n'en ont pas encore */
+  ensureAllBarcodesAssigned(): void {
+    const existing = this.getExistingBarcodes();
+    for (const p of this.cache.products) {
+      if (!p.barcode) {
+        p.barcode = generateBarcode(existing);
+        existing.push(p.barcode);
+        // Persistance locale (best-effort, sans await pour ne pas bloquer le rendu)
+        Products.update(p.id, { barcode: p.barcode } as any).catch(() => {});
+      }
+    }
+  }
 
   async createProduct(data: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
     const sku = data.sku && (data.sku as string).trim()
       ? (data.sku as string).trim().toUpperCase()
       : generateSKU(data.category, data.name, this.getExistingSkus());
 
-    const product: Product = await Products.create({ ...data, sku });
+    // Auto-assigne un code-barre si absent
+    const barcode = (data as any).barcode?.trim() || generateBarcode(this.getExistingBarcodes());
+
+    const product: Product = await Products.create({ ...data, sku, barcode });
     this.cache.products.push(product);
 
     // Create stock entries for all active sites

@@ -9,23 +9,37 @@ import { APP_CONFIG } from '../../config/app.config';
 
 interface ProductFormModalProps {
   product?: any;
+  /** SKU pré-rempli depuis un scan code-barre (nouveau produit uniquement) */
+  initialSku?: string;
+  /** Données enrichies depuis Open Food Facts / UPC Item DB */
+  initialHint?: {
+    name?: string; brand?: string; category?: string;
+    description?: string; image_url?: string;
+  };
   onClose: () => void;
 }
 
-export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
+export function ProductFormModal({ product, initialSku, initialHint, onClose }: ProductFormModalProps) {
   const isEdit = !!product;
+
+  // Description pré-remplie depuis le hint : "Marque — description"
+  const hintDesc = initialHint
+    ? [initialHint.brand, initialHint.description].filter(Boolean).join(' — ')
+    : '';
+
   const [form, setForm] = useState({
-    name: product?.name || '',
-    sku: product?.sku || '',
-    category: product?.category || 'plante',
-    sub_type: product?.sub_type || '',
-    description: product?.description || '',
-    unit: product?.unit || 'unité',
-    price: product?.price?.toString() || '',
-    threshold: product?.threshold?.toString() || '',
-    expiry_date: product?.expiry_date || '',
+    name:        product?.name        || initialHint?.name     || '',
+    sku:         product?.sku         || initialSku            || '',
+    category:    product?.category    || initialHint?.category || 'plante',
+    sub_type:    product?.sub_type    || '',
+    description: product?.description || hintDesc              || '',
+    unit:        product?.unit        || 'unité',
+    price:       product?.price?.toString()     || '',
+    threshold:   product?.threshold?.toString() || '',
+    expiry_date: product?.expiry_date           || '',
   });
-  const [skuAuto, setSkuAuto] = useState(!isEdit || !product?.sku);
+  // SKU auto-généré seulement si pas déjà fixé (édition ou scan)
+  const [skuAuto, setSkuAuto] = useState(!isEdit && !initialSku);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
   const [customSubType, setCustomSubType] = useState('');
@@ -149,6 +163,23 @@ export function ProductFormModal({ product, onClose }: ProductFormModalProps) {
         ) : (
           <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">{error}</div>}
+
+            {/* Bannière données en ligne — affichée seulement pour un nouveau produit avec hint */}
+            {!isEdit && initialHint && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                {initialHint.image_url && (
+                  <img src={initialHint.image_url} alt="" className="w-10 h-10 rounded-lg object-contain bg-white border border-blue-100 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">
+                    {initialHint.brand
+                      ? `Données importées — ${initialHint.brand}`
+                      : 'Données importées en ligne'}
+                  </p>
+                  <p className="text-[10px] text-blue-400 mt-0.5">Vérifiez et complétez les champs avant de créer.</p>
+                </div>
+              </div>
+            )}
 
             {/* Name */}
             <div className="col-span-2">
