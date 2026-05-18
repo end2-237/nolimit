@@ -19,7 +19,11 @@ export async function fetchPublishedProducts(): Promise<PublishedProduct[]> {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!base || !key) return [];
+  console.log('[Boutique] SUPABASE_URL =', base ?? '❌ VIDE');
+  if (!base || !key) {
+    console.error('[Boutique] Variables env manquantes — vérifier Coolify build env vars');
+    return [];
+  }
 
   const url =
     `${base}/products` +
