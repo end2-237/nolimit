@@ -1,20 +1,33 @@
-const VITRINE_URL = import.meta.env.VITE_VITRINE_URL || 'https://nolimitvitrine.vps.buyticle.com';
-const ADMIN_KEY   = import.meta.env.VITE_SITE_ADMIN_KEY || '';
+import { getAuthToken } from './api';
 
-function adminHeaders() {
-  return { 'Content-Type': 'application/json', 'X-Admin-Key': ADMIN_KEY };
-}
+const API_URL = (() => {
+  try {
+    const saved = localStorage.getItem('snl_api_url');
+    if (saved?.startsWith('http') && saved.includes('/api')) return saved.replace(/\/+$/, '');
+  } catch {}
+  return import.meta.env.VITE_API_URL || 'https://snl-api.vps.buyticle.com/api';
+})();
 
 async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${VITRINE_URL}${path}`, { headers: adminHeaders() });
+  const token = getAuthToken();
+  const res = await fetch(`${API_URL}/site${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res.json();
 }
 
 async function apiPatch(path: string, body: object): Promise<void> {
-  const res = await fetch(`${VITRINE_URL}${path}`, {
+  const token = getAuthToken();
+  const res = await fetch(`${API_URL}/site${path}`, {
     method: 'PATCH',
-    headers: adminHeaders(),
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
@@ -50,12 +63,12 @@ export interface ContactMessage {
 }
 
 export const siteWebService = {
-  getStats: ()           => apiFetch<SiteStats>('/api/admin/stats'),
-  getReservations: ()    => apiFetch<Reservation[]>('/api/admin/reservations'),
-  getCommandes: ()       => apiFetch<Commande[]>('/api/admin/orders'),
-  getNewsletter: ()      => apiFetch<NewsletterSub[]>('/api/admin/newsletter'),
-  getMessages: ()        => apiFetch<ContactMessage[]>('/api/admin/messages'),
-  updateReservation: (id: number, status: string) => apiPatch(`/api/admin/reservations/${id}`, { status }),
-  updateCommande:    (id: number, status: string) => apiPatch(`/api/admin/orders/${id}`,        { status }),
-  updateMessage:     (id: number, status: string) => apiPatch(`/api/admin/messages/${id}`,     { status }),
+  getStats:          ()                          => apiFetch<SiteStats>('/stats'),
+  getReservations:   ()                          => apiFetch<Reservation[]>('/reservations'),
+  getCommandes:      ()                          => apiFetch<Commande[]>('/commandes'),
+  getNewsletter:     ()                          => apiFetch<NewsletterSub[]>('/newsletter'),
+  getMessages:       ()                          => apiFetch<ContactMessage[]>('/messages'),
+  updateReservation: (id: number, status: string) => apiPatch(`/reservations/${id}`, { status }),
+  updateCommande:    (id: number, status: string) => apiPatch(`/commandes/${id}`,    { status }),
+  updateMessage:     (id: number, status: string) => apiPatch(`/messages/${id}`,     { status }),
 };
