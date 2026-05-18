@@ -124,60 +124,121 @@ function ProductModal({ p, onClose, onAdd }: { p: PublishedProduct & { vitrineCa
   );
 }
 
-function CartDrawer({ open, onClose, cart, products, updateQty }: {
+function CartDrawer({ open, onClose, cart, products, updateQty, onOrderDone }: {
   open: boolean; onClose: () => void;
   cart: { id: number; qty: number }[];
   products: (PublishedProduct & { vitrineCat: string })[];
   updateQty: (id: number, d: number) => void;
+  onOrderDone: () => void;
 }) {
+  const [step, setStep] = useState<'cart' | 'checkout' | 'done'>('cart');
+  const [form, setForm] = useState({ name: '', phone: '', email: '' });
+  const [sending, setSending] = useState(false);
+
   const total = cart.reduce((s, x) => {
     const p = products.find(pr => pr.id === x.id);
     return s + (p ? p.price * x.qty : 0);
   }, 0);
+
+  const handleOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+    const items = cart.map(x => {
+      const p = products.find(pr => pr.id === x.id);
+      return { product_id: x.id, name: p?.name, qty: x.qty, price: p?.price };
+    });
+    try {
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, total, customer_name: form.name, customer_phone: form.phone, customer_email: form.email }),
+      });
+    } catch {}
+    setSending(false);
+    setStep('done');
+    onOrderDone();
+  };
+
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(26,26,26,0.15)', background: 'var(--cream-warm)', fontSize: 14, fontFamily: 'var(--sans)', boxSizing: 'border-box' };
+
   return (
     <>
       {open && <div style={{ position: 'fixed', inset: 0, zIndex: 399, background: 'rgba(0,0,0,0.3)' }} onClick={onClose} />}
       <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(420px, 100vw)', background: 'var(--cream)', zIndex: 400, transform: open ? 'translateX(0)' : 'translateX(100%)', transition: 'transform .4s cubic-bezier(.2,.7,.2,1)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '28px 28px 20px', borderBottom: '1px solid rgba(26,26,26,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontFamily: 'var(--serif)', fontSize: 22 }}>Panier ({cart.reduce((s, x) => s + x.qty, 0)})</span>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 22 }}>
+            {step === 'cart' ? `Panier (${cart.reduce((s, x) => s + x.qty, 0)})` : step === 'checkout' ? 'Vos coordonnées' : 'Commande reçue !'}
+          </span>
           <button onClick={onClose} style={{ fontSize: 20, color: 'var(--muted)' }}>✕</button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          {cart.length === 0 ? (
-            <p style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', color: 'var(--muted)', fontSize: 18, marginTop: 40, textAlign: 'center' }}>Votre panier est vide.</p>
-          ) : cart.map(x => {
-            const p = products.find(pr => pr.id === x.id);
-            if (!p) return null;
-            return (
-              <div key={x.id} style={{ display: 'flex', gap: 16, paddingBottom: 20, borderBottom: '1px solid rgba(26,26,26,0.08)', marginBottom: 20 }}>
-                <div className={`ph ${TONE[p.vitrineCat] ?? ''}`} style={{ width: 64, height: 64, borderRadius: 8, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'var(--serif)', fontSize: 15 }}>{p.name}</div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{formatXAF(p.price)}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                    <button onClick={() => updateQty(x.id, -1)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(26,26,26,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>−</button>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: 14, minWidth: 20, textAlign: 'center' }}>{x.qty}</span>
-                    <button onClick={() => updateQty(x.id, 1)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(26,26,26,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>+</button>
-                  </div>
-                </div>
-                <div style={{ fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 600 }}>{formatXAF(p.price * x.qty)}</div>
-              </div>
-            );
-          })}
-        </div>
-        {cart.length > 0 && (
-          <div style={{ padding: '20px 28px', borderTop: '1px solid rgba(26,26,26,0.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-              <span style={{ fontFamily: 'var(--serif)', fontSize: 16 }}>Total</span>
-              <span style={{ fontFamily: 'var(--sans)', fontSize: 18, fontWeight: 600 }}>{formatXAF(total)}</span>
-            </div>
-            <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-              Commander <Arrow />
-            </button>
-            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
-              Livraison sous 48h · Paiement sécurisé
-            </p>
+
+        {step === 'done' ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, textAlign: 'center', gap: 16 }}>
+            <div style={{ fontSize: 64 }}>🌿</div>
+            <h3 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 300 }}>Merci pour votre commande !</h3>
+            <p style={{ fontSize: 15, color: 'var(--muted)', lineHeight: 1.7 }}>Notre équipe vous contacte sous 24h pour confirmer et organiser la livraison.</p>
+            <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={onClose}>Fermer <Arrow /></button>
           </div>
+        ) : step === 'checkout' ? (
+          <form onSubmit={handleOrder} style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '24px 28px', gap: 14, overflowY: 'auto' }}>
+            <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 4 }}>Total : <strong style={{ color: 'var(--ink)' }}>{formatXAF(total)}</strong></div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Nom complet *</label>
+              <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Votre nom" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Téléphone *</label>
+              <input required value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+237 6 XX XX XX XX" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Email (optionnel)</label>
+              <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="votre@email.com" style={inputStyle} />
+            </div>
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button type="submit" disabled={sending} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', opacity: sending ? 0.7 : 1 }}>
+                {sending ? 'Envoi…' : 'Confirmer la commande'} <Arrow />
+              </button>
+              <button type="button" onClick={() => setStep('cart')} style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>← Retour au panier</button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
+              {cart.length === 0 ? (
+                <p style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', color: 'var(--muted)', fontSize: 18, marginTop: 40, textAlign: 'center' }}>Votre panier est vide.</p>
+              ) : cart.map(x => {
+                const p = products.find(pr => pr.id === x.id);
+                if (!p) return null;
+                return (
+                  <div key={x.id} style={{ display: 'flex', gap: 16, paddingBottom: 20, borderBottom: '1px solid rgba(26,26,26,0.08)', marginBottom: 20 }}>
+                    <div className={`ph ${TONE[p.vitrineCat] ?? ''}`} style={{ width: 64, height: 64, borderRadius: 8, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--serif)', fontSize: 15 }}>{p.name}</div>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{formatXAF(p.price)}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                        <button onClick={() => updateQty(x.id, -1)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(26,26,26,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>−</button>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 14, minWidth: 20, textAlign: 'center' }}>{x.qty}</span>
+                        <button onClick={() => updateQty(x.id, 1)} style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(26,26,26,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>+</button>
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 600 }}>{formatXAF(p.price * x.qty)}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {cart.length > 0 && (
+              <div style={{ padding: '20px 28px', borderTop: '1px solid rgba(26,26,26,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <span style={{ fontFamily: 'var(--serif)', fontSize: 16 }}>Total</span>
+                  <span style={{ fontFamily: 'var(--sans)', fontSize: 18, fontWeight: 600 }}>{formatXAF(total)}</span>
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setStep('checkout')}>
+                  Commander <Arrow />
+                </button>
+                <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>Livraison sous 48h · Paiement à la livraison</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>
@@ -335,7 +396,7 @@ export function Boutique() {
       </div>
 
       {quick && <ProductModal p={quick} onClose={() => setQuick(null)} onAdd={() => { addToCart(quick); setQuick(null); }} />}
-      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} cart={cart} products={products} updateQty={updateQty} />
+      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} cart={cart} products={products} updateQty={updateQty} onOrderDone={() => setCart([])} />
 
       <style>{`
         @media (max-width: 1100px) { .shop-grid { grid-template-columns: repeat(3, 1fr) !important; } }

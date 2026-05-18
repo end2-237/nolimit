@@ -31,7 +31,7 @@ export function Newsletter() {
               <p style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 24, color: 'var(--sage-light)' }}>Bienvenue dans le cercle.</p>
             </div>
           ) : (
-            <form onSubmit={(e) => { e.preventDefault(); if (email) setDone(true); }} style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 320 }}>
+            <form onSubmit={async (e) => { e.preventDefault(); if (!email) return; try { await fetch('/api/newsletter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); } catch {} setDone(true); }} style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 320 }}>
               <input value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="votre@email.com"
                 style={{ padding: '18px 24px', borderRadius: 999, border: '1px solid rgba(245,241,234,0.25)', background: 'rgba(245,241,234,0.08)', color: 'var(--cream)', fontFamily: 'var(--sans)', fontSize: 15, outline: 'none' }} />
               <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center' }}>
