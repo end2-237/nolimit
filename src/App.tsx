@@ -9,6 +9,11 @@ import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SiteManagementPage } from './pages/SiteManagementPage';
+import { SiteDashboardPage } from './pages/SiteDashboardPage';
+import { SiteReservationsPage } from './pages/SiteReservationsPage';
+import { SiteCommandesPage } from './pages/SiteCommandesPage';
+import { SiteNewsletterPage } from './pages/SiteNewsletterPage';
+import { SiteMessagesPage } from './pages/SiteMessagesPage';
 import { SplashScreen } from './components/SplashScreen';
 import { DBLoader } from './components/DBLoader';
 import { db } from './services/database';
@@ -275,7 +280,12 @@ function AppInner() {
       case 'reports': return <ReportsPage />;
       case 'settings': return <SettingsPage />;
       case 'users': return <UsersPage />;
-      case 'site': return <SiteManagementPage />;
+      case 'site':              return <SiteManagementPage />;
+      case 'site-dashboard':    return <SiteDashboardPage />;
+      case 'site-reservations': return <SiteReservationsPage />;
+      case 'site-commandes':    return <SiteCommandesPage />;
+      case 'site-newsletter':   return <SiteNewsletterPage />;
+      case 'site-messages':     return <SiteMessagesPage />;
       default: return <InventoryDashboard />;
     }
   };

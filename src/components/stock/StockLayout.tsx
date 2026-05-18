@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard, ShoppingBag, ChevronRight, LogOut, Users, Shield, Menu, X, Globe } from 'lucide-react';
+import { Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard, ShoppingBag, ChevronRight, LogOut, Users, Shield, Menu, X, Globe, BarChart3, CalendarCheck, ShoppingCart, Mail, MessageSquare, ChevronDown } from 'lucide-react';
 import { APP_CONFIG } from '../../config/app.config';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
@@ -7,7 +7,9 @@ import { useAuth } from '../../stores/authStore';
 import { QuickActionBar } from './QuickActionBar';
 import { OfflineIndicator } from '../OfflineIndicator';
 
-export type PageId = 'dashboard' | 'products' | 'movements' | 'alerts' | 'reports' | 'settings' | 'users' | 'site';
+export type PageId =
+  | 'dashboard' | 'products' | 'movements' | 'alerts' | 'reports' | 'settings' | 'users'
+  | 'site' | 'site-dashboard' | 'site-reservations' | 'site-commandes' | 'site-newsletter' | 'site-messages';
 
 interface StockLayoutProps {
   children: React.ReactNode;
@@ -23,9 +25,12 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   viewer: { label: 'Lecteur', color: '#7c3aed' },
 };
 
+const SITE_PAGES: PageId[] = ['site-dashboard', 'site-reservations', 'site-commandes', 'site-newsletter', 'site-messages', 'site'];
+
 export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }: StockLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [siteOpen, setSiteOpen] = useState(() => SITE_PAGES.includes(activePage as PageId));
   const { user, logout, hasPermission } = useAuth();
 
   useEffect(() => {
@@ -47,8 +52,16 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
     { id: 'reports', label: 'Rapports', icon: FileText },
     { id: 'settings', label: 'Paramètres', icon: Settings },
     ...(hasPermission('manage_users') ? [{ id: 'users' as PageId, label: 'Utilisateurs', icon: Users }] : []),
-    ...(hasPermission('manage_users') ? [{ id: 'site' as PageId, label: 'Site Vitrine', icon: Globe }] : []),
   ];
+
+  const siteNavItems: { id: PageId; label: string; icon: typeof Package }[] = hasPermission('manage_users') ? [
+    { id: 'site-dashboard',    label: 'Dashboard',        icon: BarChart3 },
+    { id: 'site-reservations', label: 'Réservations',     icon: CalendarCheck },
+    { id: 'site-commandes',    label: 'Commandes',        icon: ShoppingCart },
+    { id: 'site-newsletter',   label: 'Newsletter',       icon: Mail },
+    { id: 'site-messages',     label: 'Messages',         icon: MessageSquare },
+    { id: 'site',              label: 'Produits publiés', icon: Globe },
+  ] : [];
 
   const roleInfo = user ? ROLE_LABELS[user.role] : null;
 
@@ -127,12 +140,11 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+          <nav className="flex-1 px-2 py-3 overflow-y-auto space-y-0.5">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = activePage === item.id;
               const showBadge = item.id === 'alerts' && alertCount > 0;
-
               return (
                 <button
                   key={item.id}
@@ -152,15 +164,47 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
                       </span>
                     )}
                   </div>
-                  {!isCollapsed && (
-                    <span className="font-medium truncate">{item.label}</span>
-                  )}
-                  {isActive && !isCollapsed && (
-                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-                  )}
+                  {!isCollapsed && <span className="font-medium truncate">{item.label}</span>}
+                  {isActive && !isCollapsed && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
                 </button>
               );
             })}
+
+            {/* ── Section Site Web ── */}
+            {siteNavItems.length > 0 && (
+              <div className="pt-3">
+                {!isCollapsed && (
+                  <button
+                    onClick={() => setSiteOpen(o => !o)}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-green-400/60 hover:text-green-300 transition-colors"
+                  >
+                    <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="text-[10px] font-semibold uppercase tracking-widest flex-1 text-left">Site Web</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${siteOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+                {(siteOpen || isCollapsed) && siteNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activePage === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => { handleNavigate(item.id); setSiteOpen(true); }}
+                      title={isCollapsed ? item.label : undefined}
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-sm ${
+                        isActive
+                          ? 'bg-green-400/20 text-green-100 shadow-sm border border-green-400/30'
+                          : 'text-green-200/80 hover:bg-green-700/50 hover:text-green-100'
+                      } ${!isCollapsed ? 'pl-5' : ''}`}
+                    >
+                      <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-green-300' : ''}`} />
+                      {!isCollapsed && <span className="font-medium truncate">{item.label}</span>}
+                      {isActive && !isCollapsed && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </nav>
 
           {/* User Section */}
