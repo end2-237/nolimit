@@ -45,9 +45,9 @@ function Booking({ open, onClose, prefilled }) {
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       animation: 'fadeIn .35s ease',
     }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        width: 'min(1240px, 96vw)',
-        height: 'min(820px, 92vh)',
+      <div onClick={(e) => e.stopPropagation()} className="booking-modal" style={{
+        width: 'min(1240px, 100vw)',
+        height: 'min(820px, 96vh)',
         background: 'var(--cream)',
         borderRadius: '24px 24px 0 0',
         overflow: 'hidden',
@@ -57,9 +57,9 @@ function Booking({ open, onClose, prefilled }) {
         animation: 'slideUp .55s cubic-bezier(.2,.7,.2,1)',
       }}>
         {/* Header */}
-        <div style={{ padding: '28px 40px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: 'clamp(18px,3vw,28px) clamp(18px,4vw,40px) 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Logo color="var(--ink)" />
-          <span style={{ fontFamily: 'var(--sans)', fontSize: 13, letterSpacing: '0.06em', color: 'var(--muted)' }}>
+          <span style={{ fontFamily: 'var(--sans)', fontSize: 13, letterSpacing: '0.06em', color: 'var(--muted)' }} className="booking-title-label">
             Réservation
           </span>
           <button onClick={onClose} aria-label="Fermer" style={{ width: 44, height: 44, borderRadius: '50%', border: '1px solid rgba(26,26,26,0.18)' }}>
@@ -68,25 +68,26 @@ function Booking({ open, onClose, prefilled }) {
         </div>
 
         {/* Progress */}
-        <div style={{ padding: '32px 40px 0' }}>
-          <div style={{ display: 'flex', gap: 0, alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: 'clamp(18px,3vw,32px) clamp(18px,4vw,40px) 0' }}>
+          {/* Dot-only progress on mobile, full labels on desktop */}
+          <div className="booking-progress-full" style={{ display: 'flex', gap: 0, alignItems: 'center', justifyContent: 'space-between' }}>
             {BOOKING_STEPS.map((s, i) => (
-              <div key={s} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div key={s} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{
                   width: 28, height: 28, borderRadius: '50%',
-                  border: '1px solid', borderColor: i <= step ? 'var(--ink)' : 'rgba(26,26,26,0.25)',
+                  border: '1px solid',
                   background: i < step ? 'var(--ink)' : (i === step ? 'var(--terracotta)' : 'transparent'),
                   color: i <= step ? 'var(--cream)' : 'var(--muted)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500,
-                  transition: 'all .35s',
+                  transition: 'all .35s', flexShrink: 0,
                   borderColor: i === step ? 'var(--terracotta)' : (i < step ? 'var(--ink)' : 'rgba(26,26,26,0.25)'),
                 }}>
                   {i < step ? '✓' : (i + 1)}
                 </span>
-                <span style={{ fontFamily: 'var(--sans)', fontSize: 13, letterSpacing: '0.04em', color: i <= step ? 'var(--ink)' : 'var(--muted)', flex: 1 }}>{s}</span>
+                <span className="booking-step-label" style={{ fontFamily: 'var(--sans)', fontSize: 13, letterSpacing: '0.04em', color: i <= step ? 'var(--ink)' : 'var(--muted)', flex: 1 }}>{s}</span>
                 {i < BOOKING_STEPS.length - 1 && (
-                  <span style={{ flex: 1, height: 1, background: 'rgba(26,26,26,0.15)', position: 'relative', maxWidth: 60 }}>
+                  <span style={{ flex: 1, height: 1, background: 'rgba(26,26,26,0.15)', position: 'relative', maxWidth: 40 }}>
                     <span style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: i < step ? '100%' : '0%', background: 'var(--ink)', transition: 'width .5s' }} />
                   </span>
                 )}
@@ -104,7 +105,7 @@ function Booking({ open, onClose, prefilled }) {
               key={step}
               style={{
                 position: 'absolute', inset: 0,
-                padding: '40px 40px 0',
+                padding: 'clamp(18px,3vw,40px) clamp(18px,4vw,40px) 0',
                 overflow: 'auto',
                 animation: `slide${direction > 0 ? 'In' : 'InBack'} .5s cubic-bezier(.2,.7,.2,1)`,
               }}
@@ -120,7 +121,7 @@ function Booking({ open, onClose, prefilled }) {
 
         {/* Footer */}
         {!done && (
-          <div style={{ padding: '24px 40px', borderTop: '1px solid rgba(26,26,26,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--cream-warm)' }}>
+          <div style={{ padding: 'clamp(16px,2.5vw,24px) clamp(18px,4vw,40px)', borderTop: '1px solid rgba(26,26,26,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--cream-warm)' }}>
             <button onClick={prev} disabled={step === 0} style={{ fontSize: 13, color: step === 0 ? 'rgba(26,26,26,0.3)' : 'var(--ink-soft)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <svg width="14" height="10" viewBox="0 0 14 10" style={{ transform: 'rotate(180deg)' }}><path d="M1 5H13M9 1L13 5L9 9" stroke="currentColor" strokeWidth="1.2" fill="none" /></svg>
               Précédent
@@ -144,6 +145,18 @@ function Booking({ open, onClose, prefilled }) {
       <style>{`
         @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes slideInBack { from { transform: translateX(-40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @media (max-width: 600px) {
+          .booking-step-label { display: none !important; }
+          .booking-title-label { display: none !important; }
+          .step-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+          .date-grid { grid-template-columns: repeat(3, 1fr) !important; }
+          .slot-grid { grid-template-columns: repeat(3, 1fr) !important; }
+          .step-grid-2 { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 400px) {
+          .date-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .slot-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
       `}</style>
     </div>
   );

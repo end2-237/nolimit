@@ -26,7 +26,7 @@ function Services({ onBook }) {
   const filtered = cat === 'Tous' ? SERVICES : SERVICES.filter(s => s.cat === cat);
 
   return (
-    <section id="soins" style={{ padding: '160px 0', borderTop: '1px solid rgba(26,26,26,0.08)' }}>
+    <section id="soins" style={{ padding: 'var(--sec-pad) 0', borderTop: '1px solid rgba(26,26,26,0.08)' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 60 }}>
           <div>

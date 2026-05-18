@@ -30,9 +30,9 @@ function Hero({ onBook }) {
 
       <div className="container" style={{ position: 'relative', zIndex: 2, minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingTop: 140, paddingBottom: 60 }}>
         {/* top eyebrow */}
-        <div style={{ position: 'absolute', top: 110, left: '4vw', right: '4vw', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, color: 'rgba(245,241,234,0.78)', fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 15, fontWeight: 300 }}>
+        <div className="hero-eyebrow" style={{ position: 'absolute', top: 'clamp(80px, 12vh, 130px)', left: '4vw', right: '4vw', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, color: 'rgba(245,241,234,0.78)', fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'clamp(13px, 1.2vw, 15px)', fontWeight: 300, flexWrap: 'wrap' }}>
           <span>— Médecine naturelle · Cameroun</span>
-          <span>Douala · Yaoundé · Bafoussam</span>
+          <span className="hero-eyebrow-cities">Douala · Yaoundé · Bafoussam</span>
         </div>
 
         <div style={{ maxWidth: 1100 }}>
@@ -79,9 +79,9 @@ function Hero({ onBook }) {
         </div>
 
         {/* Bottom row */}
-        <div style={{ marginTop: 80, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 24, color: 'rgba(245,241,234,0.7)' }}>
+        <div style={{ marginTop: 'clamp(40px, 6vh, 80px)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 24, color: 'rgba(245,241,234,0.7)' }}>
           <ScrollHint />
-          <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap' }}>
+          <div className="hero-stats" style={{ display: 'flex', gap: 'clamp(24px, 4vw, 48px)', flexWrap: 'wrap' }}>
             <HeroStat n="3" label="Centres · Cameroun" />
             <HeroStat n="32" label="Praticiens diplômés" />
             <HeroStat n="11 400+" label="Patients accompagnés" />
@@ -157,3 +157,4 @@ function FoliageLayer({ scrollY, opacity = 0.5, hue = 70, offset = 0, blur = 0, 
 }
 
 Object.assign(window, { Hero });
+// Hero responsive styles injected globally — avoid component-scoped duplication

@@ -22,7 +22,7 @@ function Galerie() {
   const filtered = theme === 'Tout' ? GALERIE_PHOTOS : GALERIE_PHOTOS.filter(p => p.theme === theme);
 
   return (
-    <section id="galerie" style={{ padding: '160px 0', background: 'var(--cream-warm)' }}>
+    <section id="galerie" style={{ padding: 'var(--sec-pad) 0', background: 'var(--cream-warm)' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 50 }}>
           <div>
@@ -80,6 +80,7 @@ function Galerie() {
       <style>{`
         @media (max-width: 900px) { .gal-grid { grid-template-columns: repeat(2, 1fr) !important; grid-auto-rows: 220px !important; }
           .gal-grid .gal-item { grid-column: span 1 !important; grid-row: span 1 !important; } }
+        @media (max-width: 480px) { .gal-grid { grid-template-columns: 1fr !important; grid-auto-rows: 280px !important; } }
       `}</style>
     </section>
   );

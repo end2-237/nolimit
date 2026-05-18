@@ -241,7 +241,7 @@ function Boutique() {
   const cartCount = cart.reduce((s, x) => s + x.qty, 0);
 
   return (
-    <section id="boutique" style={{ padding: '160px 0', borderTop: '1px solid rgba(26,26,26,0.08)' }}>
+    <section id="boutique" style={{ padding: 'var(--sec-pad) 0', borderTop: '1px solid rgba(26,26,26,0.08)' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 60 }}>
           <div>
@@ -261,42 +261,43 @@ function Boutique() {
 
         {/* Toolbar */}
         <Reveal>
-          <div style={{
+          <div className="shop-toolbar" style={{
             position: 'sticky', top: 70, zIndex: 30,
             background: 'rgba(245,241,234,0.92)',
             backdropFilter: 'blur(14px)',
             borderTop: '1px solid rgba(26,26,26,0.08)',
             borderBottom: '1px solid rgba(26,26,26,0.08)',
-            padding: '18px 0',
+            padding: '14px 0',
             margin: '0 -24px 40px',
             paddingLeft: 24, paddingRight: 24,
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 20, flexWrap: 'wrap',
           }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {/* Row 1: category tags (scrollable) */}
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 10, WebkitOverflowScrolling: 'touch' }} className="shop-cats-row">
               {SHOP_CATS.map(c => (
-                <button key={c.id} className={`tag ${cat === c.id ? 'active' : ''}`} onClick={() => setCat(c.id)}>
+                <button key={c.id} className={`tag ${cat === c.id ? 'active' : ''}`} onClick={() => setCat(c.id)} style={{ flexShrink: 0 }}>
                   {c.label}
                   <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.55 }}>{c.count}</span>
                 </button>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 999, border: '1px solid rgba(26,26,26,0.15)', background: 'var(--cream)' }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" style={{ opacity: 0.6 }}><circle cx="6" cy="6" r="4.5" stroke="currentColor" fill="none" /><path d="M9.5 9.5L13 13" stroke="currentColor" strokeLinecap="round" /></svg>
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher" style={{ background: 'transparent', border: 'none', outline: 'none', fontFamily: 'var(--sans)', fontSize: 13, width: 130 }} />
+            {/* Row 2: search + sort + cart */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 999, border: '1px solid rgba(26,26,26,0.15)', background: 'var(--cream)', flex: 1, minWidth: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" style={{ opacity: 0.6, flexShrink: 0 }}><circle cx="6" cy="6" r="4.5" stroke="currentColor" fill="none" /><path d="M9.5 9.5L13 13" stroke="currentColor" strokeLinecap="round" /></svg>
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher" style={{ background: 'transparent', border: 'none', outline: 'none', fontFamily: 'var(--sans)', fontSize: 13, width: '100%', minWidth: 0 }} />
               </div>
               <select value={sort} onChange={(e) => setSort(e.target.value)} style={{
                 padding: '10px 14px', borderRadius: 999, border: '1px solid rgba(26,26,26,0.15)',
-                background: 'var(--cream)', fontFamily: 'var(--sans)', fontSize: 13, outline: 'none', cursor: 'pointer',
-              }}>
-                <option value="default">Trier : sélection</option>
-                <option value="priceAsc">Prix croissant</option>
-                <option value="priceDesc">Prix décroissant</option>
+                background: 'var(--cream)', fontFamily: 'var(--sans)', fontSize: 13, outline: 'none', cursor: 'pointer', flexShrink: 0,
+              }} className="shop-sort">
+                <option value="default">Trier</option>
+                <option value="priceAsc">Prix ↑</option>
+                <option value="priceDesc">Prix ↓</option>
                 <option value="new">Nouveautés</option>
               </select>
               <button onClick={() => setCartOpen(true)} aria-label="Panier" style={{
                 position: 'relative', width: 44, height: 44, borderRadius: '50%',
-                border: '1px solid rgba(26,26,26,0.15)', background: 'var(--cream)',
+                border: '1px solid rgba(26,26,26,0.15)', background: 'var(--cream)', flexShrink: 0,
               }}>
                 <svg width="16" height="16" viewBox="0 0 16 16" style={{ display: 'block', margin: 'auto' }}>
                   <path d="M3 4H13L12 12H4L3 4Z M3 4L2 1H0.5" stroke="currentColor" fill="none" strokeWidth="1.1" strokeLinejoin="round" />
@@ -351,6 +352,13 @@ function Boutique() {
         @media (max-width: 1100px) { .shop-grid { grid-template-columns: repeat(3, 1fr) !important; } }
         @media (max-width: 780px)  { .shop-grid { grid-template-columns: repeat(2, 1fr) !important; } }
         @media (max-width: 480px)  { .shop-grid { grid-template-columns: 1fr !important; } }
+        .shop-cats-row::-webkit-scrollbar { display: none; }
+        .shop-cats-row { scrollbar-width: none; }
+        @media (min-width: 900px) {
+          .shop-toolbar { display: block !important; }
+          .shop-cats-row { overflow-x: visible; flex-wrap: wrap; padding-bottom: 0; }
+        }
+        @media (max-width: 480px) { .shop-sort { display: none !important; } }
       `}</style>
     </section>
   );

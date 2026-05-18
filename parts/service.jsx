@@ -1,7 +1,7 @@
 // Service — livraison · retours · support client
 function Service() {
   return (
-    <section id="service" style={{ padding: '160px 0', background: 'var(--ink)', color: 'var(--cream)' }}>
+    <section id="service" style={{ padding: 'var(--sec-pad) 0', background: 'var(--ink)', color: 'var(--cream)' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 80 }}>
           <div>

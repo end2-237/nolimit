@@ -1,7 +1,7 @@
 // Manifeste / Philosophie — large editorial quote + 2-col text
 function Manifeste() {
   return (
-    <section id="philosophie" style={{ padding: 'clamp(100px, 14vw, 200px) 0', background: 'var(--cream)' }}>
+    <section id="philosophie" style={{ padding: 'var(--sec-pad) 0', background: 'var(--cream)' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 80, flexWrap: 'wrap', gap: 20 }}>
           <Reveal>
@@ -108,6 +108,9 @@ function Manifeste() {
           .manifeste-grid { grid-template-columns: 1fr !important; }
           .principles-row { grid-template-columns: repeat(2, 1fr) !important; }
           .principles-row > div { border-left: none !important; border-top: 1px solid rgba(26,26,26,0.12); }
+        }
+        @media (max-width: 480px) {
+          .principles-row { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </section>

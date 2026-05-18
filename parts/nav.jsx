@@ -170,6 +170,10 @@ function Nav({ onBook }) {
           .nav-desktop { display: none !important; }
           .burger { display: inline-flex !important; }
         }
+        @media (min-width: 901px) and (max-width: 1100px) {
+          .nav-desktop { gap: 22px !important; }
+          .nav-desktop a { font-size: 12px !important; }
+        }
       `}</style>
     </>
   );

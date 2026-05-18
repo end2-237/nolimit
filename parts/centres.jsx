@@ -58,7 +58,7 @@ function Centres() {
   const c = CENTRES.find(x => x.id === active);
 
   return (
-    <section id="centres" style={{ padding: '160px 0', background: 'var(--cream)' }}>
+    <section id="centres" style={{ padding: 'var(--sec-pad) 0', background: 'var(--cream)' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 60 }}>
           <div>
@@ -78,7 +78,7 @@ function Centres() {
 
         {/* City tabs */}
         <Reveal>
-          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(26,26,26,0.15)', marginBottom: 50, overflowX: 'auto' }}>
+          <div className="centre-tabs" style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(26,26,26,0.15)', marginBottom: 50, overflowX: 'auto' }}>
             {CENTRES.map(ce => (
               <button
                 key={ce.id}
@@ -188,6 +188,9 @@ function Centres() {
         @keyframes tabSlide { from { transform: scaleX(0); transform-origin: left; } to { transform: scaleX(1); } }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @media (max-width: 900px) { .centre-grid { grid-template-columns: 1fr !important; } }
+        @media (max-width: 600px) {
+          .centre-tabs button { padding: 18px 20px 16px !important; font-size: clamp(18px,5vw,26px) !important; }
+        }
       `}</style>
     </section>
   );

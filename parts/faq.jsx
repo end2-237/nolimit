@@ -15,7 +15,7 @@ const FAQS = [
 function FAQ() {
   const [open, setOpen] = useState(0);
   return (
-    <section style={{ padding: '160px 0', background: 'var(--cream-warm)' }}>
+    <section style={{ padding: 'var(--sec-pad) 0', background: 'var(--cream-warm)' }}>
       <div className="container">
         <div style={{ display: 'grid', gridTemplateColumns: '4fr 8fr', gap: 80 }} className="faq-grid">
           <div>

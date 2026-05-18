@@ -11,7 +11,7 @@ const TEAM = [
 function Equipe() {
   const [open, setOpen] = useState(null);
   return (
-    <section id="equipe" style={{ padding: '160px 0', background: 'var(--ink)', color: 'var(--cream)' }}>
+    <section id="equipe" style={{ padding: 'var(--sec-pad) 0', background: 'var(--ink)', color: 'var(--cream)' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 80 }}>
           <div>
@@ -49,7 +49,7 @@ function Equipe() {
 
       <style>{`
         @media (max-width: 1000px) { .team-grid { grid-template-columns: repeat(2, 1fr) !important; } }
-        @media (max-width: 600px)  { .team-grid { grid-template-columns: 1fr !important; } }
+        @media (max-width: 480px)  { .team-grid { grid-template-columns: 1fr !important; } }
       `}</style>
     </section>
   );

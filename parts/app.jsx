@@ -50,9 +50,9 @@ function App() {
       <Footer />
 
       {/* Floating actions: scroll-to-top + book */}
-      <div style={{
+      <div className="floating-actions" style={{
         position: 'fixed',
-        bottom: 28, right: 28,
+        bottom: 'clamp(16px,3vw,28px)', right: 'clamp(16px,3vw,28px)',
         zIndex: 80,
         display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end',
         transform: y > 600 ? 'translateY(0)' : 'translateY(120px)',
@@ -132,6 +132,9 @@ function App() {
 
       <style>{`
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        @media (max-width: 480px) {
+          .floating-actions .btn-primary span:not([style*="border-radius: 50%"]) { display: none; }
+        }
       `}</style>
     </>
   );

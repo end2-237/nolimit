@@ -7,7 +7,7 @@ const ARTICLES = [
 
 function Journal() {
   return (
-    <section id="journal" style={{ padding: '160px 0' }}>
+    <section id="journal" style={{ padding: 'var(--sec-pad) 0' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 60 }}>
           <div>

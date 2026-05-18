@@ -43,7 +43,10 @@ function Footer() {
           </span>
         </div>
       </div>
-      <style>{`@media (max-width: 800px) { .footer-grid { grid-template-columns: repeat(2, 1fr) !important; } }`}</style>
+      <style>{`
+        @media (max-width: 800px) { .footer-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+        @media (max-width: 480px) { .footer-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
     </footer>
   );
 }

@@ -13,7 +13,7 @@ const LIEU_IMAGES = [
 function Lieu() {
   const [open, setOpen] = useState(null);
   return (
-    <section id="lieu" style={{ padding: '160px 0' }}>
+    <section id="lieu" style={{ padding: 'var(--sec-pad) 0' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 80 }}>
           <div>
@@ -51,6 +51,9 @@ function Lieu() {
         @media (max-width: 900px) {
           .mosaic { grid-template-columns: repeat(2, 1fr) !important; grid-auto-rows: 200px !important; }
           .mosaic .mosaic-item { grid-column: span 1 !important; grid-row: span 1 !important; }
+        }
+        @media (max-width: 480px) {
+          .mosaic { grid-template-columns: 1fr !important; grid-auto-rows: 240px !important; }
         }
       `}</style>
     </section>

@@ -13,7 +13,7 @@ function Temoignages() {
   const [i, setI] = useState(0);
   const t = TESTIMONIALS[i];
   return (
-    <section style={{ padding: '160px 0', background: 'var(--cream-warm)' }}>
+    <section style={{ padding: 'var(--sec-pad) 0', background: 'var(--cream-warm)' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 60 }}>
           <div>

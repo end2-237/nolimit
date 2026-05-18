@@ -3,7 +3,7 @@ function Newsletter() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   return (
-    <section style={{ position: 'relative', padding: '140px 0', color: 'var(--cream)', overflow: 'hidden' }}>
+    <section style={{ position: 'relative', padding: 'var(--sec-pad) 0', color: 'var(--cream)', overflow: 'hidden' }}>
       {/* Bg */}
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(110% 90% at 70% 40%, #4a5e48 0%, #2c3a2b 50%, #161a14 100%)' }} />
       {/* soft sage shape */}
@@ -33,19 +33,21 @@ function Newsletter() {
             <p style={{ fontSize: 17, lineHeight: 1.7, color: 'rgba(245,241,234,0.78)', maxWidth: 460 }}>
               Une lettre trimestrielle, sobre et utile. Pas plus de quatre envois par an. Désinscription en un clic.
             </p>
-            <form onSubmit={(e) => { e.preventDefault(); if (email) setSent(true); }} style={{ marginTop: 32, display: 'flex', gap: 0, borderBottom: '1px solid rgba(245,241,234,0.4)', maxWidth: 540 }}>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="votre@email.fr"
-                style={{
-                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                  padding: '20px 0', fontFamily: 'var(--sans)', fontSize: 18,
-                  color: 'var(--cream)',
-                }}
-              />
-              <button className="btn btn-primary" type="submit" style={{ alignSelf: 'center', marginBottom: 12 }}>
+            <form onSubmit={(e) => { e.preventDefault(); if (email) setSent(true); }} style={{ marginTop: 32, maxWidth: 540 }} className="newsletter-form">
+              <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(245,241,234,0.4)' }}>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="votre@email.fr"
+                  style={{
+                    flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                    padding: '20px 0', fontFamily: 'var(--sans)', fontSize: 'clamp(15px,1.2vw,18px)',
+                    color: 'var(--cream)', minWidth: 0,
+                  }}
+                />
+              </div>
+              <button className="btn btn-primary" type="submit" style={{ marginTop: 16, width: '100%' }}>
                 {sent ? 'Bienvenue ✓' : 'Rejoindre le cercle'} {!sent && <Arrow />}
               </button>
             </form>

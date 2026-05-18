@@ -5,7 +5,7 @@ function Contact() {
   const [city, setCity] = useState('douala');
 
   return (
-    <section id="contact" style={{ padding: '160px 0' }}>
+    <section id="contact" style={{ padding: 'var(--sec-pad) 0' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 40, marginBottom: 80 }}>
           <div>
@@ -30,7 +30,7 @@ function Contact() {
           <Reveal delay={100}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%' }}>
               {/* City cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              <div className="city-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                 {CENTRES.map(c => (
                   <button
                     key={c.id}
@@ -105,11 +105,11 @@ function Contact() {
         </div>
 
         {/* Socials */}
-        <div style={{ marginTop: 80, paddingTop: 32, borderTop: '1px solid rgba(26,26,26,0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
+        <div style={{ marginTop: 'clamp(40px,6vw,80px)', paddingTop: 32, borderTop: '1px solid rgba(26,26,26,0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
           <span className="eyebrow">Suivez No Limit Cameroun</span>
-          <div style={{ display: 'flex', gap: 24 }}>
+          <div style={{ display: 'flex', gap: 'clamp(14px,3vw,24px)', flexWrap: 'wrap' }}>
             {['Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'WhatsApp'].map((s) => (
-              <a key={s} href="#" className="social" style={{ fontFamily: 'var(--serif)', fontSize: 22, letterSpacing: '-0.01em', position: 'relative', display: 'inline-block', overflow: 'hidden', paddingBottom: 2 }}>
+              <a key={s} href="#" className="social" style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(16px,2vw,22px)', letterSpacing: '-0.01em', position: 'relative', display: 'inline-block', overflow: 'hidden', paddingBottom: 2 }}>
                 {s}
               </a>
             ))}
@@ -121,6 +121,7 @@ function Contact() {
         @media (max-width: 900px) { .contact-grid { grid-template-columns: 1fr !important; }
           .info-strip { grid-template-columns: 1fr !important; }
         }
+        @media (max-width: 600px) { .city-cards { grid-template-columns: 1fr !important; } }
         .social { transition: color .3s ease; }
         .social::after { content: ''; position: absolute; left: 0; bottom: 0; width: 0; height: 1px; background: currentColor; transition: width .4s cubic-bezier(.2,.7,.2,1); }
         .social:hover { color: var(--terracotta); }
