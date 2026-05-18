@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(url, key, {
-  db: { schema: 'nolimit' },
-});
+function getClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { db: { schema: 'nolimit' } });
+}
 
 export interface PublishedProduct {
   id: number;
@@ -21,7 +21,10 @@ export interface PublishedProduct {
 }
 
 export async function fetchPublishedProducts(): Promise<PublishedProduct[]> {
-  const { data, error } = await supabase
+  const client = getClient();
+  if (!client) return [];
+
+  const { data, error } = await client
     .from('products')
     .select('id, name, sku, category, sub_type, description, unit, price, image_url, barcode')
     .eq('is_published', true)
