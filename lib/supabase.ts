@@ -1,11 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-
-function getClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { db: { schema: 'nolimit' } });
-}
+// PostgREST direct — pas de Kong gateway dans cette config
+// NEXT_PUBLIC_SUPABASE_URL = https://rest.vps.buyticle.com  (PostgREST root)
+// NEXT_PUBLIC_SUPABASE_ANON_KEY = JWT anon key
 
 export interface PublishedProduct {
   id: number;
@@ -21,18 +16,35 @@ export interface PublishedProduct {
 }
 
 export async function fetchPublishedProducts(): Promise<PublishedProduct[]> {
-  const client = getClient();
-  if (!client) return [];
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const { data, error } = await client
-    .from('products')
-    .select('id, name, sku, category, sub_type, description, unit, price, image_url, barcode')
-    .eq('is_published', true)
-    .order('name');
+  if (!base || !key) return [];
 
-  if (error) {
-    console.error('Failed to fetch published products:', error.message);
+  const url =
+    `${base}/products` +
+    `?is_published=eq.true` +
+    `&select=id,name,sku,category,sub_type,description,unit,price,image_url,barcode` +
+    `&order=name`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'apikey': key,
+        'Accept-Profile': 'nolimit',   // schéma PostgreSQL cible
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      console.error('fetchPublishedProducts error:', res.status, await res.text());
+      return [];
+    }
+
+    return res.json();
+  } catch (err) {
+    console.error('fetchPublishedProducts network error:', err);
     return [];
   }
-  return data ?? [];
 }
