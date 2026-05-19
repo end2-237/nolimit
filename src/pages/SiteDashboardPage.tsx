@@ -160,7 +160,7 @@ function SitePreviewBanner({ onNavigate }: { onNavigate: (p: PageId) => void }) 
         }}>
           <Wifi size={11} color="#22C55E" />
           <span style={{ fontSize: 11, color: '#475569', fontFamily: "'JetBrains Mono', monospace", flex: 1 }}>
-            nolimit.cm
+            {APP_CONFIG.company.displayDomain}
           </span>
           <span style={{ fontSize: 9, fontWeight: 700, background: '#DCFCE7', color: '#166534', padding: '1px 6px', borderRadius: 99 }}>
             HTTPS
@@ -222,7 +222,7 @@ function SitePreviewBanner({ onNavigate }: { onNavigate: (p: PageId) => void }) 
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80', display: 'inline-block' }} />
-                <span style={{ fontSize: 11, color: 'rgba(187,247,208,0.70)' }}>En ligne · nolimit.cm</span>
+                <span style={{ fontSize: 11, color: 'rgba(187,247,208,0.70)' }}>En ligne · {APP_CONFIG.company.displayDomain}</span>
               </div>
             </div>
           </div>

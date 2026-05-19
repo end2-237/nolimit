@@ -456,7 +456,7 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(37,99,235,0.15)'; e.currentTarget.style.color = '#93C5FD'; }}
           >
             <Globe size={10} />
-            nolimit.cm
+            {APP_CONFIG.company.displayDomain}
           </button>
 
           {/* Sep */}

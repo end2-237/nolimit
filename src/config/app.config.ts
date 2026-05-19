@@ -7,7 +7,9 @@ export const APP_CONFIG = {
   description: 'Système de gestion de stock multi-sites',
   company: {
     name: 'No Limit Enterprise',
-    website: 'https://nolimit.cm',
+    website: 'https://nolimit.vps.buyticle.com', // URL active (VPS)
+    futureWebsite: 'https://nolimit.cm',          // domaine futur (en cours d'enregistrement)
+    displayDomain: 'nolimit.cm',                  // nom court affiché dans l'UI
     email: 'contact@nolimit.cm',
     phone: '+237 6XX XXX XXX',
     logo: logoUrl,
