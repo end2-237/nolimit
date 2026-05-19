@@ -6,6 +6,8 @@ import { Reveal, Arrow } from './Reveal';
 export function Newsletter() {
   const [email, setEmail] = useState('');
   const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   return (
     <section style={{ padding: 'var(--sec-pad) 0', background: 'var(--ink)', color: 'var(--cream)' }}>
@@ -31,11 +33,34 @@ export function Newsletter() {
               <p style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 24, color: 'var(--sage-light)' }}>Bienvenue dans le cercle.</p>
             </div>
           ) : (
-            <form onSubmit={async (e) => { e.preventDefault(); if (!email) return; try { await fetch('/api/newsletter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); } catch {} setDone(true); }} style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 320 }}>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!email) return;
+              setLoading(true);
+              setError('');
+              try {
+                const res = await fetch('/api/newsletter', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email }),
+                });
+                if (!res.ok) {
+                  const data = await res.json().catch(() => ({}));
+                  setError(data.error || `Erreur ${res.status}`);
+                  return;
+                }
+                setDone(true);
+              } catch {
+                setError('Impossible de joindre le serveur.');
+              } finally {
+                setLoading(false);
+              }
+            }} style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 320 }}>
               <input value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="votre@email.com"
                 style={{ padding: '18px 24px', borderRadius: 999, border: '1px solid rgba(245,241,234,0.25)', background: 'rgba(245,241,234,0.08)', color: 'var(--cream)', fontFamily: 'var(--sans)', fontSize: 15, outline: 'none' }} />
-              <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center' }}>
-                Rejoindre la lettre <Arrow />
+              {error && <p style={{ fontSize: 12, color: '#fca5a5', textAlign: 'center' }}>⚠️ {error}</p>}
+              <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center' }} disabled={loading}>
+                {loading ? 'Envoi…' : <> Rejoindre la lettre <Arrow /> </>}
               </button>
               <p style={{ fontSize: 11, color: 'rgba(245,241,234,0.45)', textAlign: 'center' }}>Vos données ne sont jamais partagées.</p>
             </form>

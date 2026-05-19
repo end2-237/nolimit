@@ -10,6 +10,8 @@ export function Booking({ open, onClose, prefilled }: { open: boolean; onClose: 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({ service: prefilled || '', centre: '', date: '', time: '', name: '', phone: '', email: '', notes: '' });
   const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (prefilled) setForm(f => ({ ...f, service: prefilled }));
@@ -17,21 +19,32 @@ export function Booking({ open, onClose, prefilled }: { open: boolean; onClose: 
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
-    if (!open) { setStep(0); setDone(false); }
+    if (!open) { setStep(0); setDone(false); setError(''); }
   }, [open]);
 
   if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     try {
-      await fetch('/api/reservations', {
+      const res = await fetch('/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-    } catch {}
-    setDone(true);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || `Erreur ${res.status} — réessayez.`);
+        return;
+      }
+      setDone(true);
+    } catch {
+      setError('Impossible de joindre le serveur. Vérifiez votre connexion.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -119,6 +132,11 @@ export function Booking({ open, onClose, prefilled }: { open: boolean; onClose: 
               </div>
             )}
 
+            {error && (
+              <div style={{ marginTop: 16, padding: '12px 16px', borderRadius: 8, background: '#fee2e2', color: '#991b1b', fontSize: 13 }}>
+                ⚠️ {error}
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 32 }}>
               {step > 0 ? (
                 <button type="button" onClick={() => setStep(s => s - 1)} className="btn btn-outline">← Retour</button>
@@ -128,8 +146,8 @@ export function Booking({ open, onClose, prefilled }: { open: boolean; onClose: 
                   Continuer <Arrow />
                 </button>
               ) : (
-                <button type="submit" className="btn btn-primary">
-                  Confirmer la demande <Arrow />
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Envoi…' : <> Confirmer la demande <Arrow /> </>}
                 </button>
               )}
             </div>

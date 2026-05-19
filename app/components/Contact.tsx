@@ -19,22 +19,35 @@ function InfoCell({ label, lines }: { label: string; lines: string[] }) {
 }
 
 export function Contact() {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', city: 'Douala', type: 'Information', msg: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', city: 'Douala', type: 'Information', message: '' });
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [city, setCity] = useState('douala');
 
   const selectedCentre = CENTRES.find(x => x.id === city)!;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     try {
-      await fetch('/api/contact', {
+      const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-    } catch {}
-    setSent(true);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || `Erreur ${res.status} — réessayez.`);
+        return;
+      }
+      setSent(true);
+    } catch {
+      setError('Impossible de joindre le serveur. Vérifiez votre connexion.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -96,8 +109,15 @@ export function Contact() {
                   <option>Commande boutique</option>
                   <option>Partenariat</option>
                 </select>
-                <textarea value={form.msg} onChange={e => setForm(f => ({...f, msg: e.target.value}))} placeholder="Votre message" rows={5} required style={{ padding: '14px 18px', borderRadius: 8, border: '1px solid rgba(26,26,26,0.15)', background: 'var(--cream-warm)', fontSize: 14, outline: 'none', fontFamily: 'var(--sans)', resize: 'vertical' }} />
-                <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Envoyer le message</button>
+                <textarea value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} placeholder="Votre message" rows={5} required style={{ padding: '14px 18px', borderRadius: 8, border: '1px solid rgba(26,26,26,0.15)', background: 'var(--cream-warm)', fontSize: 14, outline: 'none', fontFamily: 'var(--sans)', resize: 'vertical' }} />
+                {error && (
+                  <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fee2e2', color: '#991b1b', fontSize: 13 }}>
+                    ⚠️ {error}
+                  </div>
+                )}
+                <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }} disabled={loading}>
+                  {loading ? 'Envoi…' : 'Envoyer le message'}
+                </button>
               </form>
             )}
           </Reveal>

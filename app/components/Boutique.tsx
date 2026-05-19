@@ -134,6 +134,7 @@ function CartDrawer({ open, onClose, cart, products, updateQty, onOrderDone }: {
   const [step, setStep] = useState<'cart' | 'checkout' | 'done'>('cart');
   const [form, setForm] = useState({ name: '', phone: '', email: '' });
   const [sending, setSending] = useState(false);
+  const [orderError, setOrderError] = useState('');
 
   const total = cart.reduce((s, x) => {
     const p = products.find(pr => pr.id === x.id);
@@ -143,17 +144,28 @@ function CartDrawer({ open, onClose, cart, products, updateQty, onOrderDone }: {
   const handleOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setSending(true);
+    setOrderError('');
     const items = cart.map(x => {
       const p = products.find(pr => pr.id === x.id);
       return { product_id: x.id, name: p?.name, qty: x.qty, price: p?.price };
     });
     try {
-      await fetch('/api/orders', {
+      const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items, total, customer_name: form.name, customer_phone: form.phone, customer_email: form.email }),
       });
-    } catch {}
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setOrderError(data.error || `Erreur ${res.status} — réessayez.`);
+        setSending(false);
+        return;
+      }
+    } catch {
+      setOrderError('Impossible de joindre le serveur. Vérifiez votre connexion.');
+      setSending(false);
+      return;
+    }
     setSending(false);
     setStep('done');
     onOrderDone();
@@ -195,6 +207,11 @@ function CartDrawer({ open, onClose, cart, products, updateQty, onOrderDone }: {
               <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="votre@email.com" style={inputStyle} />
             </div>
             <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {orderError && (
+                <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fee2e2', color: '#991b1b', fontSize: 13 }}>
+                  ⚠️ {orderError}
+                </div>
+              )}
               <button type="submit" disabled={sending} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', opacity: sending ? 0.7 : 1 }}>
                 {sending ? 'Envoi…' : 'Confirmer la commande'} <Arrow />
               </button>
