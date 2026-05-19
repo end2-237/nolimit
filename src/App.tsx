@@ -281,7 +281,7 @@ function AppInner() {
       case 'settings': return <SettingsPage />;
       case 'users': return <UsersPage />;
       case 'site':              return <SiteManagementPage />;
-      case 'site-dashboard':    return <SiteDashboardPage />;
+      case 'site-dashboard':    return <SiteDashboardPage onNavigate={setActivePage} />;
       case 'site-reservations': return <SiteReservationsPage />;
       case 'site-commandes':    return <SiteCommandesPage />;
       case 'site-newsletter':   return <SiteNewsletterPage />;
