@@ -1,23 +1,46 @@
 import { useState, useEffect } from 'react';
-import { Search, RefreshCw, ChevronDown } from 'lucide-react';
+import { Search, RefreshCw, CalendarCheck } from 'lucide-react';
 import { siteWebService, type Reservation } from '../services/siteWebService';
 
-const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  pending:   { label: 'En attente',  cls: 'bg-amber-100 text-amber-700' },
-  confirmed: { label: 'Confirmé',    cls: 'bg-green-100 text-green-700' },
-  cancelled: { label: 'Annulé',      cls: 'bg-red-100 text-red-700' },
+/* ── shared tokens ── */
+const P = '#6DB33F';
+
+const STATUS: Record<string, { label: string; bg: string; color: string }> = {
+  pending:   { label: 'En attente',  bg: '#FEF3C7', color: '#B45309' },
+  confirmed: { label: 'Confirmé',    bg: '#D1FAE5', color: '#065F46' },
+  cancelled: { label: 'Annulé',      bg: '#FEE2E2', color: '#991B1B' },
 };
 
-function fmt(d: string) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+function StatusBadge({ status }: { status: string }) {
+  const s = STATUS[status] ?? { label: status, bg: '#F3F4F6', color: '#374151' };
+  return (
+    <span style={{ background: s.bg, color: s.color, padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, display: 'inline-block', whiteSpace: 'nowrap' }}>
+      {s.label}
+    </span>
+  );
 }
 
+function fmtDate(d: string) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function fmtDateTime(d: string) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+const FILTERS = [
+  { id: 'all',       label: 'Tous' },
+  { id: 'pending',   label: 'En attente' },
+  { id: 'confirmed', label: 'Confirmés' },
+  { id: 'cancelled', label: 'Annulés' },
+];
+
 export function SiteReservationsPage() {
-  const [rows, setRows] = useState<Reservation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
+  const [rows, setRows]         = useState<Reservation[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState('');
+  const [filter, setFilter]     = useState('all');
   const [updating, setUpdating] = useState<number | null>(null);
 
   const load = () => {
@@ -28,88 +51,123 @@ export function SiteReservationsPage() {
 
   const filtered = rows.filter(r => {
     if (filter !== 'all' && r.status !== filter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return r.name?.toLowerCase().includes(q) || r.service?.toLowerCase().includes(q) || r.phone?.includes(q);
-    }
-    return true;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return r.name?.toLowerCase().includes(q) || r.service?.toLowerCase().includes(q) || r.phone?.includes(q);
   });
 
   const updateStatus = async (id: number, status: string) => {
     setUpdating(id);
     await siteWebService.updateReservation(id, status).catch(() => {});
-    setRows(r => r.map(x => x.id === id ? { ...x, status: status as any } : x));
+    setRows(prev => prev.map(x => x.id === id ? { ...x, status: status as Reservation['status'] } : x));
     setUpdating(null);
   };
 
+  const counts = {
+    all: rows.length,
+    pending: rows.filter(r => r.status === 'pending').length,
+    confirmed: rows.filter(r => r.status === 'confirmed').length,
+    cancelled: rows.filter(r => r.status === 'cancelled').length,
+  } as Record<string, number>;
+
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Réservations</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{rows.length} réservation(s) au total</p>
-        </div>
-        <button onClick={load} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Actualiser
-        </button>
-      </div>
+    <div style={{ minHeight: '100%', background: 'linear-gradient(150deg,#F0F9E6 0%,#F8FCF4 40%,#FBFDFB 100%)', padding: '22px 24px 40px' }}>
 
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Nom, service, téléphone…"
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30" />
-        </div>
-        {(['all', 'pending', 'confirmed', 'cancelled'] as const).map(s => (
-          <button key={s} onClick={() => setFilter(s)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${filter === s ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-            {s === 'all' ? 'Tout' : STATUS_LABELS[s].label}
+      {/* ── Page header ── */}
+      <div style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: '#8AAD6A', letterSpacing: '0.09em', textTransform: 'uppercase', marginBottom: 4 }}>
+          Gestion du site web
+        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CalendarCheck size={18} color="#065F46" />
+            </div>
+            <div>
+              <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1C2A14', lineHeight: 1.2 }}>Réservations</h1>
+              <p style={{ fontSize: 11, color: '#8AAD6A', marginTop: 2 }}>{rows.length} réservation{rows.length !== 1 ? 's' : ''} au total</p>
+            </div>
+          </div>
+          <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: 'white', border: '1px solid #D4EABC', fontSize: 12, color: '#5A8A38', cursor: 'pointer', fontWeight: 500, boxShadow: '0 1px 4px rgba(60,100,20,0.06)' }}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Actualiser
           </button>
-        ))}
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* ── Toolbar ── */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9BAF8A' }} />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Nom, service, téléphone…"
+            style={{ width: '100%', paddingLeft: 34, paddingRight: 12, paddingTop: 9, paddingBottom: 9, borderRadius: 10, border: '1px solid #D4EABC', fontSize: 12, outline: 'none', background: 'white', boxSizing: 'border-box', color: '#1C2A14' }}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {FILTERS.map(f => (
+            <button key={f.id} onClick={() => setFilter(f.id)}
+              style={{ padding: '7px 14px', borderRadius: 999, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all .2s',
+                background: filter === f.id ? P : 'white',
+                color: filter === f.id ? 'white' : '#6B7280',
+                boxShadow: filter === f.id ? `0 2px 8px rgba(109,179,63,0.35)` : '0 1px 4px rgba(0,0,0,0.06)',
+              }}>
+              {f.label}
+              {counts[f.id] > 0 && (
+                <span style={{ marginLeft: 5, background: filter === f.id ? 'rgba(255,255,255,0.25)' : '#F3F4F6', color: filter === f.id ? 'white' : '#6B7280', padding: '1px 6px', borderRadius: 999, fontSize: 10 }}>
+                  {counts[f.id]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Table ── */}
+      <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 1px 12px rgba(60,100,20,0.07)', overflow: 'hidden' }}>
         {loading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160 }}>
+            <div style={{ width: 28, height: 28, border: `2.5px solid ${P}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         ) : filtered.length === 0 ? (
-          <p className="text-center text-gray-400 py-16">Aucune réservation</p>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9BAF8A', fontSize: 13, fontStyle: 'italic' }}>
+            Aucune réservation{filter !== 'all' ? ' pour ce filtre' : ''}
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  {['#', 'Date', 'Client', 'Soin', 'Centre', 'Créneau', 'Statut', 'Action'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#F5FBF0', borderBottom: '1px solid #E8F5D5' }}>
+                  {['#', 'Reçue le', 'Client', 'Soin', 'Centre', 'Date RDV', 'Statut', 'Action'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 14px', fontSize: 10, fontWeight: 700, color: '#5A8A38', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map(r => (
-                  <tr key={r.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-400">#{r.id}</td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmt(r.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{r.name || '—'}</div>
-                      <div className="text-xs text-gray-400">{r.phone} {r.email && `· ${r.email}`}</div>
+              <tbody>
+                {filtered.map((r, i) => (
+                  <tr key={r.id} style={{ borderBottom: '1px solid #F5FBF0', background: i % 2 === 0 ? 'white' : '#FDFFFE' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#F8FCF4')}
+                    onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'white' : '#FDFFFE')}
+                  >
+                    <td style={{ padding: '10px 14px', color: '#9BAF8A', fontFamily: 'monospace', fontSize: 11 }}>#{r.id}</td>
+                    <td style={{ padding: '10px 14px', color: '#6B7280', whiteSpace: 'nowrap' }}>{fmtDateTime(r.created_at)}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <p style={{ fontWeight: 600, color: '#1C2A14' }}>{r.name || '—'}</p>
+                      <p style={{ fontSize: 10, color: '#9BAF8A', marginTop: 1 }}>{r.phone}{r.email ? ` · ${r.email}` : ''}</p>
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{r.service || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.centre || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '—'} {r.time_slot && `à ${r.time_slot}`}
+                    <td style={{ padding: '10px 14px', color: '#374151' }}>{r.service || '—'}</td>
+                    <td style={{ padding: '10px 14px', color: '#6B7280', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.centre || '—'}</td>
+                    <td style={{ padding: '10px 14px', color: '#6B7280', whiteSpace: 'nowrap' }}>
+                      {fmtDate(r.date)}{r.time_slot ? ` · ${r.time_slot}` : ''}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_LABELS[r.status]?.cls ?? 'bg-gray-100 text-gray-600'}`}>
-                        {STATUS_LABELS[r.status]?.label ?? r.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
+                    <td style={{ padding: '10px 14px' }}><StatusBadge status={r.status} /></td>
+                    <td style={{ padding: '10px 14px' }}>
                       <select
                         value={r.status}
                         disabled={updating === r.id}
                         onChange={e => updateStatus(r.id, e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                        style={{ fontSize: 11, border: '1px solid #D4EABC', borderRadius: 8, padding: '5px 8px', background: 'white', cursor: 'pointer', color: '#374151', outline: 'none' }}
                       >
                         <option value="pending">En attente</option>
                         <option value="confirmed">Confirmer</option>
