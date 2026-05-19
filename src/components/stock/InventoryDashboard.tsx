@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, RefreshCw, Package, AlertTriangle, Edit2, Trash2, ArrowUpDown, Truck, Clock, ShoppingCart } from 'lucide-react';
+import {
+  Search, Plus, RefreshCw, Package, Edit2, Trash2,
+  ArrowUpDown, Truck, ShoppingCart, AlertTriangle,
+  TrendingUp, Clock, ChevronUp, ChevronDown,
+} from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Badge } from '../ui/badge';
 import { db } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
 import { APP_CONFIG } from '../../config/app.config';
@@ -11,48 +12,134 @@ import { BulkInputModal, StockOutModal, TransportDamageModal } from './BulkInput
 import { TransferModal } from './TransferModal';
 import { ProductFormModal } from './ProductFormModal';
 import { PendingApprovalsPanel } from './PendingApprovalsPanel';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
-const categoryColors: Record<string, string> = {
-  plante: 'bg-emerald-100 text-emerald-700',
-  huile: 'bg-amber-100 text-amber-700',
-  complement_alimentaire: 'bg-cyan-100 text-cyan-700',
-  cosmetique: 'bg-pink-100 text-pink-700',
-  ampoule_buvable: 'bg-blue-100 text-blue-700',
-  poudre: 'bg-yellow-100 text-yellow-700',
-  creme: 'bg-rose-100 text-rose-700',
-  the: 'bg-teal-100 text-teal-700',
-  boisson: 'bg-orange-100 text-orange-700',
-  colis: 'bg-gray-100 text-gray-700',
-  materiel: 'bg-slate-100 text-slate-700',
-  test: 'bg-purple-100 text-purple-700',
+/* ── design tokens ──────────────────────────────────────────────── */
+const BDR     = '1px solid #E2E8F0';
+const T1      = '#0F172A';
+const T2      = '#64748B';
+const T3      = '#94A3B8';
+const ACCENT  = '#16A34A';
+const BG      = '#F1F5F9';
+const SURFACE = '#FFFFFF';
+
+const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
+  plante:               { bg: '#DCFCE7', text: '#166534' },
+  huile:                { bg: '#FEF3C7', text: '#92400E' },
+  complement_alimentaire:{ bg: '#CFFAFE', text: '#164E63' },
+  cosmetique:           { bg: '#FCE7F3', text: '#831843' },
+  ampoule_buvable:      { bg: '#DBEAFE', text: '#1E3A8A' },
+  poudre:               { bg: '#FEF9C3', text: '#713F12' },
+  creme:                { bg: '#FFE4E6', text: '#9F1239' },
+  the:                  { bg: '#CCFBF1', text: '#134E4A' },
+  boisson:              { bg: '#FFEDD5', text: '#7C2D12' },
+  colis:                { bg: '#F1F5F9', text: '#334155' },
+  materiel:             { bg: '#E2E8F0', text: '#1E293B' },
+  test:                 { bg: '#F3E8FF', text: '#4C1D95' },
 };
 
-function getCategoryLabel(id: string): string {
-  const cat = APP_CONFIG.categories.find(c => c.id === id);
-  return cat?.name || id;
+function getCategoryLabel(id: string) {
+  return APP_CONFIG.categories.find(c => c.id === id)?.name || id;
 }
 
+/* ── KPI tile ───────────────────────────────────────────────────── */
+function StatTile({
+  label, value, sub, accent = false, warning = false, danger = false, pulse = false,
+}: {
+  label: string; value: string | number; sub?: string;
+  accent?: boolean; warning?: boolean; danger?: boolean; pulse?: boolean;
+}) {
+  const color = danger ? '#DC2626' : warning ? '#D97706' : accent ? ACCENT : T1;
+  const dotBg = danger ? '#FEE2E2' : warning ? '#FEF3C7' : accent ? '#DCFCE7' : '#F1F5F9';
+  return (
+    <div
+      style={{
+        background: SURFACE, border: BDR, borderRadius: 10,
+        padding: '16px 18px',
+        animation: pulse ? 'pulse-border 2s ease-in-out infinite' : undefined,
+        borderColor: pulse ? '#FCD34D' : undefined,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          {label}
+        </span>
+        <div style={{ width: 7, height: 7, borderRadius: 99, background: dotBg, border: `1.5px solid ${color}20` }} />
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 11, color: T3, marginTop: 5, fontWeight: 500 }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Status badge ───────────────────────────────────────────────── */
+function StatusBadge({ label, pct }: { label: string; pct: number }) {
+  const configs = {
+    'Critique': { color: '#DC2626', bg: '#FEE2E2', dot: '#DC2626' },
+    'Alerte':   { color: '#D97706', bg: '#FEF3C7', dot: '#D97706' },
+    'OK':       { color: '#16A34A', bg: '#DCFCE7', dot: '#22C55E' },
+  };
+  const c = configs[label as keyof typeof configs] ?? configs['OK'];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 6, height: 6, borderRadius: 99, background: c.dot, flexShrink: 0 }} />
+      <div style={{ flex: 1, height: 3, background: '#F1F5F9', borderRadius: 99, overflow: 'hidden', width: 64 }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: c.dot, borderRadius: 99, transition: 'width 0.3s' }} />
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 600, color: c.color, minWidth: 42 }}>{label}</span>
+    </div>
+  );
+}
+
+/* ── Sort button ────────────────────────────────────────────────── */
+function SortBtn({ field, active, dir, onClick, children }: { field: string; active: boolean; dir: 'asc' | 'desc'; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+        fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+        color: active ? T1 : T3,
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
+      }}
+    >
+      {children}
+      {active
+        ? (dir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)
+        : <ArrowUpDown size={10} style={{ opacity: 0.5 }} />
+      }
+    </button>
+  );
+}
+
+/* ── Main component ─────────────────────────────────────────────── */
 export function InventoryDashboard() {
   const { getAllowedSites, hasPermission, user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
 
-  // Sites actifs (dynamiques)
-  const activeSites = db.getSites();
-  const allowedSites = getAllowedSites().filter(sid => activeSites.find(s => s.id === sid));
+  const activeSites   = db.getSites();
+  const allowedSites  = getAllowedSites().filter(sid => activeSites.find(s => s.id === sid));
 
-  const [selectedSite, setSelectedSite] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showBulkInput, setShowBulkInput] = useState(false);
-  const [showStockOut, setShowStockOut] = useState(false);
-  const [showTransfer, setShowTransfer] = useState(false);
-  const [showProductForm, setShowProductForm] = useState(false);
+  const [selectedSite, setSelectedSite]       = useState<string>('all');
+  const [searchQuery,  setSearchQuery]         = useState('');
+  const [showBulkInput, setShowBulkInput]      = useState(false);
+  const [showStockOut,  setShowStockOut]       = useState(false);
+  const [showTransfer,  setShowTransfer]       = useState(false);
+  const [showProductForm, setShowProductForm]  = useState(false);
   const [showTransportDamage, setShowTransportDamage] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [products, setProducts] = useState<any[]>([]);
-  const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
-  const [sortField, setSortField] = useState<string>('name');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [editingProduct, setEditingProduct]    = useState<any>(null);
+  const [selectedProduct, setSelectedProduct]  = useState<any>(null);
+  const [products,  setProducts]               = useState<any[]>([]);
+  const [stats, setStats]                      = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
+  const [sortField, setSortField]              = useState<string>('name');
+  const [sortDir,   setSortDir]                = useState<'asc' | 'desc'>('asc');
 
   const load = useCallback(async () => {
     const prods = db.getStocksGroupedByProduct(allowedSites);
@@ -60,35 +147,34 @@ export function InventoryDashboard() {
     setStats(db.getDashboardStats(allowedSites));
   }, [allowedSites.join(',')]);
 
+  useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    load();
-  }, [load]);
-
-  // Écouter l'événement de mise à jour du stock (après validation d'une demande)
-  useEffect(() => {
-    const handler = () => load();
-    window.addEventListener('snl:stock-updated', handler);
-    return () => window.removeEventListener('snl:stock-updated', handler);
+    const h = () => load();
+    window.addEventListener('snl:stock-updated', h);
+    return () => window.removeEventListener('snl:stock-updated', h);
   }, [load]);
 
   const filteredSites = allowedSites.filter(sid => selectedSite === 'all' || sid === selectedSite);
 
   const filteredProducts = products
-    .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter(p =>
+      !searchQuery ||
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.sku.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     .sort((a, b) => {
       let va = a[sortField], vb = b[sortField];
       if (sortField === 'totalStock') { va = a.totalStock; vb = b.totalStock; }
-      if (sortDir === 'asc') return va > vb ? 1 : -1;
-      return va < vb ? 1 : -1;
+      return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
     });
 
   const getStockStatus = (product: any) => {
     const siteIds = selectedSite === 'all' ? allowedSites : [selectedSite];
-    const total = siteIds.reduce((sum: number, s: string) => sum + (product.stock[s] || 0), 0);
+    const total = siteIds.reduce((s: number, sid: string) => s + (product.stock[sid] || 0), 0);
     const pct = total / (product.threshold * siteIds.length);
-    if (pct < 0.3) return { color: 'bg-red-500', label: 'Critique', pct: Math.min(pct * 100, 100) };
-    if (pct < 1) return { color: 'bg-orange-500', label: 'Alerte', pct: Math.min(pct * 100, 100) };
-    return { color: 'bg-[#0284C7]', label: 'OK', pct: Math.min(pct * 100, 100) };
+    if (pct < 0.3) return { label: 'Critique', pct: Math.min(pct * 100, 100) };
+    if (pct < 1)   return { label: 'Alerte',   pct: Math.min(pct * 100, 100) };
+    return              { label: 'OK',       pct: Math.min(pct * 100, 100) };
   };
 
   const handleDeleteProduct = async (id: number) => {
@@ -102,300 +188,388 @@ export function InventoryDashboard() {
     else { setSortField(field); setSortDir('asc'); }
   };
 
-  const totalValue = filteredSites.reduce((sum, siteId) => {
-    return sum + products.reduce((s, p) => s + (p.stock[siteId] || 0) * p.price, 0);
-  }, 0);
+  const totalValue = filteredSites.reduce((sum, sid) =>
+    sum + products.reduce((s, p) => s + (p.stock[sid] || 0) * p.price, 0), 0
+  );
 
-  // Site options pour le sélecteur
   const siteSelectOptions = activeSites.filter(s => allowedSites.includes(s.id));
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="border-b border-[#F1F5F9] bg-white">
-        <div className="px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-gray-600">Site:</label>
-              <Select value={selectedSite} onValueChange={setSelectedSite}>
-                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les Sites</SelectItem>
-                  {siteSelectOptions.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+    <div style={{ minHeight: '100%', background: BG, display: 'flex', flexDirection: 'column' }}>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              {hasPermission('create') && (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)}>
-                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Transfert
-                  </Button>
-                  <Button variant="outline" size="sm"
-                    className="border-orange-300 text-orange-700 hover:bg-orange-50"
-                    onClick={() => { setSelectedProduct(null); setShowTransportDamage(true); }}>
-                    <Truck className="w-3.5 h-3.5 mr-1.5" /> Déclarer perte
-                  </Button>
-                  <Button size="sm"
-                    onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
-                    className="bg-[#0284C7] hover:bg-[#0369A1]">
-                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Nouveau Produit
-                  </Button>
-                </>
-              )}
-            </div>
+      {/* ── Top bar ─────────────────────────────────────────────── */}
+      <div style={{ background: SURFACE, borderBottom: BDR, padding: '16px 24px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+          {/* Title */}
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 700, color: T3, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>
+              Stock
+            </p>
+            <h1 style={{ fontSize: 20, fontWeight: 800, color: T1, letterSpacing: '-0.03em', lineHeight: 1.2 }}>
+              Inventaire
+            </h1>
           </div>
 
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-4">
-            <div className="bg-gradient-to-br from-blue-50 to-white p-2.5 sm:p-4 rounded-xl border border-blue-100 min-w-0">
-              <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">Valeur Stock</div>
-              <div className="text-base sm:text-xl font-bold text-[#0284C7] truncate" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {totalValue.toLocaleString('fr-FR')}
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-400">XAF</div>
+          {/* Actions */}
+          {hasPermission('create') && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setShowTransfer(true)}
+                className="snl-btn snl-btn-secondary"
+              >
+                <RefreshCw size={13} /> Transfert
+              </button>
+              <button
+                onClick={() => { setSelectedProduct(null); setShowTransportDamage(true); }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '0 14px', height: 34, borderRadius: 6,
+                  fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                  border: '1px solid #FED7AA', background: '#FFF7ED',
+                  color: '#C2410C', fontFamily: 'inherit',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#FFEDD5'}
+                onMouseLeave={e => e.currentTarget.style.background = '#FFF7ED'}
+              >
+                <Truck size={13} /> Perte
+              </button>
+              <button
+                onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
+                className="snl-btn snl-btn-primary"
+              >
+                <Plus size={13} /> Nouveau produit
+              </button>
             </div>
-            <div className="bg-gradient-to-br from-orange-50 to-white p-2.5 sm:p-4 rounded-xl border border-orange-100 min-w-0">
-              <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">Alertes</div>
-              <div className="text-base sm:text-xl font-bold text-orange-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {stats.alertCount}
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-400">{stats.criticalProducts} critique(s)</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-white p-2.5 sm:p-4 rounded-xl border border-green-100 min-w-0">
-              <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">Mvt. Auj.</div>
-              <div className="text-base sm:text-xl font-bold text-green-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {stats.todayMovements}
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-400">confirmés</div>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-white p-2.5 sm:p-4 rounded-xl border border-purple-100 min-w-0">
-              <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">Produits</div>
-              <div className="text-base sm:text-xl font-bold text-purple-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {stats.totalProducts}
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-400">réf.</div>
-            </div>
-            {stats.pendingCount > 0 ? (
-              <div className="bg-gradient-to-br from-yellow-50 to-white p-2.5 sm:p-4 rounded-xl border border-yellow-200 animate-pulse min-w-0">
-                <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">En attente</div>
-                <div className="text-base sm:text-xl font-bold text-yellow-600" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {stats.pendingCount}
-                </div>
-                <div className="text-[10px] sm:text-xs text-yellow-600 flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> à valider
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gradient-to-br from-gray-50 to-white p-2.5 sm:p-4 rounded-xl border border-gray-100 min-w-0">
-                <div className="text-[10px] sm:text-xs text-gray-500 mb-0.5 truncate">En attente</div>
-                <div className="text-base sm:text-xl font-bold text-gray-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>0</div>
-                <div className="text-[10px] sm:text-xs text-gray-400">validé ✓</div>
-              </div>
-            )}
-          </div>
+          )}
+        </div>
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Rechercher par nom, SKU..."
+        {/* ── KPI row ─────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
+          <StatTile
+            label="Valeur stock"
+            value={totalValue > 999999 ? `${(totalValue / 1000000).toFixed(1)}M` : totalValue.toLocaleString('fr-FR')}
+            sub="XAF"
+          />
+          <StatTile
+            label="Produits"
+            value={stats.totalProducts}
+            sub="références"
+          />
+          <StatTile
+            label="Mouvements"
+            value={stats.todayMovements}
+            sub="aujourd'hui"
+            accent
+          />
+          <StatTile
+            label="Alertes stock"
+            value={stats.alertCount}
+            sub={`${stats.criticalProducts} critique${stats.criticalProducts !== 1 ? 's' : ''}`}
+            warning={stats.alertCount > 0}
+            danger={stats.criticalProducts > 0}
+          />
+          <StatTile
+            label="En attente"
+            value={stats.pendingCount}
+            sub="à valider"
+            warning={stats.pendingCount > 0}
+            pulse={stats.pendingCount > 0}
+          />
+        </div>
+
+        {/* ── Toolbar ─────────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Search */}
+          <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+            <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: T3 }} />
+            <input
+              className="snl-input"
+              style={{ paddingLeft: 32, width: '100%', boxSizing: 'border-box' }}
+              placeholder="Nom, SKU…"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 h-9"
             />
           </div>
+          {/* Site filter */}
+          <Select value={selectedSite} onValueChange={setSelectedSite}>
+            <SelectTrigger style={{ width: 180, height: 34, fontSize: 12.5, border: BDR, borderRadius: 6, background: SURFACE }}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les sites</SelectItem>
+              {siteSelectOptions.map(s => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
-        {/* Pending approvals panel — seulement admin/manager */}
+      {/* ── Content ─────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
+
         {isAdmin && <PendingApprovalsPanel />}
 
         {filteredProducts.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <Package className="w-14 h-14 mx-auto mb-4 opacity-20" />
-            <p className="text-base font-medium text-gray-500">Aucun produit</p>
-            <p className="text-sm mt-1">
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '72px 24px', background: SURFACE, borderRadius: 10, border: BDR,
+            textAlign: 'center',
+          }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: 12,
+              background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: 16,
+            }}>
+              <Package size={24} style={{ color: T3 }} />
+            </div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: T1, marginBottom: 4 }}>Aucun produit</p>
+            <p style={{ fontSize: 13, color: T3, marginBottom: 20 }}>
               {products.length === 0
                 ? 'Commencez par ajouter vos premiers produits'
                 : 'Aucun produit ne correspond à votre recherche'}
             </p>
             {products.length === 0 && hasPermission('create') && (
-              <Button size="sm" className="mt-4 bg-[#0284C7] hover:bg-[#0369A1]"
-                onClick={() => { setEditingProduct(null); setShowProductForm(true); }}>
-                <Plus className="w-3.5 h-3.5 mr-1.5" /> Ajouter un produit
-              </Button>
+              <button
+                className="snl-btn snl-btn-primary"
+                onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
+              >
+                <Plus size={13} /> Ajouter un produit
+              </button>
             )}
           </div>
         ) : (
-          <div className="border border-[#E2E8F0] rounded-xl overflow-x-auto bg-white shadow-sm">
-            <table className="w-full min-w-[540px]">
-              <thead>
-                <tr className="bg-gray-50 border-b border-[#E2E8F0]">
-                  <th className="px-4 py-3 text-left">
-                    <button onClick={() => handleSort('name')} className="flex items-center gap-1 text-xs font-semibold text-gray-600 uppercase hover:text-gray-900">
-                      Désignation <ArrowUpDown className="w-3 h-3" />
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Catégorie</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
-                    {selectedSite === 'all'
-                      ? 'Stock par Site'
-                      : `Stock — ${activeSites.find(s => s.id === selectedSite)?.name}`}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Statut</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Dernier Arrivage</th>
-                  {hasPermission('create') && (
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.map(product => {
-                  const status = getStockStatus(product);
-                  const displaySites = selectedSite === 'all' ? allowedSites : [selectedSite];
-                  const catColor = categoryColors[product.category] || 'bg-gray-100 text-gray-700';
+          <div style={{ background: SURFACE, border: BDR, borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="snl-table" style={{ minWidth: 640 }}>
+                <thead>
+                  <tr>
+                    <th>
+                      <SortBtn field="name" active={sortField === 'name'} dir={sortDir} onClick={() => handleSort('name')}>
+                        Désignation
+                      </SortBtn>
+                    </th>
+                    <th>Catégorie</th>
+                    <th style={{ textAlign: 'center' }}>
+                      {selectedSite === 'all'
+                        ? 'Stock / site'
+                        : `Stock — ${activeSites.find(s => s.id === selectedSite)?.name}`}
+                    </th>
+                    <th>Statut</th>
+                    <th>
+                      <SortBtn field="lastDelivery" active={sortField === 'lastDelivery'} dir={sortDir} onClick={() => handleSort('lastDelivery')}>
+                        Dernier arrivage
+                      </SortBtn>
+                    </th>
+                    {hasPermission('create') && (
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProducts.map(product => {
+                    const status      = getStockStatus(product);
+                    const displaySites = selectedSite === 'all' ? allowedSites : [selectedSite];
+                    const cat         = CATEGORY_COLORS[product.category] ?? { bg: '#F1F5F9', text: '#334155' };
 
-                  return (
-                    <tr key={product.id} className="border-b border-[#F1F5F9] hover:bg-gray-50 transition-colors group">
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-gray-900 text-sm">{product.name}</div>
-                        <div className="text-xs text-gray-400 font-mono">{product.sku}</div>
-                        {product.sub_type && (
-                          <div className="text-xs text-purple-600 mt-0.5">{product.sub_type}</div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className={`text-xs ${catColor}`}>
-                          {getCategoryLabel(product.category)}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-3" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                          {displaySites.map(sid => (
-                            <div key={sid} className="text-center">
-                              {displaySites.length > 1 && <div className="text-[10px] text-gray-400 mb-0.5">{sid}</div>}
-                              <div className={`font-semibold text-sm ${
-                                (product.stock[sid] || 0) < product.threshold * 0.3 ? 'text-red-600' :
-                                (product.stock[sid] || 0) < product.threshold ? 'text-orange-500' : 'text-gray-900'
-                              }`}>
-                                {product.stock[sid] || 0}
-                              </div>
-                            </div>
-                          ))}
-                          {displaySites.length > 1 && (
-                            <>
-                              <div className="w-px h-6 bg-gray-200" />
-                              <div className="text-center">
-                                <div className="text-[10px] text-gray-400 mb-0.5">Total</div>
-                                <div className="font-bold text-sm text-gray-900">
-                                  {displaySites.reduce((s, sid) => s + (product.stock[sid] || 0), 0)}
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                            <div className={`h-full ${status.color} transition-all`} style={{ width: `${status.pct}%` }} />
+                    return (
+                      <tr key={product.id} className="group">
+                        {/* Name */}
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: T1 }}>{product.name}</div>
+                          <div style={{ fontSize: 11, color: T3, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>
+                            {product.sku}
                           </div>
-                          <span className={`text-xs font-medium ${
-                            status.label === 'Critique' ? 'text-red-600' :
-                            status.label === 'Alerte' ? 'text-orange-500' : 'text-gray-500'
-                          }`}>
-                            {status.label}
+                          {product.sub_type && (
+                            <div style={{ fontSize: 10.5, color: '#7C3AED', marginTop: 2 }}>{product.sub_type}</div>
+                          )}
+                        </td>
+
+                        {/* Category */}
+                        <td>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
+                            borderRadius: 4, fontSize: 11, fontWeight: 600,
+                            background: cat.bg, color: cat.text,
+                          }}>
+                            {getCategoryLabel(product.category)}
                           </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-500">
-                        {product.lastDelivery
-                          ? new Date(product.lastDelivery).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : '—'}
-                      </td>
-                      {hasPermission('create') && (
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                            {/* Entrée */}
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-[#0284C7] hover:bg-blue-50"
-                              onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}
-                              title="Soumettre une entrée">
-                              <Plus className="w-3.5 h-3.5 mr-1" /> Entrée
-                            </Button>
-                            {/* Vente/Sortie — toujours via le modal de vente (pending pour opérateurs) */}
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-red-600 hover:bg-red-50"
-                              onClick={() => { setSelectedProduct(product); setShowStockOut(true); }}
-                              title="Soumettre une vente">
-                              <ShoppingCart className="w-3.5 h-3.5 mr-1" /> Vente
-                            </Button>
-                            {/* Perte */}
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-orange-600 hover:bg-orange-50"
-                              onClick={() => { setSelectedProduct(product); setShowTransportDamage(true); }}
-                              title="Déclarer une perte">
-                              <Truck className="w-3.5 h-3.5" />
-                            </Button>
-                            {hasPermission('edit') && (
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-500 hover:text-gray-900"
-                                onClick={() => { setEditingProduct(product); setShowProductForm(true); }}>
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                            {hasPermission('delete') && (
-                              <Button variant="ghost" size="sm"
-                                className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => handleDeleteProduct(product.id)}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
+                        </td>
+
+                        {/* Stock per site */}
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                            {displaySites.map(sid => {
+                              const qty = product.stock[sid] || 0;
+                              const isLow = qty < product.threshold * 0.3;
+                              const isWarn = qty >= product.threshold * 0.3 && qty < product.threshold;
+                              return (
+                                <div key={sid} style={{ textAlign: 'center' }}>
+                                  {displaySites.length > 1 && (
+                                    <div style={{ fontSize: 9.5, color: T3, marginBottom: 1, fontWeight: 600 }}>{sid}</div>
+                                  )}
+                                  <div style={{
+                                    fontSize: 14, fontWeight: 700,
+                                    color: isLow ? '#DC2626' : isWarn ? '#D97706' : T1,
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                  }}>
+                                    {qty}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {displaySites.length > 1 && (
+                              <>
+                                <div style={{ width: 1, height: 24, background: '#E2E8F0' }} />
+                                <div style={{ textAlign: 'center' }}>
+                                  <div style={{ fontSize: 9.5, color: T3, marginBottom: 1, fontWeight: 600 }}>Total</div>
+                                  <div style={{ fontSize: 14, fontWeight: 800, color: T1, fontFamily: "'JetBrains Mono', monospace" }}>
+                                    {displaySites.reduce((s, sid) => s + (product.stock[sid] || 0), 0)}
+                                  </div>
+                                </div>
+                              </>
                             )}
                           </div>
                         </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+
+                        {/* Status */}
+                        <td>
+                          <StatusBadge label={status.label} pct={status.pct} />
+                        </td>
+
+                        {/* Last delivery */}
+                        <td style={{ fontSize: 12, color: T2, whiteSpace: 'nowrap' }}>
+                          {product.lastDelivery
+                            ? new Date(product.lastDelivery).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+                            : <span style={{ color: T3 }}>—</span>
+                          }
+                        </td>
+
+                        {/* Actions */}
+                        {hasPermission('create') && (
+                          <td style={{ textAlign: 'right' }}>
+                            <div
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
+                                opacity: 0, transition: 'opacity 0.15s',
+                              }}
+                              className="group-hover:!opacity-100"
+                            >
+                              <button
+                                onClick={() => { setSelectedProduct(product); setShowBulkInput(true); }}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600,
+                                  background: '#DCFCE7', color: '#166534', border: 'none', cursor: 'pointer',
+                                  fontFamily: 'inherit',
+                                }}
+                                title="Entrée stock"
+                              >
+                                <Plus size={11} /> Entrée
+                              </button>
+                              <button
+                                onClick={() => { setSelectedProduct(product); setShowStockOut(true); }}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600,
+                                  background: '#FEE2E2', color: '#991B1B', border: 'none', cursor: 'pointer',
+                                  fontFamily: 'inherit',
+                                }}
+                                title="Vente"
+                              >
+                                <ShoppingCart size={11} /> Vente
+                              </button>
+                              <button
+                                onClick={() => { setSelectedProduct(product); setShowTransportDamage(true); }}
+                                style={{
+                                  width: 26, height: 26, borderRadius: 5,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  background: '#FFF7ED', color: '#C2410C', border: 'none', cursor: 'pointer',
+                                }}
+                                title="Déclarer perte"
+                              >
+                                <Truck size={11} />
+                              </button>
+                              {hasPermission('edit') && (
+                                <button
+                                  onClick={() => { setEditingProduct(product); setShowProductForm(true); }}
+                                  style={{
+                                    width: 26, height: 26, borderRadius: 5,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: '#F1F5F9', color: T2, border: 'none', cursor: 'pointer',
+                                  }}
+                                  title="Modifier"
+                                >
+                                  <Edit2 size={11} />
+                                </button>
+                              )}
+                              {hasPermission('delete') && (
+                                <button
+                                  onClick={() => handleDeleteProduct(product.id)}
+                                  style={{
+                                    width: 26, height: 26, borderRadius: 5,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: 'transparent', color: '#94A3B8', border: 'none', cursor: 'pointer',
+                                    transition: 'all 0.12s',
+                                  }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = '#FEE2E2'; e.currentTarget.style.color = '#DC2626'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94A3B8'; }}
+                                  title="Supprimer"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              borderTop: BDR, padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <span style={{ fontSize: 11.5, color: T3 }}>
+                {filteredProducts.length} produit{filteredProducts.length !== 1 ? 's' : ''}
+                {filteredProducts.length !== products.length && ` sur ${products.length}`}
+              </span>
+              <span style={{ fontSize: 11.5, color: T2, fontWeight: 600 }}>
+                Valeur affichée :{' '}
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", color: T1 }}>
+                  {totalValue.toLocaleString('fr-FR')} XAF
+                </span>
+              </span>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Modals */}
+      {/* ── Modals ──────────────────────────────────────────────── */}
       {showBulkInput && (
-        <BulkInputModal
-          product={selectedProduct}
-          allowedSites={allowedSites}
-          onClose={() => { setShowBulkInput(false); setSelectedProduct(null); load(); }}
-        />
+        <BulkInputModal product={selectedProduct} allowedSites={allowedSites}
+          onClose={() => { setShowBulkInput(false); setSelectedProduct(null); load(); }} />
       )}
       {showStockOut && (
-        <StockOutModal
-          product={selectedProduct}
-          allowedSites={allowedSites}
-          onClose={() => { setShowStockOut(false); setSelectedProduct(null); load(); }}
-        />
+        <StockOutModal product={selectedProduct} allowedSites={allowedSites}
+          onClose={() => { setShowStockOut(false); setSelectedProduct(null); load(); }} />
       )}
       {showTransportDamage && (
-        <TransportDamageModal
-          product={selectedProduct}
-          allowedSites={allowedSites}
-          onClose={() => { setShowTransportDamage(false); setSelectedProduct(null); load(); }}
-        />
+        <TransportDamageModal product={selectedProduct} allowedSites={allowedSites}
+          onClose={() => { setShowTransportDamage(false); setSelectedProduct(null); load(); }} />
       )}
       {showTransfer && (
-        <TransferModal
-          products={products}
-          allowedSites={allowedSites}
-          onClose={() => { setShowTransfer(false); load(); }}
-        />
+        <TransferModal products={products} allowedSites={allowedSites}
+          onClose={() => { setShowTransfer(false); load(); }} />
       )}
       {showProductForm && (
-        <ProductFormModal
-          product={editingProduct}
-          onClose={() => { setShowProductForm(false); setEditingProduct(null); load(); }}
-        />
+        <ProductFormModal product={editingProduct}
+          onClose={() => { setShowProductForm(false); setEditingProduct(null); load(); }} />
       )}
     </div>
   );

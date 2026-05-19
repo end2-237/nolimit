@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Search, RefreshCw, Download, Mail } from 'lucide-react';
 import { siteWebService, type NewsletterSub } from '../services/siteWebService';
 
-const P = '#6DB33F';
+const T1 = '#0F172A', T2 = '#64748B', T3 = '#94A3B8';
+const ACCENT = '#16A34A';
 
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 
 export function SiteNewsletterPage() {
   const [rows, setRows]       = useState<NewsletterSub[]>([]);
@@ -12,10 +14,7 @@ export function SiteNewsletterPage() {
   const [search, setSearch]   = useState('');
   const [filter, setFilter]   = useState<'all' | 'active' | 'inactive'>('all');
 
-  const load = () => {
-    setLoading(true);
-    siteWebService.getNewsletter().then(setRows).finally(() => setLoading(false));
-  };
+  const load = () => { setLoading(true); siteWebService.getNewsletter().then(setRows).finally(() => setLoading(false)); };
   useEffect(load, []);
 
   const filtered = rows.filter(r => {
@@ -31,124 +30,102 @@ export function SiteNewsletterPage() {
     const csv = ['Email,Actif,Date inscription', ...rows.map(r => `${r.email},${r.active},${r.subscribed_at}`)].join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
-    const a    = Object.assign(document.createElement('a'), { href: url, download: `newsletter_${new Date().toISOString().split('T')[0]}.csv` });
-    a.click(); URL.revokeObjectURL(url);
+    Object.assign(document.createElement('a'), { href: url, download: `newsletter_${new Date().toISOString().split('T')[0]}.csv` }).click();
+    URL.revokeObjectURL(url);
   };
 
   const FILTERS: { id: 'all' | 'active' | 'inactive'; label: string }[] = [
-    { id: 'all',      label: 'Tous' },
-    { id: 'active',   label: 'Actifs' },
-    { id: 'inactive', label: 'Désabonnés' },
+    { id: 'all', label: 'Tous' }, { id: 'active', label: 'Actifs' }, { id: 'inactive', label: 'Désabonnés' },
   ];
 
   return (
-    <div style={{ minHeight: '100%', background: 'linear-gradient(150deg,#F0F9E6 0%,#F8FCF4 40%,#FBFDFB 100%)', padding: '22px 24px 40px' }}>
-
-      {/* ── Page header ── */}
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ fontSize: 10, fontWeight: 700, color: '#8AAD6A', letterSpacing: '0.09em', textTransform: 'uppercase', marginBottom: 4 }}>
-          Gestion du site web
-        </p>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+    <div className="snl-page">
+      {/* Header */}
+      <div className="snl-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <p className="snl-eyebrow">Site Web</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Mail size={18} color="#065F46" />
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Mail size={17} color={ACCENT} />
             </div>
             <div>
-              <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1C2A14', lineHeight: 1.2 }}>Newsletter</h1>
-              <p style={{ fontSize: 11, color: '#8AAD6A', marginTop: 2 }}>
-                {activeCount} actif{activeCount !== 1 ? 's' : ''} sur {rows.length} abonné{rows.length !== 1 ? 's' : ''}
-              </p>
+              <h1 className="snl-page-title">Newsletter</h1>
+              <p className="snl-page-sub">{activeCount} actif{activeCount !== 1 ? 's' : ''} sur {rows.length} abonné{rows.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={exportCSV} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: 'white', border: `1px solid ${P}30`, fontSize: 12, color: P, cursor: 'pointer', fontWeight: 600, boxShadow: '0 1px 4px rgba(60,100,20,0.06)' }}>
-              <Download size={13} /> Exporter CSV
-            </button>
-            <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: 'white', border: '1px solid #D4EABC', fontSize: 12, color: '#5A8A38', cursor: 'pointer', fontWeight: 500, boxShadow: '0 1px 4px rgba(60,100,20,0.06)' }}>
-              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Actualiser
-            </button>
-          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportCSV} className="snl-btn snl-btn-secondary">
+            <Download size={12} /> Exporter CSV
+          </button>
+          <button onClick={load} className="snl-btn snl-btn-secondary">
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Actualiser
+          </button>
         </div>
       </div>
 
-      {/* ── Stats summary ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Total abonnés',  value: rows.length,   color: '#1C2A14', bg: 'white' },
-          { label: 'Actifs',         value: activeCount,   color: P,         bg: '#EAF5D5' },
-          { label: 'Désabonnés',     value: rows.length - activeCount, color: '#EF4444', bg: '#FEE2E2' },
-        ].map(({ label, value, color, bg }) => (
-          <div key={label} style={{ background: bg, borderRadius: 14, padding: '14px 18px', boxShadow: '0 1px 8px rgba(60,100,20,0.06)', border: '1px solid rgba(200,230,160,0.4)' }}>
-            <p style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1 }}>{value}</p>
-            <p style={{ fontSize: 11, color: '#9BAF8A', marginTop: 4 }}>{label}</p>
+          { label: 'Total abonnés', value: rows.length, color: T1, sub: 'tous statuts' },
+          { label: 'Actifs',        value: activeCount, color: ACCENT, sub: 'reçoivent les emails' },
+          { label: 'Désabonnés',    value: rows.length - activeCount, color: '#DC2626', sub: 'opt-out' },
+        ].map(s => (
+          <div key={s.label} className="snl-card-sm" style={{ padding: '16px 18px' }}>
+            <p style={{ fontSize: 10.5, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>{s.label}</p>
+            <p style={{ fontSize: 28, fontWeight: 800, color: s.color, letterSpacing: '-0.04em', lineHeight: 1 }}>{s.value}</p>
+            <p style={{ fontSize: 11, color: T3, marginTop: 4 }}>{s.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* ── Toolbar ── */}
+      {/* Toolbar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9BAF8A' }} />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher un email…"
-            style={{ width: '100%', paddingLeft: 34, paddingRight: 12, paddingTop: 9, paddingBottom: 9, borderRadius: 10, border: '1px solid #D4EABC', fontSize: 12, outline: 'none', background: 'white', boxSizing: 'border-box', color: '#1C2A14' }}
-          />
+        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+          <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: T3 }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un email…"
+            className="snl-input" style={{ paddingLeft: 32, width: '100%', boxSizing: 'border-box' as const }} />
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {FILTERS.map(f => (
-            <button key={f.id} onClick={() => setFilter(f.id)}
-              style={{ padding: '7px 14px', borderRadius: 999, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all .2s',
-                background: filter === f.id ? P : 'white',
-                color: filter === f.id ? 'white' : '#6B7280',
-                boxShadow: filter === f.id ? `0 2px 8px rgba(109,179,63,0.35)` : '0 1px 4px rgba(0,0,0,0.06)',
-              }}>
+            <button key={f.id} onClick={() => setFilter(f.id)} className={`snl-pill${filter === f.id ? ' active' : ''}`}>
               {f.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Table ── */}
-      <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 1px 12px rgba(60,100,20,0.07)', overflow: 'hidden' }}>
+      {/* Table */}
+      <div className="snl-card">
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160 }}>
-            <div style={{ width: 28, height: 28, border: `2.5px solid ${P}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+            <div style={{ width: 22, height: 22, border: `2px solid ${ACCENT}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9BAF8A', fontSize: 13, fontStyle: 'italic' }}>
-            Aucun abonné trouvé
-          </div>
+          <div style={{ textAlign: 'center', padding: '56px 20px', color: T3, fontSize: 13 }}>Aucun abonné trouvé</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <table className="snl-table">
             <thead>
-              <tr style={{ background: '#F5FBF0', borderBottom: '1px solid #E8F5D5' }}>
-                {['#', 'Email', 'Statut', 'Date inscription'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 10, fontWeight: 700, color: '#5A8A38', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</th>
-                ))}
-              </tr>
+              <tr><th>#</th><th>Email</th><th>Statut</th><th>Date inscription</th></tr>
             </thead>
             <tbody>
-              {filtered.map((r, i) => (
-                <tr key={r.id}
-                  style={{ borderBottom: '1px solid #F5FBF0', background: i % 2 === 0 ? 'white' : '#FDFFFE', transition: 'background .15s' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#F8FCF4')}
-                  onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'white' : '#FDFFFE')}
-                >
-                  <td style={{ padding: '10px 16px', color: '#9BAF8A', fontFamily: 'monospace', fontSize: 11 }}>#{r.id}</td>
-                  <td style={{ padding: '10px 16px', fontWeight: 500, color: '#1C2A14' }}>{r.email}</td>
-                  <td style={{ padding: '10px 16px' }}>
+              {filtered.map(r => (
+                <tr key={r.id}>
+                  <td style={{ color: T3, fontFamily: "'JetBrains Mono',monospace", fontSize: 11 }}>#{r.id}</td>
+                  <td style={{ fontWeight: 500, fontSize: 13, color: T1 }}>{r.email}</td>
+                  <td>
                     <span style={{
-                      background: r.active ? '#D1FAE5' : '#F3F4F6',
-                      color: r.active ? '#065F46' : '#6B7280',
-                      padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      background: r.active ? '#DCFCE7' : '#F1F5F9',
+                      color: r.active ? '#166534' : T3,
+                      padding: '3px 9px', borderRadius: 4, fontSize: 11, fontWeight: 700,
                     }}>
-                      {r.active ? '● Actif' : '○ Désabonné'}
+                      <span style={{ width: 5, height: 5, borderRadius: 99, background: r.active ? '#22C55E' : '#CBD5E1' }} />
+                      {r.active ? 'Actif' : 'Désabonné'}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 16px', color: '#6B7280' }}>{fmtDate(r.subscribed_at)}</td>
+                  <td style={{ color: T2, fontSize: 12 }}>{fmtDate(r.subscribed_at)}</td>
                 </tr>
               ))}
             </tbody>

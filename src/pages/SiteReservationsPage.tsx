@@ -1,59 +1,41 @@
 import { useState, useEffect } from 'react';
-import { Search, RefreshCw, CalendarCheck } from 'lucide-react';
+import { Search, RefreshCw, CalendarCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { siteWebService, type Reservation } from '../services/siteWebService';
 
-/* ── shared tokens ── */
-const P = '#6DB33F';
+const T1 = '#0F172A', T2 = '#64748B', T3 = '#94A3B8';
+const BDR = '1px solid #E2E8F0';
+const ACCENT = '#16A34A';
 
-const STATUS: Record<string, { label: string; bg: string; color: string }> = {
-  pending:   { label: 'En attente',  bg: '#FEF3C7', color: '#B45309' },
-  confirmed: { label: 'Confirmé',    bg: '#D1FAE5', color: '#065F46' },
-  cancelled: { label: 'Annulé',      bg: '#FEE2E2', color: '#991B1B' },
+const STATUS_CFG: Record<string, { label: string; bg: string; color: string; dot: string }> = {
+  pending:   { label: 'En attente', bg: '#FEF3C7', color: '#92400E', dot: '#F59E0B' },
+  confirmed: { label: 'Confirmée',  bg: '#DCFCE7', color: '#166534', dot: '#22C55E' },
+  cancelled: { label: 'Annulée',    bg: '#FEE2E2', color: '#991B1B', dot: '#EF4444' },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS[status] ?? { label: status, bg: '#F3F4F6', color: '#374151' };
-  return (
-    <span style={{ background: s.bg, color: s.color, padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, display: 'inline-block', whiteSpace: 'nowrap' }}>
-      {s.label}
-    </span>
-  );
-}
-
-function fmtDate(d: string) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-function fmtDateTime(d: string) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-
 const FILTERS = [
-  { id: 'all',       label: 'Tous' },
-  { id: 'pending',   label: 'En attente' },
-  { id: 'confirmed', label: 'Confirmés' },
-  { id: 'cancelled', label: 'Annulés' },
+  { id: 'all', label: 'Toutes' }, { id: 'pending', label: 'En attente' },
+  { id: 'confirmed', label: 'Confirmées' }, { id: 'cancelled', label: 'Annulées' },
 ];
+
+const fmtDT = (d: string) =>
+  new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export function SiteReservationsPage() {
   const [rows, setRows]         = useState<Reservation[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
   const [filter, setFilter]     = useState('all');
+  const [expanded, setExpanded] = useState<number | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
 
-  const load = () => {
-    setLoading(true);
-    siteWebService.getReservations().then(setRows).finally(() => setLoading(false));
-  };
+  const load = () => { setLoading(true); siteWebService.getReservations().then(setRows).finally(() => setLoading(false)); };
   useEffect(load, []);
 
   const filtered = rows.filter(r => {
     if (filter !== 'all' && r.status !== filter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    return r.name?.toLowerCase().includes(q) || r.service?.toLowerCase().includes(q) || r.phone?.includes(q);
+    return r.name?.toLowerCase().includes(q) || r.email?.toLowerCase().includes(q) || r.phone?.includes(q);
   });
 
   const updateStatus = async (id: number, status: string) => {
@@ -64,57 +46,52 @@ export function SiteReservationsPage() {
   };
 
   const counts = {
-    all: rows.length,
-    pending: rows.filter(r => r.status === 'pending').length,
+    all: rows.length, pending: rows.filter(r => r.status === 'pending').length,
     confirmed: rows.filter(r => r.status === 'confirmed').length,
     cancelled: rows.filter(r => r.status === 'cancelled').length,
   } as Record<string, number>;
 
   return (
-    <div style={{ minHeight: '100%', background: 'linear-gradient(150deg,#F0F9E6 0%,#F8FCF4 40%,#FBFDFB 100%)', padding: '22px 24px 40px' }}>
-
-      {/* ── Page header ── */}
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ fontSize: 10, fontWeight: 700, color: '#8AAD6A', letterSpacing: '0.09em', textTransform: 'uppercase', marginBottom: 4 }}>
-          Gestion du site web
-        </p>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+    <div className="snl-page">
+      {/* Header */}
+      <div className="snl-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <p className="snl-eyebrow">Site Web</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <CalendarCheck size={18} color="#065F46" />
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: counts.pending > 0 ? '#FEF3C7' : '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CalendarCheck size={17} color={counts.pending > 0 ? '#D97706' : ACCENT} />
             </div>
             <div>
-              <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1C2A14', lineHeight: 1.2 }}>Réservations</h1>
-              <p style={{ fontSize: 11, color: '#8AAD6A', marginTop: 2 }}>{rows.length} réservation{rows.length !== 1 ? 's' : ''} au total</p>
+              <h1 className="snl-page-title">
+                Réservations
+                {counts.pending > 0 && (
+                  <span style={{ marginLeft: 10, fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#92400E', padding: '2px 8px', borderRadius: 4, verticalAlign: 'middle' }}>
+                    {counts.pending} en attente
+                  </span>
+                )}
+              </h1>
+              <p className="snl-page-sub">{rows.length} réservation{rows.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
-          <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: 'white', border: '1px solid #D4EABC', fontSize: 12, color: '#5A8A38', cursor: 'pointer', fontWeight: 500, boxShadow: '0 1px 4px rgba(60,100,20,0.06)' }}>
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Actualiser
-          </button>
         </div>
+        <button onClick={load} className="snl-btn snl-btn-secondary">
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Actualiser
+        </button>
       </div>
 
-      {/* ── Toolbar ── */}
+      {/* Toolbar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9BAF8A' }} />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Nom, service, téléphone…"
-            style={{ width: '100%', paddingLeft: 34, paddingRight: 12, paddingTop: 9, paddingBottom: 9, borderRadius: 10, border: '1px solid #D4EABC', fontSize: 12, outline: 'none', background: 'white', boxSizing: 'border-box', color: '#1C2A14' }}
-          />
+        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+          <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: T3 }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Nom, email, téléphone…"
+            className="snl-input" style={{ paddingLeft: 32, width: '100%', boxSizing: 'border-box' as const }} />
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {FILTERS.map(f => (
-            <button key={f.id} onClick={() => setFilter(f.id)}
-              style={{ padding: '7px 14px', borderRadius: 999, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all .2s',
-                background: filter === f.id ? P : 'white',
-                color: filter === f.id ? 'white' : '#6B7280',
-                boxShadow: filter === f.id ? `0 2px 8px rgba(109,179,63,0.35)` : '0 1px 4px rgba(0,0,0,0.06)',
-              }}>
+            <button key={f.id} onClick={() => setFilter(f.id)} className={`snl-pill${filter === f.id ? ' active' : ''}`}>
               {f.label}
               {counts[f.id] > 0 && (
-                <span style={{ marginLeft: 5, background: filter === f.id ? 'rgba(255,255,255,0.25)' : '#F3F4F6', color: filter === f.id ? 'white' : '#6B7280', padding: '1px 6px', borderRadius: 999, fontSize: 10 }}>
+                <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, background: filter === f.id ? 'rgba(255,255,255,0.2)' : '#F1F5F9', color: filter === f.id ? 'white' : T3, padding: '1px 5px', borderRadius: 99 }}>
                   {counts[f.id]}
                 </span>
               )}
@@ -123,59 +100,71 @@ export function SiteReservationsPage() {
         </div>
       </div>
 
-      {/* ── Table ── */}
-      <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 1px 12px rgba(60,100,20,0.07)', overflow: 'hidden' }}>
+      {/* Table */}
+      <div className="snl-card">
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160 }}>
-            <div style={{ width: 28, height: 28, border: `2.5px solid ${P}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+            <div style={{ width: 22, height: 22, border: `2px solid ${ACCENT}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9BAF8A', fontSize: 13, fontStyle: 'italic' }}>
+          <div style={{ textAlign: 'center', padding: '56px 20px', color: T3, fontSize: 13 }}>
             Aucune réservation{filter !== 'all' ? ' pour ce filtre' : ''}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <table className="snl-table">
               <thead>
-                <tr style={{ background: '#F5FBF0', borderBottom: '1px solid #E8F5D5' }}>
-                  {['#', 'Reçue le', 'Client', 'Soin', 'Centre', 'Date RDV', 'Statut', 'Action'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 14px', fontSize: 10, fontWeight: 700, color: '#5A8A38', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
+                <tr>
+                  <th>#</th><th>Date</th><th>Client</th><th>Service</th>
+                  <th>Statut</th><th style={{ textAlign: 'right' }}>Action</th><th style={{ width: 40 }} />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r, i) => (
-                  <tr key={r.id} style={{ borderBottom: '1px solid #F5FBF0', background: i % 2 === 0 ? 'white' : '#FDFFFE' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#F8FCF4')}
-                    onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'white' : '#FDFFFE')}
-                  >
-                    <td style={{ padding: '10px 14px', color: '#9BAF8A', fontFamily: 'monospace', fontSize: 11 }}>#{r.id}</td>
-                    <td style={{ padding: '10px 14px', color: '#6B7280', whiteSpace: 'nowrap' }}>{fmtDateTime(r.created_at)}</td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <p style={{ fontWeight: 600, color: '#1C2A14' }}>{r.name || '—'}</p>
-                      <p style={{ fontSize: 10, color: '#9BAF8A', marginTop: 1 }}>{r.phone}{r.email ? ` · ${r.email}` : ''}</p>
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#374151' }}>{r.service || '—'}</td>
-                    <td style={{ padding: '10px 14px', color: '#6B7280', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.centre || '—'}</td>
-                    <td style={{ padding: '10px 14px', color: '#6B7280', whiteSpace: 'nowrap' }}>
-                      {fmtDate(r.date)}{r.time_slot ? ` · ${r.time_slot}` : ''}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}><StatusBadge status={r.status} /></td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <select
-                        value={r.status}
-                        disabled={updating === r.id}
-                        onChange={e => updateStatus(r.id, e.target.value)}
-                        style={{ fontSize: 11, border: '1px solid #D4EABC', borderRadius: 8, padding: '5px 8px', background: 'white', cursor: 'pointer', color: '#374151', outline: 'none' }}
-                      >
-                        <option value="pending">En attente</option>
-                        <option value="confirmed">Confirmer</option>
-                        <option value="cancelled">Annuler</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map(r => {
+                  const st = STATUS_CFG[r.status] ?? STATUS_CFG.pending;
+                  const isOpen = expanded === r.id;
+                  return (
+                    <>
+                      <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setExpanded(isOpen ? null : r.id)}>
+                        <td style={{ color: T3, fontFamily: "'JetBrains Mono',monospace", fontSize: 11 }}>#{r.id}</td>
+                        <td style={{ color: T2, fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDT(r.created_at)}</td>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: T1 }}>{r.name || '—'}</div>
+                          <div style={{ fontSize: 11, color: T3 }}>{r.email}{r.phone ? ` · ${r.phone}` : ''}</div>
+                        </td>
+                        <td style={{ fontSize: 12, color: T2 }}>{r.service || <span style={{ color: T3 }}>—</span>}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: st.bg, color: st.color, padding: '3px 9px', borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                            <span style={{ width: 5, height: 5, borderRadius: 99, background: st.dot }} />{st.label}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                          <select value={r.status} disabled={updating === r.id} onChange={e => updateStatus(r.id, e.target.value)}
+                            style={{ fontSize: 11.5, border: BDR, borderRadius: 6, padding: '5px 8px', background: 'white', cursor: 'pointer', color: T1, outline: 'none', fontFamily: 'inherit' }}>
+                            <option value="pending">En attente</option>
+                            <option value="confirmed">Confirmer</option>
+                            <option value="cancelled">Annuler</option>
+                          </select>
+                        </td>
+                        <td style={{ textAlign: 'center', color: T3 }}>
+                          {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr key={`${r.id}-d`}>
+                          <td colSpan={7} style={{ padding: '0 16px 14px', background: '#F8FAFC' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12, paddingTop: 12 }}>
+                              {r.date && <div><p style={{ fontSize: 10, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Date souhaitée</p><p style={{ fontSize: 13, color: T1, fontWeight: 500 }}>{r.date}</p></div>}
+                              {r.time && <div><p style={{ fontSize: 10, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Heure</p><p style={{ fontSize: 13, color: T1, fontWeight: 500 }}>{r.time}</p></div>}
+                              {r.notes && <div style={{ gridColumn: '1/-1' }}><p style={{ fontSize: 10, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Notes</p><p style={{ fontSize: 13, color: T2, lineHeight: 1.6 }}>{r.notes}</p></div>}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>
