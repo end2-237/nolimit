@@ -17,6 +17,7 @@ import { APP_CONFIG } from '../config/app.config';
 import { CloudSyncPanel } from '../components/stock/CloudSyncPanel';
 import { ServerStatus } from '../components/stock/ServerStatus';
 import { JSONImportModal } from '../components/stock/JSONImportModal';
+import { getSupabaseConfig, saveSupabaseConfig, testSupabaseConnection, isSupabaseConfigured } from '../services/supabaseStorage';
 
 // ─── Auto-Sync Settings ────────────────────────────────────────────────────
 const SYNC_INTERVAL_KEY = 'snl_auto_sync_interval';
@@ -586,6 +587,112 @@ function ScheduledTasksPanel() {
   );
 }
 
+// ─── Supabase Storage Panel ───────────────────────────────────────────────────
+
+function SupabaseStoragePanel() {
+  const cfg = getSupabaseConfig();
+  const [url,  setUrl]  = useState(cfg.url);
+  const [key,  setKey_] = useState(cfg.key);
+  const [testing, setTesting] = useState(false);
+  const [saved,   setSaved]   = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleSave = () => {
+    saveSupabaseConfig({ url: url.trim(), key: key.trim() });
+    setSaved(true);
+    setTestResult(null);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleTest = async () => {
+    // Save first then test
+    saveSupabaseConfig({ url: url.trim(), key: key.trim() });
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await testSupabaseConnection();
+      setTestResult(r);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const configured = !!(url.trim() && key.trim());
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center">
+            <HardDrive className="w-4 h-4 text-teal-600" />
+          </div>
+          <div>
+            <CardTitle className="text-sm">Stockage Images (Supabase)</CardTitle>
+            <CardDescription className="text-xs">
+              Upload d'images produits vers votre bucket self-hosted Supabase
+            </CardDescription>
+          </div>
+          {isSupabaseConfigured() && (
+            <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">
+              <CheckCircle className="w-3 h-3" /> Configuré
+            </span>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">URL Supabase</Label>
+          <Input
+            className="mt-1.5 font-mono text-sm"
+            value={url}
+            onChange={e => { setUrl(e.target.value); setTestResult(null); }}
+            placeholder="https://supabase.vps.buyticle.com"
+          />
+        </div>
+        <div>
+          <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Clé API (anon ou service_role)</Label>
+          <Input
+            className="mt-1.5 font-mono text-sm"
+            type="password"
+            value={key}
+            onChange={e => { setKey_(e.target.value); setTestResult(null); }}
+            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          />
+        </div>
+
+        {testResult && (
+          <div className={`flex items-center gap-2 text-sm rounded-xl p-3 ${testResult.ok ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+            {testResult.ok
+              ? <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+            {testResult.message}
+          </div>
+        )}
+
+        <div className="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 space-y-1">
+          <p>• Bucket : <span className="font-mono font-semibold text-gray-600">nolimit_bucket</span></p>
+          <p>• Les images sont stockées sous <span className="font-mono text-gray-600">products/&lt;sku&gt;-&lt;timestamp&gt;.ext</span></p>
+          <p>• La clé est sauvegardée localement dans le navigateur (pas envoyée au serveur SNL).</p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={handleTest} disabled={!configured || testing}>
+            {testing
+              ? <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />Test en cours…</>
+              : <><Shield className="w-3.5 h-3.5 mr-1.5" />Tester la connexion</>}
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={!configured}
+            className="bg-teal-600 hover:bg-teal-700 text-white">
+            {saved
+              ? <><CheckCircle className="w-3.5 h-3.5 mr-1.5" />Sauvegardé</>
+              : <><Save className="w-3.5 h-3.5 mr-1.5" />Enregistrer</>}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Settings Page ───────────────────────────────────────────────────────
 
 export function SettingsPage() {
@@ -730,6 +837,7 @@ export function SettingsPage() {
         {activeTab === 'cloud' && isSuperAdmin && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <AutoSyncSettings />
+            <SupabaseStoragePanel />
             <CloudSyncPanel />
           </div>
         )}

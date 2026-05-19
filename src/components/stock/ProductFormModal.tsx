@@ -6,6 +6,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { db, generateSKU } from '../../services/database';
 import { APP_CONFIG } from '../../config/app.config';
+import { ImageUploader } from '../ImageUploader';
 
 interface ProductFormModalProps {
   product?: any;
@@ -37,6 +38,7 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
     price:       product?.price?.toString()     || '',
     threshold:   product?.threshold?.toString() || '',
     expiry_date: product?.expiry_date           || '',
+    image_url:   (product?.image_url  || initialHint?.image_url || '') as string,
   });
   // SKU auto-généré seulement si pas déjà fixé (édition ou scan)
   const [skuAuto, setSkuAuto] = useState(!isEdit && !initialSku);
@@ -106,6 +108,7 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
       price: parseFloat(form.price),
       threshold: parseInt(form.threshold),
       expiry_date: form.expiry_date || null,
+      image_url: form.image_url || null,
       count: 0,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -296,6 +299,14 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
               <Label>Date d'Expiration</Label>
               <Input className="mt-1" type="date" value={form.expiry_date} onChange={e => set('expiry_date', e.target.value)} />
             </div>
+
+            <ImageUploader
+              value={form.image_url || null}
+              onChange={url => set('image_url', url || '')}
+              folder="products"
+              filePrefix={form.sku || form.name.slice(0, 20) || 'img'}
+              label="Image produit"
+            />
 
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>

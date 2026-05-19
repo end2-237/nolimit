@@ -338,7 +338,7 @@ export function SiteManagementPage() {
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '6px 14px', borderRadius: 7,
-                        fontSize: 12, fontWeight: 700, border: 'none',
+                        fontSize: 12, fontWeight: 700,
                         cursor: isSav ? 'wait' : 'pointer', flexShrink: 0,
                         fontFamily: "'Plus Jakarta Sans', sans-serif",
                         background: isSd
