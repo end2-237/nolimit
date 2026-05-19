@@ -51,13 +51,18 @@ const SITE_PAGES: PageId[] = [
 export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }: StockLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [siteOpen, setSiteOpen] = useState(() => SITE_PAGES.includes(activePage));
   const { user, logout, hasPermission } = useAuth();
 
   useEffect(() => {
-    const close = () => setIsMobileOpen(false);
-    window.addEventListener('resize', close);
-    return () => window.removeEventListener('resize', close);
+    const check = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setIsMobileOpen(false);
+    };
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
   const handleNavigate = (page: PageId) => {
@@ -425,9 +430,11 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
         )}
 
         {/* Desktop sidebar */}
-        <div className="hidden md:flex" style={{ height: '100%' }}>
-          <SidebarContent />
-        </div>
+        {!isMobile && (
+          <div style={{ height: '100%', display: 'flex' }}>
+            <SidebarContent />
+          </div>
+        )}
 
         {/* Mobile sidebar (drawer) */}
         {isMobileOpen && (
@@ -456,46 +463,45 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
         {/* Main content */}
         <main style={{ flex: 1, overflow: 'auto', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {/* Mobile top bar */}
-          <div
-            className="md:hidden"
-            style={{
+          {isMobile && (
+            <div style={{
               height: 48, display: 'flex', alignItems: 'center', gap: 12,
               padding: '0 16px',
               background: SB,
               borderBottom: `1px solid ${SB_SEP}`,
               position: 'sticky', top: 0, zIndex: 30, flexShrink: 0,
-            }}
-          >
-            <button
-              onClick={() => setIsMobileOpen(true)}
-              style={{
-                width: 32, height: 32, borderRadius: 6,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: SB_HOVER, border: 'none', cursor: 'pointer',
-              }}
-            >
-              <Menu size={15} style={{ color: 'rgba(255,255,255,0.6)' }} />
-            </button>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.02em' }}>
-              {APP_CONFIG.shortName}
-            </span>
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <OfflineIndicator />
-              {alertCount > 0 && (
-                <button
-                  onClick={() => handleNavigate('alerts')}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '3px 9px', borderRadius: 99,
-                    background: 'rgba(239,68,68,0.15)', color: '#FCA5A5',
-                    border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                  }}
-                >
-                  <Bell size={12} /> {alertCount}
-                </button>
-              )}
+            }}>
+              <button
+                onClick={() => setIsMobileOpen(true)}
+                style={{
+                  width: 32, height: 32, borderRadius: 6,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: SB_HOVER, border: 'none', cursor: 'pointer',
+                }}
+              >
+                <Menu size={15} style={{ color: 'rgba(255,255,255,0.6)' }} />
+              </button>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.02em' }}>
+                {APP_CONFIG.shortName}
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <OfflineIndicator />
+                {alertCount > 0 && (
+                  <button
+                    onClick={() => handleNavigate('alerts')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '3px 9px', borderRadius: 99,
+                      background: 'rgba(239,68,68,0.15)', color: '#FCA5A5',
+                      border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                    }}
+                  >
+                    <Bell size={12} /> {alertCount}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Page content */}
           <div style={{ flex: 1, overflow: 'auto' }}>

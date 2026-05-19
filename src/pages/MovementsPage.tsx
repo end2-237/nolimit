@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Search, Filter, Download, ArrowUpRight, ArrowDownLeft, RefreshCw,
-  Package, Clock, CheckCircle, XCircle, User, MapPin, TrendingUp,
-  DollarSign, AlertTriangle, BarChart3, Calendar, ChevronDown, Eye
+  Search, Download, ArrowUpRight, ArrowDownLeft, RefreshCw,
+  Package, Clock, CheckCircle, XCircle, User, MapPin,
+  DollarSign, AlertTriangle, BarChart3
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,21 +14,27 @@ import { APP_CONFIG } from '../config/app.config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-const typeConfig: Record<string, { label: string; icon: any; color: string; iconColor: string }> = {
-  in: { label: 'Entrée', icon: ArrowDownLeft, color: 'bg-green-100 text-green-700', iconColor: 'text-green-600' },
-  pending_in: { label: 'Entrée (dem.)', icon: Clock, color: 'bg-yellow-100 text-yellow-700', iconColor: 'text-yellow-600' },
-  out: { label: 'Vente/Sortie', icon: ArrowUpRight, color: 'bg-red-100 text-red-700', iconColor: 'text-red-600' },
-  transfer: { label: 'Transfert', icon: RefreshCw, color: 'bg-blue-100 text-blue-700', iconColor: 'text-blue-600' },
-  adjustment: { label: 'Ajustement', icon: Package, color: 'bg-orange-100 text-orange-700', iconColor: 'text-orange-600' },
-  transport_damage: { label: 'Perte/Dégât', icon: AlertTriangle, color: 'bg-red-100 text-red-800', iconColor: 'text-red-700' },
+const typeConfig: Record<string, { label: string; icon: any; color: string; dot: string }> = {
+  in:               { label: 'Entrée',        icon: ArrowDownLeft, color: '#16A34A', dot: '#16A34A' },
+  pending_in:       { label: 'Entrée (dem.)', icon: Clock,         color: '#CA8A04', dot: '#CA8A04' },
+  out:              { label: 'Vente/Sortie',  icon: ArrowUpRight,  color: '#DC2626', dot: '#DC2626' },
+  transfer:         { label: 'Transfert',     icon: RefreshCw,     color: '#2563EB', dot: '#2563EB' },
+  adjustment:       { label: 'Ajustement',   icon: Package,       color: '#EA580C', dot: '#EA580C' },
+  transport_damage: { label: 'Perte/Dégât',  icon: AlertTriangle, color: '#991B1B', dot: '#991B1B' },
 };
 
-const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
-  confirmed: { label: 'Confirmé', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-  pending: { label: 'En attente', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-  approved: { label: 'Approuvé', color: 'bg-blue-100 text-blue-700', icon: CheckCircle },
-  rejected: { label: 'Refusé', color: 'bg-red-100 text-red-700', icon: XCircle },
+const statusConfig: Record<string, { label: string; dot: string; icon: any }> = {
+  confirmed: { label: 'Confirmé',   dot: '#16A34A', icon: CheckCircle },
+  pending:   { label: 'En attente', dot: '#CA8A04', icon: Clock },
+  approved:  { label: 'Approuvé',   dot: '#2563EB', icon: CheckCircle },
+  rejected:  { label: 'Refusé',     dot: '#DC2626', icon: XCircle },
 };
+
+const T1 = '#0F172A';
+const T2 = '#64748B';
+const T3 = '#94A3B8';
+const BDR = '1px solid #E2E8F0';
+const ACCENT = '#16A34A';
 
 function today() { return new Date().toISOString().split('T')[0]; }
 function weekStart() {
@@ -58,14 +64,14 @@ function exportToCSV(movements: Movement[]) {
     new Date(m.created_at).toLocaleString('fr-FR'),
   ]);
   const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = `mouvements_${today()}.csv`;
   a.click(); URL.revokeObjectURL(url);
 }
 
-// ─── CA Dashboard — MODIFIÉ: accepte filtres externes ───────────────────────
+// ─── CA Dashboard ─────────────────────────────────────────────────────────────
 
 function CADashboard({
   movements,
@@ -79,13 +85,10 @@ function CADashboard({
   externalDateTo?: string;
 }) {
   const [activeCity, setActiveCity] = useState<string>('all');
-  // Quand des filtres externes sont actifs, ils priment sur l'état interne
   const [internalUser, setInternalUser] = useState<string>('all');
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
 
-  // Filtre utilisateur effectif: externe si défini, sinon interne
   const activeUser = externalUser !== 'all' ? externalUser : internalUser;
-  // Filtre date effectif: externe si défini, sinon calculé depuis la période interne
   const hasExternalDate = externalDateFrom !== '' || externalDateTo !== '';
 
   const getDateFrom = () => {
@@ -103,7 +106,6 @@ function CADashboard({
   const dateFrom = getDateFrom();
   const dateTo = getDateTo();
 
-  // FIX: inclure type 'out' ET status 'confirmed' ou 'approved'
   const sales = movements.filter(m =>
     m.type === 'out' &&
     (m.status === 'confirmed' || m.status === 'approved') &&
@@ -113,7 +115,6 @@ function CADashboard({
     (activeUser === 'all' || m.user_name === activeUser)
   );
 
-  // CA par ville (respecte filtre date)
   const caByCity = APP_CONFIG.sites.reduce((acc, site) => {
     const siteSales = movements.filter(m =>
       m.type === 'out' && (m.status === 'confirmed' || m.status === 'approved') &&
@@ -130,7 +131,6 @@ function CADashboard({
     return acc;
   }, {} as Record<string, { total: number; qty: number; count: number }>);
 
-  // CA par utilisateur (respecte filtres date + ville)
   const allUsers = [...new Set(movements.filter(m => m.type === 'out' && (m.status === 'confirmed' || m.status === 'approved')).map(m => m.user_name).filter(Boolean))];
   const caByUser = allUsers.reduce((acc, userName) => {
     const userSales = movements.filter(m =>
@@ -156,141 +156,161 @@ function CADashboard({
   const totalQty = sales.reduce((sum, m) => sum + m.quantity, 0);
 
   const periodLabels = { today: "Aujourd'hui", week: 'Cette semaine', month: 'Ce mois', all: 'Tout' };
-
-  // Afficher un bandeau si des filtres externes sont actifs
   const externalFiltersActive = externalUser !== 'all' || hasExternalDate;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-4">
+    <div className="snl-card" style={{ marginBottom: 16 }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-green-600 flex items-center justify-center">
-            <DollarSign className="w-4 h-4 text-white" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: BDR, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <DollarSign style={{ width: 16, height: 16, color: 'white' }} />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-gray-900">Chiffre d'Affaires</h2>
-            <p className="text-xs text-gray-500">Ventes confirmées et approuvées</p>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T1 }}>Chiffre d'Affaires</div>
+            <div style={{ fontSize: 11.5, color: T3 }}>Ventes confirmées et approuvées</div>
           </div>
         </div>
-        {/* Sélecteur de période — désactivé si filtre externe de date actif */}
         {!hasExternalDate ? (
-          <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 flex-wrap">
+          <div style={{ display: 'flex', gap: 4, background: '#F8FAFC', border: BDR, borderRadius: 8, padding: 4, flexWrap: 'wrap' }}>
             {(['today', 'week', 'month', 'all'] as const).map(p => (
               <button key={p} onClick={() => setPeriod(p)}
-                className={`px-2 py-1 text-xs rounded-lg font-medium transition-all ${period === p ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                style={{
+                  padding: '4px 10px', fontSize: 11.5, fontWeight: 500, borderRadius: 6, border: 'none', cursor: 'pointer',
+                  background: period === p ? ACCENT : 'transparent',
+                  color: period === p ? 'white' : T2,
+                  transition: 'all 0.15s',
+                }}>
                 {periodLabels[p]}
               </button>
             ))}
           </div>
         ) : (
-          <div className="text-xs text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl font-medium">
-            Filtre date actif: {externalDateFrom || '…'} → {externalDateTo || '…'}
+          <div style={{ fontSize: 11.5, color: '#2563EB', background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '6px 12px', borderRadius: 8, fontWeight: 500 }}>
+            Filtre date : {externalDateFrom || '…'} → {externalDateTo || '…'}
           </div>
         )}
       </div>
 
-      {/* Bandeau filtre vendeur externe */}
+      {/* Bandeau vendeur externe */}
       {externalUser !== 'all' && (
-        <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700 font-medium flex items-center gap-2">
-          <User className="w-3 h-3" />
-          Filtre vendeur actif : <strong>{externalUser}</strong> — CA affiché uniquement pour ce vendeur
+        <div style={{ padding: '8px 18px', background: '#FFFBEB', borderBottom: '1px solid #FDE68A', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#92400E', fontWeight: 500 }}>
+          <User style={{ width: 12, height: 12 }} />
+          Filtre vendeur actif : <strong style={{ marginLeft: 2 }}>{externalUser}</strong> — CA affiché uniquement pour ce vendeur
         </div>
       )}
 
-      <div className="p-5">
-        {/* Global KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
-            <div className="text-xs text-gray-500">CA Total</div>
-            <div className="text-2xl font-bold text-green-700 font-mono">{totalCA.toLocaleString('fr-FR')}</div>
-            <div className="text-xs text-gray-400">XAF</div>
+      <div style={{ padding: '18px' }}>
+        {/* KPI tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+          <div style={{ background: 'white', border: BDR, borderRadius: 10, padding: '14px 18px' }}>
+            <div style={{ fontSize: 11, color: T3, marginBottom: 4 }}>CA Total</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: ACCENT, fontFamily: 'JetBrains Mono, monospace' }}>{totalCA.toLocaleString('fr-FR')}</div>
+            <div style={{ fontSize: 11, color: T3 }}>XAF</div>
           </div>
-          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100">
-            <div className="text-xs text-gray-500">Unités vendues</div>
-            <div className="text-2xl font-bold text-blue-700 font-mono">{totalQty}</div>
-            <div className="text-xs text-gray-400">articles</div>
+          <div style={{ background: 'white', border: BDR, borderRadius: 10, padding: '14px 18px' }}>
+            <div style={{ fontSize: 11, color: T3, marginBottom: 4 }}>Unités vendues</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#2563EB', fontFamily: 'JetBrains Mono, monospace' }}>{totalQty}</div>
+            <div style={{ fontSize: 11, color: T3 }}>articles</div>
           </div>
-          <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-4 border border-purple-100">
-            <div className="text-xs text-gray-500">Transactions</div>
-            <div className="text-2xl font-bold text-purple-700 font-mono">{sales.length}</div>
-            <div className="text-xs text-gray-400">ventes validées</div>
+          <div style={{ background: 'white', border: BDR, borderRadius: 10, padding: '14px 18px' }}>
+            <div style={{ fontSize: 11, color: T3, marginBottom: 4 }}>Transactions</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#7C3AED', fontFamily: 'JetBrains Mono, monospace' }}>{sales.length}</div>
+            <div style={{ fontSize: 11, color: T3 }}>ventes validées</div>
           </div>
         </div>
 
         {/* CA par ville */}
-        <div className="mb-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Par Ville</p>
-          <div className="flex gap-2 mb-3 flex-wrap">
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 10.5, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Par Ville</p>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
             <button onClick={() => setActiveCity('all')}
-              className={`px-3 py-1.5 text-xs rounded-xl font-medium border transition-all ${activeCity === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'}`}>
+              style={{
+                padding: '4px 10px', fontSize: 11.5, borderRadius: 6, border: BDR, cursor: 'pointer', fontWeight: 500,
+                background: activeCity === 'all' ? T1 : 'white',
+                color: activeCity === 'all' ? 'white' : T2,
+              }}>
               Toutes
             </button>
             {APP_CONFIG.sites.map(site => (
               <button key={site.id} onClick={() => setActiveCity(site.id)}
-                className={`px-3 py-1.5 text-xs rounded-xl font-medium border transition-all ${activeCity === site.id ? 'text-white border-transparent' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'}`}
-                style={activeCity === site.id ? { backgroundColor: site.color, borderColor: site.color } : {}}>
+                style={{
+                  padding: '4px 10px', fontSize: 11.5, borderRadius: 6, border: activeCity === site.id ? `2px solid ${site.color}` : BDR, cursor: 'pointer', fontWeight: 500,
+                  background: activeCity === site.id ? site.color : 'white',
+                  color: activeCity === site.id ? 'white' : T2,
+                }}>
                 {site.name}
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
             {APP_CONFIG.sites.map(site => {
               const data = caByCity[site.id] || { total: 0, qty: 0, count: 0 };
+              const isActive = activeCity === site.id;
               return (
-                <button key={site.id} onClick={() => setActiveCity(activeCity === site.id ? 'all' : site.id)}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${activeCity === site.id ? 'border-2' : 'border border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200'}`}
-                  style={activeCity === site.id ? { borderColor: site.color, backgroundColor: site.color + '10' } : {}}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <MapPin className="w-3 h-3" style={{ color: site.color }} />
-                    <span className="text-xs font-semibold text-gray-700">{site.name}</span>
+                <button key={site.id} onClick={() => setActiveCity(isActive ? 'all' : site.id)}
+                  style={{
+                    padding: '10px 12px', borderRadius: 10, border: isActive ? `2px solid ${site.color}` : BDR,
+                    background: isActive ? site.color + '12' : '#F8FAFC', cursor: 'pointer', textAlign: 'left',
+                    transition: 'all 0.15s',
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                    <MapPin style={{ width: 12, height: 12, color: site.color }} />
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: T1 }}>{site.name}</span>
                   </div>
-                  <div className="text-base font-bold font-mono" style={{ color: site.color }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: site.color, fontFamily: 'JetBrains Mono, monospace' }}>
                     {data.total.toLocaleString('fr-FR')}
                   </div>
-                  <div className="text-[10px] text-gray-400">{data.qty} u. · {data.count} ventes</div>
+                  <div style={{ fontSize: 10, color: T3 }}>{data.qty} u. · {data.count} ventes</div>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* CA par vendeur — si filtre externe actif, highlight le vendeur filtré */}
+        {/* CA par vendeur */}
         <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Par Vendeur</p>
+          <p style={{ fontSize: 10.5, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Par Vendeur</p>
           {Object.keys(caByUser).length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-3">Aucune vente pour cette période</p>
+            <p style={{ fontSize: 12, color: T3, textAlign: 'center', padding: '12px 0' }}>Aucune vente pour cette période</p>
           ) : (
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {Object.entries(caByUser)
                 .sort((a, b) => b[1].total - a[1].total)
                 .map(([userName, data]) => {
                   const initials = userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
                   const isSelected = internalUser === userName || externalUser === userName;
-                  // Total CA pour le calcul du pourcentage (sur tous vendeurs de la période/ville)
                   const grandTotal = Object.values(caByUser).reduce((s, v) => s + v.total, 0);
                   const pct = grandTotal > 0 ? (data.total / grandTotal) * 100 : 0;
                   const isExternallyHighlighted = externalUser === userName;
                   return (
                     <button key={userName}
                       onClick={() => externalUser === 'all' ? setInternalUser(isSelected ? 'all' : userName) : undefined}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all
-                        ${isExternallyHighlighted ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200' :
-                          isSelected ? 'border-green-400 bg-green-50' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200'}
-                        ${externalUser !== 'all' && !isExternallyHighlighted ? 'opacity-50' : ''}`}>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${isExternallyHighlighted ? 'bg-amber-500' : isSelected ? 'bg-green-600' : 'bg-gray-400'}`}>
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, border: BDR,
+                        background: isExternallyHighlighted ? '#FFFBEB' : isSelected ? '#F0FDF4' : '#F8FAFC',
+                        borderColor: isExternallyHighlighted ? '#FCD34D' : isSelected ? '#86EFAC' : '#E2E8F0',
+                        cursor: 'pointer', textAlign: 'left',
+                        opacity: externalUser !== 'all' && !isExternallyHighlighted ? 0.5 : 1,
+                        transition: 'all 0.15s',
+                      }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 11, fontWeight: 700, color: 'white', flexShrink: 0,
+                        background: isExternallyHighlighted ? '#F59E0B' : isSelected ? ACCENT : T3,
+                      }}>
                         {initials}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-semibold text-gray-800">{userName}</span>
-                          <span className="text-sm font-bold text-green-700 font-mono">{data.total.toLocaleString('fr-FR')} XAF</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: T1 }}>{userName}</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: ACCENT, fontFamily: 'JetBrains Mono, monospace' }}>{data.total.toLocaleString('fr-FR')} XAF</span>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, background: '#E2E8F0', borderRadius: 99, height: 5, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: ACCENT, borderRadius: 99, width: `${pct}%`, transition: 'width 0.3s' }} />
                           </div>
-                          <span className="text-[10px] text-gray-400 whitespace-nowrap">{data.qty} u. · {pct.toFixed(0)}%</span>
+                          <span style={{ fontSize: 10, color: T3, whiteSpace: 'nowrap' }}>{data.qty} u. · {pct.toFixed(0)}%</span>
                         </div>
                       </div>
                     </button>
@@ -335,85 +355,103 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
   const pendingOther = pending.filter(m => m.type !== 'pending_in' && m.type !== 'in');
 
   return (
-    <div className="border-l-4 border-orange-400 bg-orange-50 rounded-xl overflow-hidden mb-4">
-      <div className="flex items-center gap-3 px-4 py-3 bg-orange-100 border-b border-orange-200">
-        <Clock className="w-4 h-4 text-orange-600 flex-shrink-0 animate-pulse" />
-        <div className="flex-1">
-          <h3 className="text-sm font-bold text-orange-800">
+    <div style={{ background: 'white', border: '1px solid #FCD34D', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#FFFBEB', borderBottom: '1px solid #FDE68A' }}>
+        <Clock style={{ width: 16, height: 16, color: '#D97706', flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>
             {pending.length} demande(s) en attente de validation
-          </h3>
-          <p className="text-xs text-orange-600">
+          </div>
+          <div style={{ fontSize: 11.5, color: '#B45309' }}>
             {pendingIn.length > 0 && `${pendingIn.length} entrée(s) en attente`}
             {pendingOther.length > 0 && ` · ${pendingOther.length} autre(s)`}
-          </p>
+          </div>
         </div>
-        <button onClick={() => { load(); onRefresh(); }} className="text-orange-500 hover:text-orange-700">
-          <RefreshCw className="w-4 h-4" />
+        <button onClick={() => { load(); onRefresh(); }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D97706', padding: 4 }}>
+          <RefreshCw style={{ width: 15, height: 15 }} />
         </button>
       </div>
 
-      <div className="divide-y divide-orange-100 max-h-80 overflow-y-auto">
-        {pending.map(m => {
-          const isOut = false; // No more pending_out - exits are immediate
+      <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+        {pending.map((m, idx) => {
+          const isOut = false;
           const isIn = m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending');
           const site = APP_CONFIG.sites.find(s => s.id === (isOut ? m.from_site_id : m.to_site_id) || s.id === m.from_site_id || s.id === m.to_site_id);
           const product = db.getProductById(m.product_id);
           const estimatedCA = isOut && product ? m.quantity * product.price : 0;
 
           return (
-            <div key={m.id} className="px-4 py-3">
-              <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3">
-                <div className="flex items-start gap-2 flex-1 min-w-0">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isOut ? 'bg-red-100' : isIn ? 'bg-green-100' : 'bg-blue-100'}`}>
-                  {isOut ? <ArrowUpRight className="w-4 h-4 text-red-600" /> : <ArrowDownLeft className="w-4 h-4 text-green-600" />}
+            <div key={m.id} style={{ padding: '12px 16px', borderBottom: idx < pending.length - 1 ? '1px solid #FEF3C7' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                {/* Icon */}
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2,
+                  background: isOut ? '#FEE2E2' : isIn ? '#DCFCE7' : '#DBEAFE',
+                }}>
+                  {isOut
+                    ? <ArrowUpRight style={{ width: 15, height: 15, color: '#DC2626' }} />
+                    : <ArrowDownLeft style={{ width: 15, height: 15, color: '#16A34A' }} />
+                  }
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                    <span className="font-semibold text-gray-900 text-sm">{m.product_name}</span>
-                    <Badge className={'bg-green-100 text-green-700 text-[10px]'}>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: T1 }}>{m.product_name}</span>
+                    <span style={{ fontSize: 10.5, background: '#DCFCE7', color: '#166534', padding: '1px 6px', borderRadius: 4, fontWeight: 500 }}>
                       {isIn ? 'Entrée demandée' : m.type}
-                    </Badge>
-                    {site && <Badge variant="outline" className="text-[10px]">{site.name}</Badge>}
+                    </span>
+                    {site && (
+                      <span style={{ fontSize: 10.5, background: '#F1F5F9', color: T2, padding: '1px 6px', borderRadius: 4, border: BDR }}>
+                        {site.name}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
-                    <span className={`font-mono font-bold ${isOut ? 'text-red-600' : 'text-green-600'}`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11.5, color: T2 }}>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: isOut ? '#DC2626' : ACCENT }}>
                       {isOut ? '-' : '+'}{m.quantity} unités
                     </span>
                     {isOut && estimatedCA > 0 && (
-                      <span className="text-green-700 font-semibold">≈ {estimatedCA.toLocaleString('fr-FR')} XAF</span>
+                      <span style={{ color: ACCENT, fontWeight: 600 }}>≈ {estimatedCA.toLocaleString('fr-FR')} XAF</span>
                     )}
-                    <span className="text-gray-400 truncate">{m.reason}</span>
-                    <span className="font-medium text-gray-700 flex items-center gap-1">
-                      <User className="w-3 h-3" />{m.user_name}
+                    <span style={{ color: T3 }}>{m.reason}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: T1, fontWeight: 500 }}>
+                      <User style={{ width: 11, height: 11 }} />{m.user_name}
                     </span>
                   </div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">
+                  <div style={{ fontSize: 10.5, color: T3, marginTop: 3 }}>
                     Réf: {m.reference} · {new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </div>
 
                   {rejectingId === m.id && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Input className="h-7 text-xs flex-1 min-w-[140px]" placeholder="Raison du refus..."
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <input
+                        className="snl-input"
+                        style={{ height: 30, flex: 1, minWidth: 140, fontSize: 12 }}
+                        placeholder="Raison du refus..."
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
-                        autoFocus />
-                      <Button size="sm" className="h-7 bg-red-600 hover:bg-red-700 text-white text-xs px-2" onClick={() => handleReject(m.id)}>Refuser</Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setRejectingId(null)}>Annuler</Button>
+                        autoFocus
+                      />
+                      <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', background: '#DC2626' }}
+                        onClick={() => handleReject(m.id)}>Refuser</button>
+                      <button className="snl-btn snl-btn-secondary" style={{ height: 30, fontSize: 12, padding: '0 10px' }}
+                        onClick={() => setRejectingId(null)}>Annuler</button>
                     </div>
                   )}
                 </div>
-                </div>
 
                 {rejectingId !== m.id && (
-                  <div className="flex gap-1.5 flex-shrink-0 mt-1 sm:mt-0">
-                    <Button size="sm" className="h-7 bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 gap-1"
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 4 }}
                       onClick={() => handleApprove(m.id)}>
-                      <CheckCircle className="w-3 h-3" /> Valider
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 border-red-200 text-red-600 hover:bg-red-50 text-xs px-2.5 gap-1"
+                      <CheckCircle style={{ width: 12, height: 12 }} /> Valider
+                    </button>
+                    <button className="snl-btn snl-btn-secondary" style={{ height: 30, fontSize: 12, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 4, color: '#DC2626', borderColor: '#FECACA' }}
                       onClick={() => setRejectingId(m.id)}>
-                      <XCircle className="w-3 h-3" /> Refuser
-                    </Button>
+                      <XCircle style={{ width: 12, height: 12 }} /> Refuser
+                    </button>
                   </div>
                 )}
               </div>
@@ -449,7 +487,6 @@ export function MovementsPage() {
       date_from: dateFrom || undefined,
       date_to: dateTo || undefined,
     });
-
     const filtered = isAdmin ? all : all.filter(m => m.user_id === user?.id);
     setAllMovements(all);
     setMovements(filtered);
@@ -477,230 +514,276 @@ export function MovementsPage() {
   const pendingCount = movements.filter(m => m.status === 'pending').length;
   const allUsers = isAdmin ? [...new Set(allMovements.map(m => m.user_name).filter(Boolean))] : [];
 
+  const selectStyle: React.CSSProperties = {
+    height: 34, border: '1px solid #E2E8F0', borderRadius: 6, padding: '0 10px',
+    fontSize: 12.5, background: 'white', color: T1, fontFamily: 'inherit', outline: 'none',
+    cursor: 'pointer',
+  };
+
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">
-              {isAdmin ? 'Mouvements & Chiffre d\'Affaires' : 'Mes Mouvements'}
-            </h1>
-            <p className="text-gray-500 text-sm">
-              {displayMovements.length} mouvement(s)
-              {pendingCount > 0 && isAdmin && (
-                <span className="ml-2 text-orange-600 font-semibold animate-pulse">· {pendingCount} en attente de validation !</span>
-              )}
-              {!isAdmin && <span className="ml-1 text-gray-400">(vos opérations uniquement)</span>}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {hasPermission('export') && (
-              <Button variant="outline" size="sm" onClick={() => exportToCSV(displayMovements)} disabled={displayMovements.length === 0}>
-                <Download className="w-3.5 h-3.5 mr-1.5" /> CSV
-              </Button>
+    <div className="snl-page">
+      {/* Page header */}
+      <div className="snl-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div>
+          <p className="snl-eyebrow">Stock</p>
+          <h1 className="snl-page-title">
+            Mouvements{isAdmin ? " & Chiffre d'Affaires" : ""}
+          </h1>
+          <p className="snl-page-sub">
+            {displayMovements.length} mouvement(s)
+            {pendingCount > 0 && isAdmin && (
+              <span style={{ marginLeft: 8, color: '#EA580C', fontWeight: 600 }}>· {pendingCount} en attente !</span>
             )}
-          </div>
+            {!isAdmin && <span style={{ marginLeft: 4, color: T3 }}>(vos opérations uniquement)</span>}
+          </p>
         </div>
-
-        {/* Tabs */}
-        {isAdmin && (
-          <div className="flex gap-1 mb-4">
-            <button onClick={() => setActiveTab('movements')}
-              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-medium transition-all ${activeTab === 'movements' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              <RefreshCw className="w-3.5 h-3.5" /> Mouvements
-              {pendingCount > 0 && <span className="w-4 h-4 bg-orange-500 text-white text-[9px] rounded-full flex items-center justify-center">{pendingCount}</span>}
-            </button>
-            <button onClick={() => setActiveTab('ca')}
-              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-medium transition-all ${activeTab === 'ca' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              <BarChart3 className="w-3.5 h-3.5" /> Chiffre d'Affaires
-              {userFilter !== 'all' && <span className="text-[10px] bg-amber-400 text-white px-1.5 py-0.5 rounded-full">filtré</span>}
-            </button>
-          </div>
+        {hasPermission('export') && (
+          <button
+            onClick={() => exportToCSV(displayMovements)}
+            className="snl-btn snl-btn-secondary"
+            disabled={displayMovements.length === 0}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Download style={{ width: 14, height: 14 }} /> CSV
+          </button>
         )}
+      </div>
 
-        {/* Filters */}
-        <div className="flex gap-2 mb-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <Input placeholder="Produit, référence, vendeur..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 h-9 text-sm" />
-          </div>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[160px] h-9 text-sm">
-              <Filter className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les types</SelectItem>
-              {Object.entries(typeConfig).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px] h-9 text-sm">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les statuts</SelectItem>
-              {Object.entries(statusConfig).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={siteFilter} onValueChange={setSiteFilter}>
-            <SelectTrigger className="w-[140px] h-9 text-sm">
-              <SelectValue placeholder="Ville" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes villes</SelectItem>
-              {allowedSites.map(sid => {
-                const s = APP_CONFIG.sites.find(s => s.id === sid);
-                return s ? <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem> : null;
-              })}
-            </SelectContent>
-          </Select>
-          {isAdmin && allUsers.length > 0 && (
-            <Select value={userFilter} onValueChange={setUserFilter}>
-              <SelectTrigger className="w-[160px] h-9 text-sm">
-                <User className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
-                <SelectValue placeholder="Vendeur" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les vendeurs</SelectItem>
-                {allUsers.map(u => u ? <SelectItem key={u} value={u}>{u}</SelectItem> : null)}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        {/* Date range */}
-        <div className="flex gap-2 items-center flex-wrap">
-          <span className="text-xs text-gray-500 flex-shrink-0">Période :</span>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Input type="date" className="h-8 text-xs w-32" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-            <span className="text-gray-400 text-xs">→</span>
-            <Input type="date" className="h-8 text-xs w-32" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-          </div>
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-gray-400 hover:text-gray-600 underline">Effacer</button>
-          )}
-          <div className="flex gap-1.5">
-            {[
-              { label: "Auj.", from: today(), to: today() },
-              { label: 'Sem.', from: weekStart(), to: today() },
-              { label: 'Mois', from: monthStart(), to: today() },
-            ].map(p => (
-              <button key={p.label} onClick={() => { setDateFrom(p.from); setDateTo(p.to); }}
-                className="text-xs px-2 py-1 bg-gray-100 hover:bg-green-100 hover:text-green-700 rounded-lg transition-colors">
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <button onClick={load} className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 ml-auto">
-            <RefreshCw className="w-3 h-3" /> Actualiser
+      {/* Tabs */}
+      {isAdmin && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+          <button
+            onClick={() => setActiveTab('movements')}
+            className={`snl-pill${activeTab === 'movements' ? ' active' : ''}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <RefreshCw style={{ width: 13, height: 13 }} />
+            Mouvements
+            {pendingCount > 0 && (
+              <span style={{
+                width: 18, height: 18, background: '#EA580C', color: 'white', fontSize: 9.5, fontWeight: 700,
+                borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {pendingCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('ca')}
+            className={`snl-pill${activeTab === 'ca' ? ' active' : ''}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <BarChart3 style={{ width: 13, height: 13 }} />
+            Chiffre d'Affaires
+            {userFilter !== 'all' && (
+              <span style={{ fontSize: 10, background: '#F59E0B', color: 'white', padding: '1px 5px', borderRadius: 99, fontWeight: 600 }}>filtré</span>
+            )}
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
-
-        {/* CA Tab — passe les filtres externes */}
-        {activeTab === 'ca' && isAdmin && (
-          <CADashboard
-            movements={allMovements}
-            externalUser={userFilter}
-            externalDateFrom={dateFrom}
-            externalDateTo={dateTo}
+      {/* Filters row */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
+        {/* Search */}
+        <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 340 }}>
+          <Search style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: T3, pointerEvents: 'none' }} />
+          <input
+            className="snl-input"
+            style={{ width: '100%', paddingLeft: 32, height: 34, fontSize: 12.5 }}
+            placeholder="Produit, référence, vendeur..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
           />
-        )}
+        </div>
 
-        {/* Movements Tab */}
-        {activeTab === 'movements' && (
-          <>
-            {isAdmin && <PendingApprovalsAdmin onRefresh={load} />}
+        {/* Type filter */}
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={selectStyle}>
+          <option value="all">Tous les types</option>
+          {Object.entries(typeConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
 
-            {displayMovements.length === 0 ? (
-              <div className="text-center py-16 text-gray-400">
-                <RefreshCw className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                <p className="text-sm">Aucun mouvement trouvé</p>
-              </div>
-            ) : (
-              <div className="border border-[#E2E8F0] rounded-xl overflow-x-auto bg-white shadow-sm">
-                <table className="w-full text-sm min-w-[700px]">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-[#E2E8F0]">
-                      {['Type', 'Statut', 'Référence', 'Produit', 'Qté', 'Site', 'Motif', 'Date', 'Vendeur'].map(h => (
-                        <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayMovements.map(m => {
-                      const cfg = typeConfig[m.type] || typeConfig.adjustment;
-                      const sCfg = statusConfig[m.status] || statusConfig.confirmed;
-                      const Icon = cfg.icon;
-                      const StatusIcon = sCfg.icon;
-                      const product = db.getProductById(m.product_id);
-                      const isOut = m.type === 'out' || m.type === 'pending_out';
-                      const estCA = isOut && product ? m.quantity * product.price : 0;
-                      // FIX: afficher le CA pour confirmed ET approved
-                      const showCA = isOut && estCA > 0 && (m.status === 'confirmed' || m.status === 'approved');
+        {/* Status filter */}
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={selectStyle}>
+          <option value="all">Tous les statuts</option>
+          {Object.entries(statusConfig).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
 
-                      return (
-                        <tr key={m.id} className={`border-b border-[#F1F5F9] hover:bg-gray-50 ${m.status === 'pending' ? 'bg-yellow-50/50' : m.status === 'rejected' ? 'bg-red-50/30' : ''}`}>
-                          <td className="px-3 py-2.5">
-                            <Badge className={`text-xs ${cfg.color}`}>
-                              <Icon className={`w-2.5 h-2.5 mr-1 ${cfg.iconColor}`} />
-                              {cfg.label}
-                            </Badge>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full w-fit ${sCfg.color}`}>
-                              <StatusIcon className="w-3 h-3" />
-                              {sCfg.label}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{m.reference}</td>
-                          <td className="px-3 py-2.5">
-                            <div className="font-medium max-w-[120px] truncate">{m.product_name}</div>
-                            {/* FIX: Afficher CA pour approved aussi */}
-                            {showCA && (
-                              <div className="text-[10px] text-green-600 font-mono font-semibold">
-                                {estCA.toLocaleString('fr-FR')} XAF
-                              
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5 font-mono font-semibold">
-                            <span className={isOut ? 'text-red-600' : 'text-green-600'}>
-                              {isOut ? '-' : '+'}{m.quantity}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-gray-600 text-xs">
-                            {m.type === 'transfer' ? `${m.from_site_id} → ${m.to_site_id}` :
-                              (isOut || m.type === 'transport_damage') ? m.from_site_id :
-                              m.to_site_id}
-                          </td>
-                          <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[120px] truncate" title={m.reason}>{m.reason}</td>
-                          <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                            {new Date(m.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
-                            {' '}
-                            {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-1 text-xs text-gray-600">
-                              <User className="w-3 h-3 text-gray-400" />
-                              <span className="truncate max-w-[80px]">{m.user_name || '—'}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
+        {/* Site filter */}
+        <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)} style={selectStyle}>
+          <option value="all">Toutes villes</option>
+          {allowedSites.map(sid => {
+            const s = APP_CONFIG.sites.find(s => s.id === sid);
+            return s ? <option key={s.id} value={s.id}>{s.name}</option> : null;
+          })}
+        </select>
+
+        {/* User filter (admin only) */}
+        {isAdmin && allUsers.length > 0 && (
+          <select value={userFilter} onChange={e => setUserFilter(e.target.value)} style={selectStyle}>
+            <option value="all">Tous les vendeurs</option>
+            {allUsers.map(u => u ? <option key={u} value={u}>{u}</option> : null)}
+          </select>
         )}
       </div>
+
+      {/* Date range */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+        <span style={{ fontSize: 12, color: T3, flexShrink: 0 }}>Période :</span>
+        <input
+          type="date"
+          className="snl-input"
+          style={{ width: 128, height: 34 }}
+          value={dateFrom}
+          onChange={e => setDateFrom(e.target.value)}
+        />
+        <span style={{ fontSize: 12, color: T3 }}>→</span>
+        <input
+          type="date"
+          className="snl-input"
+          style={{ width: 128, height: 34 }}
+          value={dateTo}
+          onChange={e => setDateTo(e.target.value)}
+        />
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+            style={{ fontSize: 11.5, color: T3, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+            Effacer
+          </button>
+        )}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[
+            { label: "Auj.", from: today(), to: today() },
+            { label: 'Sem.', from: weekStart(), to: today() },
+            { label: 'Mois', from: monthStart(), to: today() },
+          ].map(p => (
+            <button key={p.label} onClick={() => { setDateFrom(p.from); setDateTo(p.to); }}
+              style={{
+                fontSize: 11.5, padding: '4px 8px', background: '#F1F5F9', border: 'none', borderRadius: 6,
+                cursor: 'pointer', color: T2, fontFamily: 'inherit',
+              }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={load}
+          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: ACCENT, background: 'none', border: 'none', cursor: 'pointer' }}>
+          <RefreshCw style={{ width: 12, height: 12 }} /> Actualiser
+        </button>
+      </div>
+
+      {/* CA Tab */}
+      {activeTab === 'ca' && isAdmin && (
+        <CADashboard
+          movements={allMovements}
+          externalUser={userFilter}
+          externalDateFrom={dateFrom}
+          externalDateTo={dateTo}
+        />
+      )}
+
+      {/* Movements Tab */}
+      {activeTab === 'movements' && (
+        <>
+          {isAdmin && <PendingApprovalsAdmin onRefresh={load} />}
+
+          {displayMovements.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '64px 0', color: T3 }}>
+              <RefreshCw style={{ width: 40, height: 40, margin: '0 auto 12px', opacity: 0.2 }} />
+              <p style={{ fontSize: 13 }}>Aucun mouvement trouvé</p>
+            </div>
+          ) : (
+            <div className="snl-card" style={{ overflowX: 'auto' }}>
+              <table className="snl-table" style={{ minWidth: 700 }}>
+                <thead>
+                  <tr>
+                    {['Type', 'Statut', 'Référence', 'Produit', 'Qté', 'Site', 'Motif', 'Date', 'Vendeur'].map(h => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayMovements.map(m => {
+                    const cfg = typeConfig[m.type] || typeConfig.adjustment;
+                    const sCfg = statusConfig[m.status] || statusConfig.confirmed;
+                    const StatusIcon = sCfg.icon;
+                    const product = db.getProductById(m.product_id);
+                    const isOut = m.type === 'out' || m.type === 'pending_out';
+                    const estCA = isOut && product ? m.quantity * product.price : 0;
+                    const showCA = isOut && estCA > 0 && (m.status === 'confirmed' || m.status === 'approved');
+
+                    return (
+                      <tr key={m.id} style={{
+                        background: m.status === 'pending' ? '#FFFBEB' : m.status === 'rejected' ? '#FFF5F5' : undefined,
+                      }}>
+                        {/* Type */}
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.dot, flexShrink: 0, display: 'inline-block' }} />
+                            <span style={{ color: T1, fontWeight: 500 }}>{cfg.label}</span>
+                          </span>
+                        </td>
+                        {/* Status */}
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                            <StatusIcon style={{ width: 12, height: 12, color: sCfg.dot, flexShrink: 0 }} />
+                            <span style={{ color: T2 }}>{sCfg.label}</span>
+                          </span>
+                        </td>
+                        {/* Reference */}
+                        <td>
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11.5, color: T3 }}>{m.reference}</span>
+                        </td>
+                        {/* Product */}
+                        <td>
+                          <div style={{ fontWeight: 500, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T1, fontSize: 12.5 }}>
+                            {m.product_name}
+                          </div>
+                          {showCA && (
+                            <div style={{ fontSize: 10.5, color: ACCENT, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>
+                              {estCA.toLocaleString('fr-FR')} XAF
+                            </div>
+                          )}
+                        </td>
+                        {/* Qty */}
+                        <td>
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: isOut ? '#DC2626' : ACCENT, fontSize: 13 }}>
+                            {isOut ? '-' : '+'}{m.quantity}
+                          </span>
+                        </td>
+                        {/* Site */}
+                        <td style={{ fontSize: 12, color: T2 }}>
+                          {m.type === 'transfer'
+                            ? `${m.from_site_id} → ${m.to_site_id}`
+                            : (isOut || m.type === 'transport_damage') ? m.from_site_id : m.to_site_id}
+                        </td>
+                        {/* Reason */}
+                        <td style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: T2 }} title={m.reason}>
+                          {m.reason}
+                        </td>
+                        {/* Date */}
+                        <td style={{ fontSize: 11.5, color: T2, whiteSpace: 'nowrap' }}>
+                          {new Date(m.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                          {' '}
+                          {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        {/* Vendor */}
+                        <td>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: T2 }}>
+                            <User style={{ width: 12, height: 12, color: T3, flexShrink: 0 }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80 }}>
+                              {m.user_name || '—'}
+                            </span>
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

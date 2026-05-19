@@ -1,30 +1,32 @@
 import { useState, useEffect } from 'react';
 import { Bell, AlertTriangle, Clock, CheckCircle, X, Filter, Package, ShieldAlert } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { db, Alert } from '../services/database';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
 
+const T1 = '#0F172A';
+const T2 = '#64748B';
+const T3 = '#94A3B8';
+const BDR = '1px solid #E2E8F0';
+
 const alertTypeConfig: Record<string, {
-  label: string; icon: any; color: string; iconColor: string; bg: string;
+  label: string; icon: any; dotColor: string; iconBg: string; iconColor: string; numColor: string;
 }> = {
   critical_stock: {
     label: 'Stock Critique', icon: AlertTriangle,
-    color: 'bg-red-100 text-red-700 border-red-200', iconColor: 'text-red-600', bg: 'bg-red-50',
+    dotColor: '#DC2626', iconBg: '#FEF2F2', iconColor: '#DC2626', numColor: '#DC2626',
   },
   low_stock: {
     label: 'Stock Faible', icon: Package,
-    color: 'bg-orange-100 text-orange-700 border-orange-200', iconColor: 'text-orange-600', bg: 'bg-orange-50',
+    dotColor: '#EA580C', iconBg: '#FFF7ED', iconColor: '#EA580C', numColor: '#EA580C',
   },
   expiry: {
     label: 'Expiration', icon: Clock,
-    color: 'bg-yellow-100 text-yellow-700 border-yellow-200', iconColor: 'text-yellow-600', bg: 'bg-yellow-50',
+    dotColor: '#CA8A04', iconBg: '#FEFCE8', iconColor: '#CA8A04', numColor: '#CA8A04',
   },
   pending_approval: {
     label: 'En attente', icon: ShieldAlert,
-    color: 'bg-blue-100 text-blue-700 border-blue-200', iconColor: 'text-blue-600', bg: 'bg-blue-50',
+    dotColor: '#2563EB', iconBg: '#EFF6FF', iconColor: '#2563EB', numColor: '#2563EB',
   },
 };
 
@@ -68,77 +70,114 @@ export function AlertsPage() {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="snl-page">
       {/* Header */}
-      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-              <Bell className="w-5 h-5 text-orange-600" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Alertes</h1>
-              <p className="text-gray-500 text-sm">
-                {unreadCount > 0 ? `${unreadCount} alerte(s) non lue(s)` : 'Toutes les alertes sont lues'}
-              </p>
-            </div>
+      <div className="snl-page-header" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <p className="snl-eyebrow">Centre de notifications</p>
+            <h1 className="snl-page-title">Alertes</h1>
+            <p className="snl-page-sub">
+              {unreadCount > 0 ? `${unreadCount} alerte(s) non lue(s)` : 'Toutes les alertes sont lues'}
+            </p>
           </div>
           {unreadCount > 0 && (
-            <Button variant="outline" size="sm" onClick={() => { db.markAllAlertsRead(); load(); }}>
-              <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
+            <button
+              className="snl-btn snl-btn-secondary"
+              onClick={() => { db.markAllAlertsRead(); load(); }}
+            >
+              <CheckCircle style={{ width: 14, height: 14, marginRight: 6 }} />
               Tout marquer lu
-            </Button>
+            </button>
           )}
         </div>
 
-        <div className="flex gap-3 flex-wrap">
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[180px] h-9">
-              <Filter className="w-3.5 h-3.5 mr-1.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les types</SelectItem>
+        {/* Filters row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* Type filter — native select */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Filter style={{ width: 13, height: 13, color: T3, flexShrink: 0 }} />
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              style={{
+                border: BDR,
+                borderRadius: 6,
+                height: 34,
+                padding: '0 10px',
+                fontSize: 12.5,
+                background: 'white',
+                color: T1,
+                fontFamily: 'inherit',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="all">Tous les types</option>
               {Object.entries(alertTypeConfig).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                <option key={k} value={k}>{v.label}</option>
               ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
-              <SelectItem value="unread">Non lues ({unreadCount})</SelectItem>
-              <SelectItem value="read">Lues</SelectItem>
-            </SelectContent>
-          </Select>
+            </select>
+          </div>
+
+          {/* Status filter — pills */}
+          <div style={{ display: 'flex', gap: 4 }}>
+            {(['all', 'unread', 'read'] as const).map(s => {
+              const labels: Record<string, string> = {
+                all: 'Toutes',
+                unread: `Non lues${unreadCount > 0 ? ` (${unreadCount})` : ''}`,
+                read: 'Lues',
+              };
+              return (
+                <button
+                  key={s}
+                  className={`snl-pill${statusFilter === s ? ' active' : ''}`}
+                  onClick={() => setStatusFilter(s)}
+                >
+                  {labels[s]}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b border-[#F1F5F9]">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Stat tiles */}
+      <div style={{ padding: '12px 24px', borderBottom: BDR, background: '#F8FAFC' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {Object.entries(counts).map(([type, count]) => {
             const cfg = alertTypeConfig[type];
             if (!cfg) return null;
             const Icon = cfg.icon;
+            const isActive = typeFilter === type;
             return (
               <button
                 key={type}
+                className="snl-card-sm"
                 onClick={() => setTypeFilter(type === typeFilter ? 'all' : type)}
-                className={`bg-white rounded-xl border p-3 flex items-center gap-3 transition-all hover:shadow-sm text-left ${typeFilter === type ? 'border-current ring-1 ring-current' : 'border-gray-200'}`}
-                style={typeFilter === type ? { borderColor: cfg.iconColor.replace('text-', '').replace('-600', '') } : {}}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  background: 'white',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  border: isActive ? `1.5px solid ${cfg.dotColor}` : BDR,
+                  transition: 'border-color 0.15s',
+                }}
               >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${cfg.bg}`}>
-                  <Icon className={`w-4 h-4 ${cfg.iconColor}`} />
+                <div style={{
+                  width: 34, height: 34, borderRadius: 8,
+                  background: cfg.iconBg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <Icon style={{ width: 16, height: 16, color: cfg.iconColor }} />
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-gray-900" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: cfg.numColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
                     {count}
                   </div>
-                  <div className="text-xs text-gray-400">{cfg.label}</div>
+                  <div style={{ fontSize: 11, color: T3, marginTop: 1 }}>{cfg.label}</div>
                 </div>
               </button>
             );
@@ -147,17 +186,17 @@ export function AlertsPage() {
       </div>
 
       {/* Alerts list */}
-      <div className="flex-1 overflow-auto px-4 sm:px-6 py-4">
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
         {filtered.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
-            <Bell className="w-10 h-10 mx-auto mb-3 opacity-20" />
-            <p className="text-sm">Aucune alerte trouvée</p>
-            <p className="text-xs mt-1">
-              {statusFilter === 'unread' ? 'Toutes les alertes sont lues ✓' : 'Les alertes sont générées automatiquement'}
+          <div style={{ textAlign: 'center', padding: '64px 0', color: T3 }}>
+            <Bell style={{ width: 36, height: 36, margin: '0 auto 12px', opacity: 0.2 }} />
+            <p style={{ fontSize: 13, color: T2 }}>Aucune alerte trouvée</p>
+            <p style={{ fontSize: 12, color: T3, marginTop: 4 }}>
+              {statusFilter === 'unread' ? 'Toutes les alertes sont lues' : 'Les alertes sont générées automatiquement'}
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {filtered.map(alert => {
               const cfg = alertTypeConfig[alert.type] || alertTypeConfig.low_stock;
               const Icon = cfg.icon;
@@ -166,49 +205,102 @@ export function AlertsPage() {
               return (
                 <div
                   key={alert.id}
-                  className={`border rounded-xl p-4 transition-all ${
-                    alert.is_read ? 'bg-white border-gray-200' : `${cfg.bg} border-l-4`
-                  }`}
-                  style={!alert.is_read ? { borderLeftColor: cfg.iconColor.replace('text-', '') } : {}}
+                  style={{
+                    background: 'white',
+                    border: BDR,
+                    borderRadius: 10,
+                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    opacity: alert.is_read ? 0.75 : 1,
+                    transition: 'opacity 0.15s',
+                  }}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.color}`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <Badge className={`text-xs ${cfg.color}`}>{cfg.label}</Badge>
-                        {site && <Badge variant="outline" className="text-xs">{site.name}</Badge>}
-                        {!alert.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
-                      </div>
-                      <p className="font-semibold text-gray-900 text-sm">{alert.product_name || '—'}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">{alert.message}</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {new Date(alert.created_at).toLocaleString('fr-FR', {
-                          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-                        })}
-                      </p>
-                    </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      {!alert.is_read && (
-                        <Button
-                          variant="ghost" size="sm"
-                          className="h-7 w-7 p-0 text-blue-500 hover:bg-blue-50"
-                          onClick={() => { db.markAlertRead(alert.id); load(); }}
-                          title="Marquer comme lue"
-                        >
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        </Button>
+                  {/* Colored icon */}
+                  <div style={{
+                    width: 34, height: 34, borderRadius: 8,
+                    background: cfg.iconBg,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Icon style={{ width: 15, height: 15, color: cfg.iconColor }} />
+                  </div>
+
+                  {/* Content */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Type tag + site tag */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: 11, fontWeight: 600, color: cfg.iconColor,
+                        background: cfg.iconBg, border: `1px solid ${cfg.dotColor}22`,
+                        borderRadius: 4, padding: '1px 6px',
+                      }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dotColor, display: 'inline-block' }} />
+                        {cfg.label}
+                      </span>
+                      {site && (
+                        <span style={{
+                          fontSize: 11, color: T2,
+                          border: BDR, borderRadius: 4, padding: '1px 6px',
+                          background: 'white',
+                        }}>
+                          {site.name}
+                        </span>
                       )}
-                      <Button
-                        variant="ghost" size="sm"
-                        className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600"
-                        onClick={() => { db.dismissAlert(alert.id); load(); }}
-                        title="Supprimer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
                     </div>
+
+                    {/* Product name + unread dot */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: T1, margin: 0 }}>
+                        {alert.product_name || '—'}
+                      </p>
+                      {!alert.is_read && (
+                        <span style={{
+                          width: 6, height: 6, borderRadius: '50%',
+                          background: '#EF4444', flexShrink: 0, display: 'inline-block',
+                        }} />
+                      )}
+                    </div>
+
+                    <p style={{ fontSize: 12, color: T2, margin: '2px 0 0' }}>{alert.message}</p>
+                    <p style={{ fontSize: 11, color: T3, margin: '4px 0 0' }}>
+                      {new Date(alert.created_at).toLocaleString('fr-FR', {
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                    {!alert.is_read && (
+                      <button
+                        title="Marquer comme lue"
+                        onClick={() => { db.markAlertRead(alert.id); load(); }}
+                        style={{
+                          width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer',
+                          color: '#2563EB', transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#EFF6FF')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <CheckCircle style={{ width: 14, height: 14 }} />
+                      </button>
+                    )}
+                    <button
+                      title="Supprimer"
+                      onClick={() => { db.dismissAlert(alert.id); load(); }}
+                      style={{
+                        width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer',
+                        color: T3, transition: 'background 0.15s, color 0.15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9'; e.currentTarget.style.color = T1; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = T3; }}
+                    >
+                      <X style={{ width: 14, height: 14 }} />
+                    </button>
                   </div>
                 </div>
               );

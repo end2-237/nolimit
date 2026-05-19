@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle, XCircle, ArrowDownLeft, ArrowUpRight, RefreshCw, User, DollarSign, Wifi, WifiOff } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Input } from '../ui/input';
+import { Clock, CheckCircle, XCircle, ArrowDownLeft, ArrowUpRight, RefreshCw, User, Wifi, WifiOff } from 'lucide-react';
 import { db, Movement } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
 import { useSync } from '../../context/SyncProvider';
 import { notifyServer } from '../../services/realtime';
+
+const T1 = '#0F172A', T2 = '#64748B', T3 = '#94A3B8';
+const BDR = '1px solid #E2E8F0';
+const ACCENT = '#16A34A';
+
+const fmtDT = (d: string) =>
+  new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 export function PendingApprovalsPanel() {
   const { user } = useAuth();
@@ -23,34 +27,20 @@ export function PendingApprovalsPanel() {
     return () => clearInterval(t);
   }, []);
 
-  // ── Écoute Socket.io — rafraîchissement automatique ──────────────────────────
   useEffect(() => {
     if (!socket) return;
-
-    const onPending = () => {
-      load();
-      // Flash visuel optionnel
-      window.dispatchEvent(new CustomEvent('snl:stock-updated'));
-    };
-
-    const onApproved = () => {
-      load();
-      window.dispatchEvent(new CustomEvent('snl:stock-updated'));
-    };
-
-    socket.on('movement:pending', onPending);
-    socket.on('movement:approved', onApproved);
-    socket.on('movement:updated', onApproved);
+    const refresh = () => { load(); window.dispatchEvent(new CustomEvent('snl:stock-updated')); };
+    socket.on('movement:pending', refresh);
+    socket.on('movement:approved', refresh);
+    socket.on('movement:updated', refresh);
     socket.on('stock:updated', () => window.dispatchEvent(new CustomEvent('snl:stock-updated')));
-
     return () => {
-      socket.off('movement:pending', onPending);
-      socket.off('movement:approved', onApproved);
-      socket.off('movement:updated', onApproved);
+      socket.off('movement:pending', refresh);
+      socket.off('movement:approved', refresh);
+      socket.off('movement:updated', refresh);
       socket.off('stock:updated');
     };
   }, [socket]);
-  // ─────────────────────────────────────────────────────────────────────────────
 
   if (user?.role !== 'admin' && user?.role !== 'manager') return null;
   if (pending.length === 0) return null;
@@ -59,16 +49,12 @@ export function PendingApprovalsPanel() {
     if (!user) return;
     const m = pending.find(p => p.id === id);
     const result = await db.approveMovement(id, user.id);
-
     if (!result) {
-      alert('Mouvement refusé automatiquement : stock insuffisant au moment de la validation.');
+      alert('Mouvement refusé automatiquement : stock insuffisant.');
     } else {
-      // Notifier l'opérateur et les autres admins
       await notifyServer('movement:approved', {
-        movementId: id,
-        product_name: m?.product_name,
-        approved_by: user.full_name,
-        site_id: m?.to_site_id || m?.from_site_id,
+        movementId: id, product_name: m?.product_name,
+        approved_by: user.full_name, site_id: m?.to_site_id || m?.from_site_id,
       });
     }
     load();
@@ -80,141 +66,211 @@ export function PendingApprovalsPanel() {
     const m = pending.find(p => p.id === id);
     const reason = rejectReason[id] || 'Refusé par le responsable';
     await db.rejectMovement(id, user.id, reason);
-    await notifyServer('movement:updated', {
-      movementId: id,
-      status: 'rejected',
-      product_name: m?.product_name,
-      reason,
-    });
+    await notifyServer('movement:updated', { movementId: id, status: 'rejected', product_name: m?.product_name, reason });
     setRejectingId(null);
     setRejectReason(r => { const next = { ...r }; delete next[id]; return next; });
     load();
     window.dispatchEvent(new CustomEvent('snl:stock-updated'));
   };
 
-  const pendingIn = pending.filter(m => m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending'));
+  const pendingIn  = pending.filter(m => m.type === 'pending_in' || (m.type === 'in'  && m.status === 'pending'));
   const pendingOut = pending.filter(m => m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending'));
 
   return (
-    <div className="border-l-4 border-orange-400 bg-orange-50 rounded-xl overflow-hidden mb-4">
-      <div className="flex items-center gap-3 px-4 py-3 bg-orange-100 border-b border-orange-200">
-        <Clock className="w-4 h-4 text-orange-600 flex-shrink-0 animate-pulse" />
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold text-orange-800">
-            {pending.length} demande(s) en attente de validation
-          </h3>
-          <p className="text-xs text-orange-600">
-            {pendingIn.length > 0 && `${pendingIn.length} entrée(s)`}
+    <div style={{
+      background: 'white',
+      border: '1px solid #FCD34D',
+      borderRadius: 10,
+      overflow: 'hidden',
+      marginBottom: 16,
+      boxShadow: '0 0 0 3px rgba(251,191,36,0.08)',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 16px',
+        background: '#FFFBEB',
+        borderBottom: '1px solid #FCD34D',
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: '#FEF3C7',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <Clock size={15} color="#D97706" />
+        </div>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: '#92400E', margin: 0 }}>
+            {pending.length} demande{pending.length > 1 ? 's' : ''} en attente de validation
+          </p>
+          <p style={{ fontSize: 11, color: '#B45309', margin: 0 }}>
+            {pendingIn.length > 0 && `${pendingIn.length} entrée${pendingIn.length > 1 ? 's' : ''}`}
             {pendingIn.length > 0 && pendingOut.length > 0 && ' · '}
-            {pendingOut.length > 0 && `${pendingOut.length} sortie(s)`}
+            {pendingOut.length > 0 && `${pendingOut.length} sortie${pendingOut.length > 1 ? 's' : ''}`}
           </p>
         </div>
 
-        {/* Indicateur temps réel */}
-        <div className="flex items-center gap-1.5">
-          {isConnected ? (
-            <div className="flex items-center gap-1 text-[10px] text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-              <Wifi className="w-3 h-3" />
-              Temps réel
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-              <WifiOff className="w-3 h-3" />
-              Poll 15s
-            </div>
-          )}
+        {/* Realtime indicator */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          fontSize: 10, fontWeight: 600,
+          background: isConnected ? '#DCFCE7' : '#F1F5F9',
+          color: isConnected ? '#166534' : T3,
+          padding: '3px 8px', borderRadius: 99,
+        }}>
+          {isConnected
+            ? <><Wifi size={10} /> Temps réel</>
+            : <><WifiOff size={10} /> Poll 15s</>
+          }
         </div>
 
-        <button onClick={load} className="text-orange-500 hover:text-orange-700 transition-colors">
-          <RefreshCw className="w-4 h-4" />
+        <button
+          onClick={load}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D97706', padding: 4, display: 'flex' }}
+          title="Actualiser"
+        >
+          <RefreshCw size={14} />
         </button>
       </div>
 
-      <div className="divide-y divide-orange-100 max-h-64 overflow-y-auto">
-        {pending.map(m => {
+      {/* Items */}
+      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+        {pending.map((m, i) => {
           const isOut = m.type === 'pending_out' || (m.type === 'out' && m.status === 'pending');
-          const isIn = m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending');
-          const sites = db.getSites();
-          const site = sites.find(s => s.id === (isOut ? m.from_site_id : m.to_site_id));
+          const isIn  = m.type === 'pending_in'  || (m.type === 'in'  && m.status === 'pending');
           const product = db.getProductById(m.product_id);
-          const estimatedCA = isOut && product ? m.quantity * product.price : 0;
           const currentStock = product
             ? (db.getStocksGroupedByProduct().find(p => p.id === m.product_id)?.stock?.[m.from_site_id || ''] || 0)
             : 0;
           const stockOk = !isOut || currentStock >= m.quantity;
+          const estimatedCA = isOut && product ? m.quantity * product.price : 0;
 
           return (
-            <div key={m.id} className="px-4 py-3">
-              <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3">
-                <div className="flex items-start gap-2 flex-1 min-w-0">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isOut ? 'bg-red-100' : 'bg-green-100'}`}>
+            <div key={m.id} style={{
+              padding: '12px 16px',
+              borderBottom: i < pending.length - 1 ? '1px solid #F1F5F9' : 'none',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                {/* Icon */}
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                  background: isOut ? '#FEE2E2' : '#DCFCE7',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1,
+                }}>
                   {isOut
-                    ? <ArrowUpRight className="w-4 h-4 text-red-600" />
-                    : <ArrowDownLeft className="w-4 h-4 text-green-600" />}
+                    ? <ArrowUpRight size={14} color="#DC2626" />
+                    : <ArrowDownLeft size={14} color={ACCENT} />
+                  }
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-gray-900 text-sm">{m.product_name}</span>
-                    <Badge className={isOut ? 'bg-red-100 text-red-700 text-[10px]' : 'bg-green-100 text-green-700 text-[10px]'}>
-                      {isOut ? 'Vente demandée' : 'Entrée demandée'}
-                    </Badge>
-                    {site && <Badge variant="outline" className="text-[10px]">{site.name}</Badge>}
+
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T1 }}>{m.product_name}</span>
+                    <span style={{
+                      fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 4,
+                      background: isIn ? '#DCFCE7' : '#FEE2E2',
+                      color: isIn ? '#166534' : '#991B1B',
+                    }}>
+                      {isIn ? 'Entrée demandée' : 'Sortie demandée'}
+                    </span>
+                    {m.to_site_id && (
+                      <span style={{ fontSize: 10.5, background: '#F1F5F9', color: T2, padding: '1px 7px', borderRadius: 4 }}>
+                        {m.to_site_id}
+                      </span>
+                    )}
                     {!stockOk && (
-                      <Badge className="bg-red-100 text-red-700 text-[10px]">⚠️ Stock insuffisant</Badge>
+                      <span style={{ fontSize: 10.5, background: '#FEE2E2', color: '#991B1B', padding: '1px 7px', borderRadius: 4 }}>
+                        ⚠ Stock insuffisant
+                      </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600 flex-wrap">
-                    <span className={`font-mono font-bold ${isOut ? 'text-red-600' : 'text-green-600'}`}>
-                      {isOut ? '-' : '+'}{m.quantity} {product?.unit || 'unités'}
+
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 2 }}>
+                    <span style={{
+                      fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace",
+                      color: isOut ? '#DC2626' : ACCENT,
+                    }}>
+                      {isOut ? '-' : '+'}{m.quantity} {product?.unit || 'u.'}
                     </span>
                     {isOut && estimatedCA > 0 && (
-                      <span className="flex items-center gap-0.5 text-green-700 font-semibold">
-                        <DollarSign className="w-3 h-3" />{estimatedCA.toLocaleString('fr-FR')} XAF
+                      <span style={{ fontSize: 11, fontWeight: 600, color: ACCENT }}>
+                        ≈ {estimatedCA.toLocaleString('fr-FR')} XAF
                       </span>
                     )}
                     {isOut && product && (
-                      <span className="text-gray-400">stock actuel: <strong>{currentStock}</strong></span>
+                      <span style={{ fontSize: 11, color: T3 }}>
+                        stock actuel: <strong style={{ color: T2 }}>{currentStock}</strong>
+                      </span>
                     )}
-                    <span>·</span>
-                    <span className="text-gray-400 truncate max-w-[120px]">{m.reason}</span>
+                    <span style={{ fontSize: 11, color: T3, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {m.reason}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
-                    <User className="w-3 h-3" />
-                    <span className="font-medium text-gray-600">{m.user_name}</span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: T3 }}>
+                    <User size={10} />
+                    <span style={{ color: T2, fontWeight: 500 }}>{m.user_name}</span>
                     <span>·</span>
                     <span>Réf: {m.reference}</span>
                     <span>·</span>
-                    <span>{new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>{fmtDT(m.created_at)}</span>
                   </div>
 
                   {rejectingId === m.id && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Input className="h-7 text-xs flex-1 min-w-[140px]" placeholder="Raison du refus..."
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                      <input
+                        className="snl-input"
+                        style={{ flex: 1, minWidth: 140, height: 30, fontSize: 12 }}
+                        placeholder="Raison du refus…"
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
-                        autoFocus />
-                      <Button size="sm" className="h-7 bg-red-600 hover:bg-red-700 text-white text-xs px-2"
-                        onClick={() => handleReject(m.id)}>Confirmer</Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs px-2"
-                        onClick={() => setRejectingId(null)}>Annuler</Button>
+                        autoFocus
+                      />
+                      <button
+                        className="snl-btn"
+                        style={{ height: 30, background: '#DC2626', color: 'white', fontSize: 11, padding: '0 10px' }}
+                        onClick={() => handleReject(m.id)}
+                      >
+                        Confirmer
+                      </button>
+                      <button
+                        className="snl-btn snl-btn-secondary"
+                        style={{ height: 30, fontSize: 11 }}
+                        onClick={() => setRejectingId(null)}
+                      >
+                        Annuler
+                      </button>
                     </div>
                   )}
                 </div>
-                </div>
 
+                {/* Actions */}
                 {rejectingId !== m.id && (
-                  <div className="flex gap-1.5 flex-shrink-0 mt-1 sm:mt-0">
-                    <Button size="sm"
-                      className={`h-7 text-white text-xs px-2.5 gap-1 ${stockOk ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      className="snl-btn"
+                      style={{
+                        height: 30, fontSize: 11, padding: '0 10px',
+                        background: stockOk ? ACCENT : '#F59E0B',
+                        color: 'white', display: 'flex', alignItems: 'center', gap: 4,
+                      }}
                       onClick={() => handleApprove(m.id)}
-                      title={!stockOk ? 'Stock insuffisant — peut être refusé automatiquement' : ''}>
-                      <CheckCircle className="w-3 h-3" /> Valider
-                    </Button>
-                    <Button size="sm" variant="outline"
-                      className="h-7 border-red-200 text-red-600 hover:bg-red-50 text-xs px-2.5 gap-1"
-                      onClick={() => setRejectingId(m.id)}>
-                      <XCircle className="w-3 h-3" /> Refuser
-                    </Button>
+                      title={!stockOk ? 'Stock insuffisant — peut être refusé auto' : ''}
+                    >
+                      <CheckCircle size={11} /> Valider
+                    </button>
+                    <button
+                      className="snl-btn snl-btn-secondary"
+                      style={{
+                        height: 30, fontSize: 11, padding: '0 10px',
+                        color: '#DC2626', borderColor: '#FCA5A5',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}
+                      onClick={() => setRejectingId(m.id)}
+                    >
+                      <XCircle size={11} /> Refuser
+                    </button>
                   </div>
                 )}
               </div>

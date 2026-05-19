@@ -593,93 +593,108 @@ export function ReportsPage() {
     custom: { label: 'Personnalisé', color: 'bg-gray-100 text-gray-700', icon: FileText },
   };
 
+  const T1 = '#0F172A', T2 = '#64748B', T3 = '#94A3B8';
+  const BDR = '1px solid #E2E8F0';
+  const ACCENT = '#16A34A';
+
   return (
-    <div className="h-full flex flex-col">
+    <div className="snl-page">
       {/* Header */}
-      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-purple-600" />
+      <div className="snl-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div>
+          <p className="snl-eyebrow">Stock</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FileText size={17} color="#7C3AED" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Rapports & Exports</h1>
-              <p className="text-gray-500 text-sm">{savedReports.length} rapport(s) sauvegardé(s)</p>
+              <h1 className="snl-page-title">Rapports & Exports</h1>
+              <p className="snl-page-sub">{savedReports.length} rapport{savedReports.length !== 1 ? 's' : ''} sauvegardé{savedReports.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
-          <Button size="sm" onClick={() => setShowScheduleModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white">
-            <Plus className="w-3.5 h-3.5 mr-1.5" /> Nouveau rapport
-          </Button>
         </div>
+        <button onClick={() => setShowScheduleModal(true)} className="snl-btn snl-btn-primary" style={{ background: '#7C3AED' }}>
+          <Plus size={12} /> Nouveau rapport
+        </button>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 sm:px-6 py-5 space-y-6">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Quick stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
           {[
-            { label: 'Produits', value: stats.totalProducts, sub: 'références', color: 'blue' },
-            { label: 'Valeur Stock', value: stats.totalValue.toLocaleString('fr-FR'), sub: 'XAF', color: 'green' },
-            { label: 'Mouvements', value: movements.length, sub: 'total', color: 'purple' },
-            { label: 'Alertes', value: stats.alertCount, sub: 'non lues', color: 'orange' },
+            { label: 'Produits', value: stats.totalProducts, sub: 'références', color: T1 },
+            { label: 'Valeur stock', value: stats.totalValue.toLocaleString('fr-FR'), sub: 'XAF', color: ACCENT, mono: true },
+            { label: 'Mouvements', value: movements.length, sub: 'total', color: '#7C3AED' },
+            { label: 'Alertes', value: stats.alertCount, sub: 'non lues', color: '#DC2626' },
           ].map(k => (
-            <div key={k.label} className={`bg-gradient-to-br from-${k.color}-50 to-white p-4 rounded-xl border border-${k.color}-100`}>
-              <div className="text-xs text-gray-500">{k.label}</div>
-              <div className={`text-2xl font-bold text-${k.color}-600 font-mono`}>{k.value}</div>
-              <div className="text-xs text-gray-400">{k.sub}</div>
+            <div key={k.label} className="snl-card-sm" style={{ padding: '14px 16px' }}>
+              <p style={{ fontSize: 10.5, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>{k.label}</p>
+              <p style={{ fontSize: 26, fontWeight: 800, color: k.color, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: (k as any).mono ? "'JetBrains Mono',monospace" : undefined }}>{k.value}</p>
+              <p style={{ fontSize: 11, color: T3, marginTop: 4 }}>{k.sub}</p>
             </div>
           ))}
         </div>
 
         {/* Rapports spéciaux */}
         <div>
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Rapports Interactifs</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <button onClick={() => setShowCAModal(true)}
-              className="flex items-center gap-4 p-5 bg-white border border-emerald-200 rounded-xl hover:border-emerald-400 hover:shadow-md transition-all text-left group">
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-600 transition-colors">
-                <DollarSign className="w-6 h-6 text-emerald-600 group-hover:text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Chiffre d'Affaires</h3>
-                <p className="text-xs text-gray-500">Rapport des ventes (sorties) avec sélection de dates</p>
-              </div>
-            </button>
-            <button onClick={() => setShowDamageModal(true)}
-              className="flex items-center gap-4 p-5 bg-white border border-orange-200 rounded-xl hover:border-orange-400 hover:shadow-md transition-all text-left group">
-              <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center group-hover:bg-orange-600 transition-colors">
-                <Truck className="w-6 h-6 text-orange-600 group-hover:text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Dégâts de Transport</h3>
-                <p className="text-xs text-gray-500">Pertes liées au transport avec sélection de dates</p>
-              </div>
-            </button>
+          <p style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Rapports Interactifs</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+            {[
+              { onClick: () => setShowCAModal(true), icon: DollarSign, iconBg: '#DCFCE7', iconColor: ACCENT, title: "Chiffre d'Affaires", desc: 'Rapport des ventes (sorties) avec sélection de dates' },
+              { onClick: () => setShowDamageModal(true), icon: Truck, iconBg: '#FEF3C7', iconColor: '#D97706', title: 'Dégâts de Transport', desc: 'Pertes liées au transport avec sélection de dates' },
+            ].map(r => {
+              const Icon = r.icon;
+              return (
+                <button key={r.title} onClick={r.onClick} style={{
+                  display: 'flex', alignItems: 'center', gap: 16, padding: '18px 20px',
+                  background: 'white', border: BDR, borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                  transition: 'box-shadow 0.15s',
+                }}
+                  onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+                >
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: r.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon size={22} color={r.iconColor} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: T1, marginBottom: 2 }}>{r.title}</p>
+                    <p style={{ fontSize: 11, color: T3 }}>{r.desc}</p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Quick exports */}
         {hasPermission('export') && (
           <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Exports Rapides (Excel)</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <p style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Exports Rapides · Excel</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
               {[
-                { id: 'inventory', label: 'Inventaire complet', desc: 'Multi-feuilles : résumé, stock par site', icon: BarChart3, color: 'blue', fn: exportInventoryXLSXQuick },
-                { id: 'movements', label: 'Mouvements', desc: 'Par type, colorisé, feuilles séparées', icon: TrendingUp, color: 'green', fn: exportMovementsXLSXQuick },
-                { id: 'alerts', label: 'Alertes', desc: 'Code couleur par sévérité', icon: AlertTriangle, color: 'orange', fn: exportAlertsXLSXQuick },
+                { id: 'inventory', label: 'Inventaire complet', desc: 'Multi-feuilles : résumé, stock par site', icon: BarChart3, iconBg: '#DBEAFE', iconColor: '#1D4ED8', fn: exportInventoryXLSXQuick },
+                { id: 'movements', label: 'Mouvements', desc: 'Par type, colorisé, feuilles séparées', icon: TrendingUp, iconBg: '#DCFCE7', iconColor: ACCENT, fn: exportMovementsXLSXQuick },
+                { id: 'alerts', label: 'Alertes', desc: 'Code couleur par sévérité', icon: AlertTriangle, iconBg: '#FEF3C7', iconColor: '#D97706', fn: exportAlertsXLSXQuick },
               ].map(r => {
                 const Icon = r.icon;
                 return (
                   <button key={r.id} onClick={() => quickExport(r.id, r.fn)} disabled={downloading === r.id}
-                    className={`group flex flex-col items-start gap-3 p-5 bg-white border border-gray-200 rounded-xl hover:border-${r.color}-400 hover:shadow-md transition-all disabled:opacity-50`}>
-                    <div className={`w-10 h-10 rounded-xl bg-${r.color}-100 flex items-center justify-center group-hover:bg-${r.color}-600 transition-colors`}>
-                      {downloading === r.id ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Icon className={`w-5 h-5 text-${r.color}-600 group-hover:text-white`} />}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12, padding: '18px 20px', background: 'white', border: BDR, borderRadius: 10, cursor: 'pointer', textAlign: 'left', opacity: downloading === r.id ? 0.5 : 1, transition: 'box-shadow 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+                  >
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: r.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {downloading === r.id
+                        ? <RefreshCw size={18} color={r.iconColor} style={{ animation: 'spin .7s linear infinite' }} />
+                        : <Icon size={18} color={r.iconColor} />
+                      }
                     </div>
                     <div>
-                      <div className="font-semibold text-sm text-gray-900">{r.label}</div>
-                      <div className="text-xs text-gray-400">{r.desc}</div>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: T1, marginBottom: 2 }}>{r.label}</p>
+                      <p style={{ fontSize: 11, color: T3 }}>{r.desc}</p>
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-gray-400">
-                      <FileSpreadsheet className="w-3 h-3" /> Télécharger Excel (.xlsx)
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: T3 }}>
+                      <FileSpreadsheet size={11} /> Télécharger Excel (.xlsx)
                     </div>
                   </button>
                 );
@@ -689,7 +704,7 @@ export function ReportsPage() {
         )}
 
         {/* Résumé mouvements */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-sm">Résumé des Mouvements</CardTitle></CardHeader>
             <CardContent>

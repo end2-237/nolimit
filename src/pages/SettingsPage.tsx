@@ -613,31 +613,36 @@ export function SettingsPage() {
     { id: 'tasks', label: 'Automatisations', admin: false },
   ];
 
+  const T1 = '#0F172A', T2 = '#64748B', T3 = '#94A3B8';
+  const BDR = '1px solid #E2E8F0';
+  const ACCENT = '#16A34A';
+
   return (
-    <div className="h-full flex flex-col">
-      <div className="border-b border-[#F1F5F9] bg-white px-4 sm:px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-            <Settings className="w-5 h-5 text-gray-600" />
+    <div className="snl-page">
+      <div className="snl-page-header" style={{ marginBottom: 20 }}>
+        <p className="snl-eyebrow">Système</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Settings size={17} color={T2} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Paramètres</h1>
-            <p className="text-gray-500 text-sm">
-              {stats.totalProducts} produit(s) · {stats.totalValue.toLocaleString('fr-FR')} XAF de stock
+            <h1 className="snl-page-title">Paramètres</h1>
+            <p className="snl-page-sub">
+              {stats.totalProducts} produit{stats.totalProducts !== 1 ? 's' : ''} · {stats.totalValue.toLocaleString('fr-FR')} XAF de stock
             </p>
           </div>
         </div>
-        <div className="flex gap-1 mt-4 flex-wrap">
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {tabs.filter(t => !t.admin || isSuperAdmin).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-              className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${activeTab === tab.id ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+              className={`snl-pill${activeTab === tab.id ? ' active' : ''}`}>
               {tab.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 sm:px-6 py-6 space-y-4 max-w-3xl w-full">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
         {activeTab === 'general' && (
           <>
           <ServerStatus />
@@ -723,7 +728,7 @@ export function SettingsPage() {
         {activeTab === 'database' && isSuperAdmin && <DBExportImport />}
         {activeTab === 'sites' && isSuperAdmin && <SitesManager />}
         {activeTab === 'cloud' && isSuperAdmin && (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <AutoSyncSettings />
             <CloudSyncPanel />
           </div>
