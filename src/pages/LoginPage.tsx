@@ -22,11 +22,20 @@ export function LoginPage() {
   const [step,     setStep]     = useState<'user' | 'pass'>('user');
 
   const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, alertCount: 0 });
+  const [winW,  setWinW]  = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
   const alerts   = db.getAlerts(false);
   const products = db.getProducts();
   const today    = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   useEffect(() => { setStats(db.getDashboardStats()); }, []);
+
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const showLeftPanel = winW >= 920;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,18 +72,16 @@ export function LoginPage() {
         {/* ══════════════════════════════════════════════════════
             LEFT — Brand panel
         ══════════════════════════════════════════════════════ */}
-        <div style={{
+        {showLeftPanel && <div style={{
           width: '48%',
-          minWidth: 480,
+          minWidth: 460,
           background: '#090F0B',
           display: 'flex',
           flexDirection: 'column',
           padding: '48px 56px',
           position: 'relative',
           overflow: 'hidden',
-        }}
-          className="hidden lg:flex"
-        >
+        }}>
           {/* Background radial glow */}
           <div style={{
             position: 'absolute', width: 560, height: 560, borderRadius: '50%',
@@ -208,7 +215,7 @@ export function LoginPage() {
               ))}
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* ══════════════════════════════════════════════════════
             RIGHT — Login form (white, clean, Teams-style)
@@ -224,13 +231,11 @@ export function LoginPage() {
           position: 'relative',
         }}>
 
-          {/* Subtle top-right branding for mobile */}
-          <div style={{
+          {/* Branding for when left panel is hidden */}
+          {!showLeftPanel && <div style={{
             position: 'absolute', top: 24, left: 24,
             display: 'flex', alignItems: 'center', gap: 8,
-          }}
-            className="flex lg:hidden"
-          >
+          }}>
             <div style={{
               width: 30, height: 30, borderRadius: 8,
               background: '#052e16',
@@ -240,7 +245,7 @@ export function LoginPage() {
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             </div>
             <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{APP_CONFIG.name}</span>
-          </div>
+          </div>}
 
           {/* Card */}
           <div style={{

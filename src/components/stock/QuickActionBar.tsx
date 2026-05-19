@@ -295,25 +295,6 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
         } as any}
       >
 
-        {/* App identity */}
-        <div
-          style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            padding: '0 14px', height: '100%',
-            borderRight: '1px solid rgba(255,255,255,0.05)',
-            flexShrink: 0, WebkitAppRegion: 'no-drag',
-          } as any}
-        >
-          <div style={{
-            width: 20, height: 20, borderRadius: 5,
-            background: 'linear-gradient(135deg, #16A34A, #059669)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Package size={11} color="white" />
-          </div>
-          <span style={{ fontSize: 11, fontWeight: 800, color: TEXT_HI, letterSpacing: '0.1em' }}>SNL</span>
-        </div>
-
         {/* Menu tabs */}
         <div
           style={{ display: 'flex', alignItems: 'stretch', height: '100%', WebkitAppRegion: 'no-drag' } as any}

@@ -22,6 +22,7 @@ import { notifService } from './services/notifications';
 import { SyncProvider, useSync } from './context/SyncProvider';
 import { startConnectivityMonitor } from './services/connectivity';
 import { processOutbox } from './services/outbox';
+import { startSiteOrderPolling, stopSiteOrderPolling } from './services/siteOrderSync';
 
 // Start connectivity monitor as early as possible
 startConnectivityMonitor();
@@ -260,6 +261,27 @@ function AppInner() {
       schedulerStarted.current = false;
       notifService.stopScheduler();
     };
+  }, [user]);
+
+  // ── Site vitrine : sync commandes → mouvements de stock ──────
+  useEffect(() => {
+    if (!user) return;
+    startSiteOrderPolling(
+      user.id,
+      'Site Web (auto)',
+      5 * 60 * 1000,  // toutes les 5 min
+      (result) => {
+        // Notifier l'admin/manager quand de nouvelles ventes arrivent
+        if (result.movements > 0 && (user.role === 'admin' || user.role === 'manager')) {
+          showBrowserNotif(
+            `🛒 ${result.orders} nouvelle${result.orders > 1 ? 's' : ''} commande${result.orders > 1 ? 's' : ''} vitrine`,
+            `${result.movements} mouvement${result.movements > 1 ? 's' : ''} de stock créé${result.movements > 1 ? 's' : ''} automatiquement`
+          );
+          setAlertCount(db.getAlerts(false).length);
+        }
+      }
+    );
+    return () => stopSiteOrderPolling();
   }, [user]);
 
   if (showSplash) return <SplashScreen onComplete={() => setShowSplash(false)} />;
