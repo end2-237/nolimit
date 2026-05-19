@@ -5,13 +5,23 @@ import {
   ChevronDown, Database, Shield, Calendar, BarChart3,
   Package, AlertTriangle, Clock, Zap, Save, FolderOpen,
   Printer, Filter, HelpCircle, LogOut, Moon, Sun,
-  CheckSquare, Archive, TrendingUp, RotateCcw, Share2
+  CheckSquare, Archive, TrendingUp, RotateCcw, Share2,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '../../stores/authStore';
 import { db } from '../../services/database';
 import { APP_CONFIG } from '../../config/app.config';
 import { OfflineIndicator } from '../OfflineIndicator';
 
+/* ── tokens ─────────────────────────────────────────────────── */
+const BAR_BG   = '#0C1F12';
+const BAR_BDR  = 'rgba(74,222,128,0.10)';
+const TEXT_HI  = '#A7F3D0';
+const TEXT_DIM = 'rgba(187,247,208,0.55)';
+const CHIP_BG  = 'rgba(74,222,128,0.10)';
+const CHIP_COL = '#86EFAC';
+
+/* ── interfaces ─────────────────────────────────────────────── */
 interface QuickActionBarProps {
   onNavigate: (page: string) => void;
   alertCount: number;
@@ -31,15 +41,9 @@ interface MenuItem {
   badge?: number;
 }
 
-interface MenuGroup {
-  label: string;
-  items: MenuItem[];
-}
-
+/* ── DropdownMenu ────────────────────────────────────────────── */
 function DropdownMenu({
-  items,
-  onClose,
-  anchor,
+  items, onClose, anchor,
 }: {
   items: MenuItem[];
   onClose: () => void;
@@ -58,42 +62,61 @@ function DropdownMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-[9999] min-w-[200px] bg-white border border-gray-200 rounded-lg shadow-xl py-1 overflow-hidden"
       style={{
+        position: 'fixed',
+        zIndex: 9999,
+        minWidth: 216,
+        background: 'white',
+        border: '1px solid #E2E8F0',
+        borderRadius: 10,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.07)',
+        padding: '4px 0',
+        overflow: 'hidden',
         top: anchor.bottom + 4,
-        left: Math.min(anchor.left, Math.max(0, window.innerWidth - 220)),
+        left: Math.min(anchor.left, Math.max(0, window.innerWidth - 224)),
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
       }}
     >
       {items.map((item, i) => {
         if (item.separator) {
-          return <div key={i} className="h-px bg-gray-100 my-1 mx-2" />;
+          return <div key={i} style={{ height: 1, background: '#F1F5F9', margin: '3px 10px' }} />;
         }
         const Icon = item.icon;
         return (
           <button
             key={i}
             disabled={item.disabled}
-            onClick={() => {
-              if (!item.disabled) {
-                item.action?.();
-                onClose();
-              }
+            onClick={() => { if (!item.disabled) { item.action?.(); onClose(); } }}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '7px 14px',
+              textAlign: 'left',
+              border: 'none',
+              background: 'transparent',
+              cursor: item.disabled ? 'not-allowed' : 'pointer',
+              opacity: item.disabled ? 0.38 : 1,
+              color: item.danger ? '#DC2626' : '#1E293B',
+              fontSize: 12.5,
+              fontWeight: 500,
+              fontFamily: 'inherit',
+              transition: 'background 0.1s',
             }}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors
-              ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}
-              ${item.danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700'}
-            `}
+            onMouseEnter={e => { if (!item.disabled) e.currentTarget.style.background = item.danger ? '#FEF2F2' : '#F8FAFC'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            {Icon && <Icon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />}
-            <span className="flex-1">{item.label}</span>
+            {Icon && <Icon size={13} style={{ opacity: 0.55, flexShrink: 0, color: item.danger ? '#DC2626' : '#64748B' }} />}
+            <span style={{ flex: 1 }}>{item.label}</span>
             {item.shortcut && (
-              <span className="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">
+              <span style={{ fontSize: 10, color: '#94A3B8', fontFamily: "'JetBrains Mono', monospace", background: '#F1F5F9', padding: '1px 5px', borderRadius: 3 }}>
                 {item.shortcut}
               </span>
             )}
             {item.badge !== undefined && item.badge > 0 && (
-              <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                {item.badge}
+              <span style={{ fontSize: 9, fontWeight: 800, background: '#EF4444', color: 'white', borderRadius: 99, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                {item.badge > 9 ? '9+' : item.badge}
               </span>
             )}
           </button>
@@ -103,16 +126,17 @@ function DropdownMenu({
   );
 }
 
+/* ── Main component ──────────────────────────────────────────── */
 export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMovement }: QuickActionBarProps) {
   const { user, logout, hasPermission } = useAuth();
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [openMenu, setOpenMenu]       = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor]   = useState<DOMRect | null>(null);
+  const [searchOpen, setSearchOpen]   = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [time, setTime] = useState(new Date());
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
+  const [time, setTime]               = useState(new Date());
+  const searchRef                     = useRef<HTMLInputElement>(null);
+  const [stats, setStats]             = useState({ totalProducts: 0, totalValue: 0, todayMovements: 0, alertCount: 0, criticalProducts: 0, pendingCount: 0 });
 
   useEffect(() => {
     setStats(db.getDashboardStats());
@@ -126,9 +150,7 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
   }, []);
 
   useEffect(() => {
-    if (searchOpen && searchRef.current) {
-      searchRef.current.focus();
-    }
+    if (searchOpen && searchRef.current) searchRef.current.focus();
   }, [searchOpen]);
 
   useEffect(() => {
@@ -142,44 +164,29 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
 
   const handleMenuOpen = (menuId: string, e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    if (openMenu === menuId) {
-      setOpenMenu(null);
-      setMenuAnchor(null);
-    } else {
-      setOpenMenu(menuId);
-      setMenuAnchor(rect);
-    }
+    if (openMenu === menuId) { setOpenMenu(null); setMenuAnchor(null); }
+    else { setOpenMenu(menuId); setMenuAnchor(rect); }
   };
 
-  const closeMenu = () => {
-    setOpenMenu(null);
-    setMenuAnchor(null);
-  };
+  const closeMenu = () => { setOpenMenu(null); setMenuAnchor(null); };
 
-  // Notification native
   const sendNativeNotif = (title: string, body: string) => {
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(title, { body, icon: '/icons/logo.svg' });
     } else if ('Notification' in window) {
-      Notification.requestPermission().then(p => {
-        if (p === 'granted') new Notification(title, { body });
-      });
+      Notification.requestPermission().then(p => { if (p === 'granted') new Notification(title, { body }); });
     }
-    // Electron IPC
-    if ((window as any).electronAPI?.notify) {
-      (window as any).electronAPI.notify({ title, body });
-    }
+    if ((window as any).electronAPI?.notify) (window as any).electronAPI.notify({ title, body });
   };
 
-  // Export DB
   const handleExportDB = async () => {
     const data = localStorage.getItem('snl_db_v2') || '{}';
     if ((window as any).electronAPI?.exportDB) {
       await (window as any).electronAPI.exportDB({ data });
     } else {
       const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
       a.href = url;
       a.download = `snl_backup_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
@@ -188,280 +195,435 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
     sendNativeNotif('Exportation réussie', 'La base de données a été exportée avec succès.');
   };
 
-  // Sauvegarde rapide
   const handleQuickBackup = () => {
-    const data = localStorage.getItem('snl_db_v2') || '{}';
-    const key = `snl_backup_${Date.now()}`;
+    const data    = localStorage.getItem('snl_db_v2') || '{}';
+    const key     = `snl_backup_${Date.now()}`;
     const backups = JSON.parse(localStorage.getItem('snl_backups_list') || '[]');
     backups.push({ key, date: new Date().toISOString(), size: data.length });
-    if (backups.length > 10) backups.shift(); // garder 10 backups max
+    if (backups.length > 10) backups.shift();
     localStorage.setItem(key, data);
     localStorage.setItem('snl_backups_list', JSON.stringify(backups));
     sendNativeNotif('Sauvegarde effectuée', `Sauvegarde locale créée — ${new Date().toLocaleTimeString('fr-FR')}`);
   };
 
+  const openWebsite = () => {
+    const url = APP_CONFIG.company.website;
+    if ((window as any).electronAPI?.openExternal) (window as any).electronAPI.openExternal(url);
+    else window.open(url, '_blank');
+  };
+
   const menuDefs: Record<string, MenuItem[]> = {
     fichier: [
-      { label: 'Nouveau Produit', icon: Package, action: () => { onNewProduct?.(); }, shortcut: 'Ctrl+N' },
-      { label: 'Nouveau Mouvement', icon: ArrowLeftRight, action: () => { onNavigate('movements'); onNewMovement?.(); } },
+      { label: 'Nouveau Produit',           icon: Package,      action: () => onNewProduct?.(),                             shortcut: 'Ctrl+N' },
+      { label: 'Nouveau Mouvement',         icon: ArrowLeftRight, action: () => { onNavigate('movements'); onNewMovement?.(); } },
       { separator: true },
-      { label: 'Exporter la Base de Données', icon: Download, action: handleExportDB, disabled: !hasPermission('export') },
-      { label: 'Importer une Base de Données', icon: Upload, action: () => onNavigate('settings'), disabled: !hasPermission('delete') },
-      { label: 'Sauvegarde Rapide', icon: Save, action: handleQuickBackup, shortcut: 'Ctrl+S' },
+      { label: 'Exporter la Base',          icon: Download,     action: handleExportDB,                    disabled: !hasPermission('export') },
+      { label: 'Importer une Base',         icon: Upload,       action: () => onNavigate('settings'),      disabled: !hasPermission('delete') },
+      { label: 'Sauvegarde Rapide',         icon: Save,         action: handleQuickBackup,                              shortcut: 'Ctrl+S' },
       { separator: true },
-      { label: 'Imprimer le Rapport', icon: Printer, action: () => window.print() },
+      { label: 'Imprimer le Rapport',       icon: Printer,      action: () => window.print() },
       { separator: true },
-      { label: 'Quitter', icon: LogOut, action: logout, danger: true },
+      { label: 'Quitter',                   icon: LogOut,       action: logout,                                             danger: true },
     ],
     stock: [
-      { label: 'Tableau de Bord', icon: BarChart3, action: () => onNavigate('dashboard'), shortcut: 'Ctrl+1' },
-      { label: 'Catalogue Produits', icon: Package, action: () => onNavigate('products'), shortcut: 'Ctrl+2' },
-      { label: 'Mouvements', icon: ArrowLeftRight, action: () => onNavigate('movements'), shortcut: 'Ctrl+3' },
+      { label: 'Tableau de Bord',           icon: BarChart3,    action: () => onNavigate('dashboard'),                  shortcut: 'Ctrl+1' },
+      { label: 'Catalogue Produits',        icon: Package,      action: () => onNavigate('products'),                   shortcut: 'Ctrl+2' },
+      { label: 'Mouvements',               icon: ArrowLeftRight, action: () => onNavigate('movements'),                 shortcut: 'Ctrl+3' },
       { separator: true },
-      { label: 'Nouvelle Entrée Stock', icon: Plus, action: () => onNavigate('products') },
-      { label: 'Nouveau Transfert', icon: RefreshCw, action: () => onNavigate('movements') },
+      { label: 'Nouvelle Entrée Stock',     icon: Plus,         action: () => onNavigate('products') },
+      { label: 'Nouveau Transfert',         icon: RefreshCw,    action: () => onNavigate('movements') },
       { separator: true },
-      { label: 'Ajustement Inventaire', icon: CheckSquare, action: () => onNavigate('movements') },
-      { label: 'Archiver Produits Épuisés', icon: Archive, action: () => onNavigate('products') },
+      { label: 'Ajustement Inventaire',     icon: CheckSquare,  action: () => onNavigate('movements') },
+      { label: 'Archiver Produits Épuisés', icon: Archive,      action: () => onNavigate('products') },
     ],
     alertes: [
-      { label: 'Voir Toutes les Alertes', icon: Bell, action: () => onNavigate('alerts'), badge: alertCount },
-      { label: 'Marquer Tout Lu', icon: CheckSquare, action: () => { db.markAllAlertsRead(); sendNativeNotif('Alertes', 'Toutes les alertes ont été marquées comme lues.'); } },
+      { label: 'Voir Toutes les Alertes',   icon: Bell,         action: () => onNavigate('alerts'),                    badge: alertCount },
+      { label: 'Marquer Tout Lu',           icon: CheckSquare,  action: () => { db.markAllAlertsRead(); sendNativeNotif('Alertes', 'Toutes les alertes ont été marquées comme lues.'); } },
       { separator: true },
       { label: 'Planifier Réapprovisionnement', icon: Calendar, action: () => onNavigate('alerts') },
-      { label: 'Programmer Rapport Auto', icon: FileText, action: () => onNavigate('reports') },
-      { label: 'Configurer Seuils d\'Alerte', icon: AlertTriangle, action: () => onNavigate('settings') },
+      { label: 'Configurer Seuils',         icon: AlertTriangle, action: () => onNavigate('settings') },
       { separator: true },
-      { label: 'Alertes Stock Critique', icon: Zap, action: () => onNavigate('alerts') },
-      { label: 'Alertes Expiration', icon: Clock, action: () => onNavigate('alerts') },
+      { label: 'Alertes Stock Critique',    icon: Zap,          action: () => onNavigate('alerts') },
+      { label: 'Alertes Expiration',        icon: Clock,        action: () => onNavigate('alerts') },
     ],
     rapports: [
-      { label: 'Rapports & Exports', icon: BarChart3, action: () => onNavigate('reports'), shortcut: 'Ctrl+R' },
+      { label: 'Rapports & Exports',        icon: BarChart3,    action: () => onNavigate('reports'),                    shortcut: 'Ctrl+R' },
       { separator: true },
-      { label: 'Exporter Inventaire CSV', icon: Download, action: () => onNavigate('reports'), disabled: !hasPermission('export') },
-      { label: 'Exporter Mouvements CSV', icon: TrendingUp, action: () => onNavigate('reports'), disabled: !hasPermission('export') },
-      { label: 'Exporter Alertes CSV', icon: AlertTriangle, action: () => onNavigate('reports'), disabled: !hasPermission('export') },
+      { label: 'Exporter Inventaire CSV',   icon: Download,     action: () => onNavigate('reports'),   disabled: !hasPermission('export') },
+      { label: 'Exporter Mouvements CSV',   icon: TrendingUp,   action: () => onNavigate('reports'),   disabled: !hasPermission('export') },
+      { label: 'Exporter Alertes CSV',      icon: AlertTriangle, action: () => onNavigate('reports'),  disabled: !hasPermission('export') },
       { separator: true },
-      { label: 'Rapport Mensuel Auto', icon: Calendar, action: () => onNavigate('reports') },
-      { label: 'Rapport par Site', icon: Filter, action: () => onNavigate('reports') },
+      { label: 'Rapport Mensuel Auto',      icon: Calendar,     action: () => onNavigate('reports') },
+      { label: 'Rapport par Site',          icon: Filter,       action: () => onNavigate('reports') },
     ],
     outils: [
-      { label: 'Paramètres', icon: Settings, action: () => onNavigate('settings'), shortcut: 'Ctrl+,' },
+      { label: 'Paramètres',               icon: Settings,     action: () => onNavigate('settings'),                   shortcut: 'Ctrl+,' },
       ...(hasPermission('manage_users') ? [
-        { label: 'Gestion Utilisateurs', icon: Users, action: () => onNavigate('users') },
+        { label: 'Gestion Utilisateurs',   icon: Users,        action: () => onNavigate('users') },
         { separator: true },
-        { label: 'Sauvegarde & Sync Cloud', icon: Share2, action: () => onNavigate('settings') },
-        { label: 'Gestion des Sites', icon: Database, action: () => onNavigate('settings') },
-        { label: 'Permissions & Rôles', icon: Shield, action: () => onNavigate('users') },
+        { label: 'Sauvegarde & Sync Cloud', icon: Share2,      action: () => onNavigate('settings') },
+        { label: 'Gestion des Sites',      icon: Database,     action: () => onNavigate('settings') },
+        { label: 'Permissions & Rôles',    icon: Shield,       action: () => onNavigate('users') },
       ] : []),
       { separator: true },
-      { label: 'Réinitialiser Données Démo', icon: RotateCcw, action: () => onNavigate('settings'), danger: true, disabled: !hasPermission('delete') },
+      { label: 'Réinitialiser Données Démo', icon: RotateCcw,  action: () => onNavigate('settings'), danger: true, disabled: !hasPermission('delete') },
     ],
   };
 
   const tabs = [
-    { id: 'fichier', label: 'Fichier' },
-    { id: 'stock', label: 'Stock' },
-    { id: 'alertes', label: 'Alertes', badge: alertCount },
+    { id: 'fichier',  label: 'Fichier' },
+    { id: 'stock',    label: 'Stock' },
+    { id: 'alertes',  label: 'Alertes',  badge: alertCount },
     { id: 'rapports', label: 'Rapports' },
-    { id: 'outils', label: 'Outils' },
+    { id: 'outils',   label: 'Outils' },
   ];
 
-
+  /* ── render ──────────────────────────────────────────────── */
   return (
     <>
-      {/* Quick Action Bar */}
+      {/* ── Bar ── */}
       <div
-        className="h-9 flex items-center bg-[#14532d] border-b border-green-800/40 select-none flex-shrink-0"
-        style={{ WebkitAppRegion: 'drag' } as any}
+        style={{
+          height: 38,
+          display: 'flex',
+          alignItems: 'center',
+          background: BAR_BG,
+          borderBottom: `1px solid ${BAR_BDR}`,
+          flexShrink: 0,
+          userSelect: 'none',
+          WebkitAppRegion: 'drag',
+        } as any}
       >
-        {/* Logo zone */}
-        {/* <div className="flex items-center gap-2 px-4 h-full border-r border-green-800/40">
-          <div className="w-5 h-5 rounded flex items-center justify-center overflow-hidden">
-            <img src="/icons/logo.svg" alt="SNL" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+
+        {/* App identity */}
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '0 14px', height: '100%',
+            borderRight: '1px solid rgba(255,255,255,0.05)',
+            flexShrink: 0, WebkitAppRegion: 'no-drag',
+          } as any}
+        >
+          <div style={{
+            width: 20, height: 20, borderRadius: 5,
+            background: 'linear-gradient(135deg, #16A34A, #059669)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Package size={11} color="white" />
           </div>
-          <span className="text-green-100 text-xs font-semibold tracking-wide">SNL</span>
-        </div> */}
+          <span style={{ fontSize: 11, fontWeight: 800, color: TEXT_HI, letterSpacing: '0.1em' }}>SNL</span>
+        </div>
 
         {/* Menu tabs */}
         <div
-          className="hidden sm:flex items-center h-full"
-          style={{ WebkitAppRegion: 'no-drag' } as any}
+          style={{ display: 'flex', alignItems: 'stretch', height: '100%', WebkitAppRegion: 'no-drag' } as any}
         >
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={(e) => handleMenuOpen(tab.id, e)}
-              className={`relative h-full px-4 text-xs font-medium transition-colors flex items-center gap-1.5
-                ${openMenu === tab.id
-                  ? 'bg-green-600/40 text-white'
-                  : 'text-green-200/80 hover:text-white hover:bg-green-700/40'
-                }`}
-            >
-              {tab.label}
-              {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="w-4 h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center leading-none">
-                  {tab.badge > 9 ? '9+' : tab.badge}
-                </span>
-              )}
-            </button>
-          ))}
+          {tabs.map(tab => {
+            const isActive = openMenu === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={e => handleMenuOpen(tab.id, e)}
+                style={{
+                  position: 'relative',
+                  height: '100%',
+                  padding: '0 13px',
+                  fontSize: 11.5,
+                  fontWeight: isActive ? 700 : 500,
+                  background: isActive ? 'rgba(74,222,128,0.10)' : 'transparent',
+                  color: isActive ? CHIP_COL : TEXT_DIM,
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  transition: 'color 0.12s, background 0.12s',
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                }}
+                onMouseEnter={e => { if (!isActive) { e.currentTarget.style.color = TEXT_HI; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; } }}
+                onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = TEXT_DIM; e.currentTarget.style.background = 'transparent'; } }}
+              >
+                {/* Active bottom accent */}
+                {isActive && (
+                  <span style={{
+                    position: 'absolute', bottom: 0, left: 6, right: 6,
+                    height: 2, background: '#4ADE80', borderRadius: '2px 2px 0 0',
+                  }} />
+                )}
+                {tab.label}
+                {tab.badge !== undefined && tab.badge > 0 && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 800,
+                    background: '#EF4444', color: 'white',
+                    borderRadius: 99, minWidth: 15, height: 15,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px',
+                  }}>
+                    {tab.badge > 9 ? '9+' : tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Quick actions — séparateur */}
-        <div className="hidden sm:block h-5 w-px bg-green-700/60 mx-2" style={{ WebkitAppRegion: 'no-drag' } as any} />
+        {/* Separator */}
+        <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.07)', margin: '0 6px', flexShrink: 0 }} />
 
-        {/* Quick action buttons */}
+        {/* Quick icon buttons */}
         <div
-          className="hidden sm:flex items-center gap-0.5 h-full px-1"
-          style={{ WebkitAppRegion: 'no-drag' } as any}
+          style={{ display: 'flex', alignItems: 'center', gap: 1, padding: '0 2px', WebkitAppRegion: 'no-drag' } as any}
         >
-          {[
-            { icon: Plus, label: 'Nouveau produit', action: () => onNavigate('products'), show: hasPermission('create') },
-            { icon: ArrowLeftRight, label: 'Transfert', action: () => onNavigate('movements'), show: hasPermission('create') },
-            { icon: Save, label: 'Sauvegarde rapide', action: handleQuickBackup, show: true },
-            { icon: Download, label: 'Exporter', action: handleExportDB, show: hasPermission('export') },
-          ].filter(b => b.show).map((btn, i) => {
+          {([
+            { icon: Plus,          label: 'Nouveau produit',  action: () => onNavigate('products'),  show: hasPermission('create') },
+            { icon: ArrowLeftRight, label: 'Mouvement',        action: () => onNavigate('movements'), show: hasPermission('create') },
+            { icon: Save,          label: 'Sauvegarde rapide', action: handleQuickBackup,             show: true },
+            { icon: Download,      label: 'Exporter DB',       action: handleExportDB,                show: hasPermission('export') },
+          ] as { icon: any; label: string; action: () => void; show: boolean }[]).filter(b => b.show).map((btn, i) => {
             const Icon = btn.icon;
             return (
               <button
                 key={i}
                 title={btn.label}
                 onClick={btn.action}
-                className="w-6 h-6 flex items-center justify-center rounded text-green-300/70 hover:text-white hover:bg-green-700/50 transition-colors"
+                style={{
+                  width: 26, height: 26,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 5, border: 'none', background: 'transparent',
+                  cursor: 'pointer', color: TEXT_DIM,
+                  transition: 'background 0.12s, color 0.12s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = CHIP_BG; e.currentTarget.style.color = CHIP_COL; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = TEXT_DIM; }}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon size={13} />
               </button>
             );
           })}
         </div>
 
-        {/* Search */}
-        <div
-          className="flex-1 flex items-center justify-center h-full"
-          style={{ WebkitAppRegion: 'drag' } as any}
-        />
+        {/* Spacer (draggable) */}
+        <div style={{ flex: 1, height: '100%', WebkitAppRegion: 'drag' } as any} />
 
-        {/* Right section: stats + time + user */}
+        {/* Right section */}
         <div
-          className="flex items-center gap-3 px-3 h-full"
-          style={{ WebkitAppRegion: 'no-drag' } as any}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 10px', WebkitAppRegion: 'no-drag' } as any}
         >
-          {/* Quick stats pills */}
-          <div className="hidden sm:flex items-center gap-1.5">
-            <button
-              onClick={() => onNavigate('alerts')}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors
-                ${alertCount > 0 ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30' : 'bg-green-700/30 text-green-300 hover:bg-green-700/50'}`}
-            >
-              <Bell className="w-2.5 h-2.5" />
-              {alertCount}
-            </button>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-green-700/30 text-[10px] text-green-300">
-              <Package className="w-2.5 h-2.5" />
-              {stats.totalProducts}
-            </div>
+          {/* Alert chip */}
+          <button
+            onClick={() => onNavigate('alerts')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '2px 9px', borderRadius: 99,
+              background: alertCount > 0 ? 'rgba(239,68,68,0.18)' : CHIP_BG,
+              color: alertCount > 0 ? '#FCA5A5' : CHIP_COL,
+              fontSize: 10, fontWeight: 700, border: 'none', cursor: 'pointer',
+              transition: 'background 0.12s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '0.75'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+          >
+            <Bell size={9} />
+            {alertCount}
+          </button>
+
+          {/* Products chip */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '2px 9px', borderRadius: 99,
+            background: CHIP_BG, color: CHIP_COL,
+            fontSize: 10, fontWeight: 600,
+          }}>
+            <Package size={9} />
+            {stats.totalProducts}
           </div>
 
-          {/* Search button */}
+          {/* Sep */}
+          <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.07)', margin: '0 2px' }} />
+
+          {/* Website button */}
+          <button
+            onClick={openWebsite}
+            title={APP_CONFIG.company.website}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '3px 9px', borderRadius: 6,
+              background: 'rgba(37,99,235,0.15)', color: '#93C5FD',
+              fontSize: 10.5, fontWeight: 600, border: '1px solid rgba(37,99,235,0.25)',
+              cursor: 'pointer', transition: 'background 0.12s, color 0.12s',
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(37,99,235,0.25)'; e.currentTarget.style.color = '#BFDBFE'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(37,99,235,0.15)'; e.currentTarget.style.color = '#93C5FD'; }}
+          >
+            <Globe size={10} />
+            nolimit.cm
+          </button>
+
+          {/* Sep */}
+          <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.07)', margin: '0 2px' }} />
+
+          {/* Search */}
           <button
             onClick={() => setSearchOpen(!searchOpen)}
-            className="flex items-center gap-1.5 px-2 py-1 rounded bg-green-700/30 text-green-200/70 hover:text-white hover:bg-green-700/50 transition-colors text-[10px]"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '3px 10px', borderRadius: 6,
+              background: 'rgba(255,255,255,0.05)',
+              color: TEXT_DIM,
+              fontSize: 10.5,
+              border: '1px solid rgba(255,255,255,0.06)',
+              cursor: 'pointer',
+              transition: 'background 0.12s, color 0.12s',
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = CHIP_BG; e.currentTarget.style.color = CHIP_COL; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = TEXT_DIM; }}
           >
-            <Search className="w-3 h-3" />
-            <span className="hidden sm:inline">Rechercher...</span>
-            <span className="hidden sm:inline text-[9px] bg-green-800/50 px-1 rounded font-mono">Ctrl+K</span>
+            <Search size={11} />
+            Rechercher
+            <span style={{
+              fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+              background: 'rgba(255,255,255,0.07)', padding: '1px 4px', borderRadius: 3,
+              color: 'rgba(187,247,208,0.35)',
+            }}>Ctrl+K</span>
           </button>
 
           {/* Offline indicator */}
-          <div className="hidden sm:block" style={{ WebkitAppRegion: 'no-drag' } as any}>
-            <OfflineIndicator />
-          </div>
+          <OfflineIndicator />
 
-          {/* Time */}
-          <div className="hidden sm:block text-[10px] font-mono text-green-400/60 tabular-nums">
+          {/* Clock */}
+          <span style={{
+            fontSize: 10.5,
+            fontFamily: "'JetBrains Mono', monospace",
+            color: 'rgba(74,222,128,0.40)',
+            letterSpacing: '0.05em',
+          }}>
             {time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-          </div>
+          </span>
+
+          {/* Sep */}
+          <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.07)', margin: '0 2px' }} />
 
           {/* User */}
           <button
-            onClick={(e) => handleMenuOpen('user', e)}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-green-700/40 transition-colors"
+            onClick={e => handleMenuOpen('user', e)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '3px 8px', borderRadius: 6,
+              background: openMenu === 'user' ? CHIP_BG : 'transparent',
+              border: 'none', cursor: 'pointer',
+              transition: 'background 0.12s',
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+            }}
+            onMouseEnter={e => { if (openMenu !== 'user') e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { if (openMenu !== 'user') e.currentTarget.style.background = 'transparent'; }}
           >
-            <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-[9px] font-bold">
-              {user?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #16A34A, #059669)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 8.5, fontWeight: 900, color: 'white', flexShrink: 0,
+            }}>
+              {user?.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
-            <span className="text-[10px] text-green-200/80 max-w-[80px] truncate">{user?.full_name?.split(' ')[0]}</span>
-            <ChevronDown className="w-2.5 h-2.5 text-green-400/60" />
+            <span style={{
+              fontSize: 11, color: 'rgba(187,247,208,0.80)', fontWeight: 600,
+              maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {user?.full_name?.split(' ')[0]}
+            </span>
+            <ChevronDown size={9} color="rgba(74,222,128,0.45)" />
           </button>
         </div>
       </div>
 
-      {/* Dropdown menus */}
+      {/* ── Dropdowns ── */}
       {openMenu && openMenu !== 'user' && menuDefs[openMenu] && menuAnchor && (
         <DropdownMenu items={menuDefs[openMenu]} onClose={closeMenu} anchor={menuAnchor} />
       )}
 
-      {/* User dropdown */}
       {openMenu === 'user' && menuAnchor && (
         <DropdownMenu
           items={[
-            { label: user?.full_name || '', icon: Users, disabled: true },
-            { label: `Rôle: ${user?.role}`, disabled: true },
+            { label: user?.full_name || '',   icon: Users,    disabled: true },
+            { label: `Rôle : ${user?.role}`,  icon: Shield,   disabled: true },
             { separator: true },
-            { label: 'Paramètres', icon: Settings, action: () => onNavigate('settings') },
+            { label: 'Paramètres',            icon: Settings, action: () => onNavigate('settings') },
             { separator: true },
-            { label: 'Déconnexion', icon: LogOut, action: logout, danger: true },
+            { label: 'Déconnexion',           icon: LogOut,   action: logout, danger: true },
           ]}
           onClose={closeMenu}
           anchor={menuAnchor}
         />
       )}
 
-      {/* Search overlay */}
+      {/* ── Search overlay ── */}
       {searchOpen && (
-        <div className="fixed inset-0 z-[9998] bg-black/40 flex items-start justify-center pt-24"
-          onClick={() => setSearchOpen(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
-            onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
-              <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 96 }}
+          onClick={() => setSearchOpen(false)}
+        >
+          <div
+            style={{ background: 'white', borderRadius: 14, boxShadow: '0 20px 60px rgba(0,0,0,0.18)', width: '100%', maxWidth: 520, margin: '0 16px', overflow: 'hidden', border: '1px solid #E2E8F0' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Search input */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid #F1F5F9' }}>
+              <Search size={16} color="#94A3B8" style={{ flexShrink: 0 }} />
               <input
                 ref={searchRef}
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Rechercher un produit, SKU, catégorie..."
-                className="flex-1 text-sm outline-none text-gray-900 placeholder-gray-400"
+                onKeyDown={e => { if (e.key === 'Escape') setSearchOpen(false); }}
+                placeholder="Rechercher un produit, SKU, catégorie…"
+                style={{ flex: 1, fontSize: 14, outline: 'none', color: '#0F172A', background: 'transparent', border: 'none', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               />
-              <kbd className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">Echap</kbd>
+              <kbd style={{ fontSize: 10, background: '#F1F5F9', color: '#94A3B8', padding: '2px 6px', borderRadius: 4, fontFamily: "'JetBrains Mono', monospace" }}>Echap</kbd>
             </div>
+
+            {/* Results */}
             {searchResults.length > 0 ? (
-              <div className="py-1 max-h-72 overflow-y-auto">
+              <div style={{ maxHeight: 320, overflowY: 'auto' }}>
                 {searchResults.map(p => (
-                  <button key={p.id}
+                  <button
+                    key={p.id}
                     onClick={() => {
                       onNavigate('products');
                       window.dispatchEvent(new CustomEvent('snl:highlight-product', { detail: { name: p.name } }));
                       setSearchOpen(false);
                       setSearchQuery('');
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left">
-                    <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                      <Package className="w-4 h-4 text-green-600" />
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 16px', border: 'none', background: 'transparent',
+                      cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s',
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#F8FAFC'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <div style={{ width: 34, height: 34, borderRadius: 8, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Package size={15} color="#16A34A" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{p.name}</div>
-                      <div className="text-xs text-gray-400">{p.sku} · {p.category}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: '#94A3B8' }}>{p.sku} · {p.category}</div>
                     </div>
-                    <div className="text-xs font-mono text-green-700">{p.price.toLocaleString()} XAF</div>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: '#16A34A', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                      {p.price.toLocaleString('fr-FR')} XAF
+                    </div>
                   </button>
                 ))}
               </div>
             ) : searchQuery ? (
-              <div className="py-8 text-center text-sm text-gray-400">Aucun résultat pour "{searchQuery}"</div>
+              <div style={{ padding: '28px 0', textAlign: 'center', fontSize: 13, color: '#94A3B8' }}>
+                Aucun résultat pour «&nbsp;{searchQuery}&nbsp;»
+              </div>
             ) : (
-              <div className="py-6 text-center text-sm text-gray-400">Tapez pour rechercher</div>
+              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: '#CBD5E1' }}>
+                Tapez pour rechercher un produit…
+              </div>
             )}
           </div>
         </div>

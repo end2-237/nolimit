@@ -6,9 +6,11 @@ import {
 import {
   RefreshCw, ArrowUpRight, CalendarCheck, ShoppingCart,
   Mail, MessageSquare, TrendingUp, CheckCircle, Clock,
+  Globe, ExternalLink, Wifi,
 } from 'lucide-react';
 import { siteWebService, type SiteStats, type Reservation, type ContactMessage } from '../services/siteWebService';
 import { useAuth } from '../stores/authStore';
+import { APP_CONFIG } from '../config/app.config';
 import type { PageId } from '../components/stock/StockLayout';
 
 /* ── tokens ─────────────────────────────────────────────────────── */
@@ -124,6 +126,142 @@ function Dot({ color }: { color: string }) {
   return <span style={{ width: 6, height: 6, borderRadius: 99, background: color, display: 'inline-block', flexShrink: 0 }} />;
 }
 
+/* ── openSite helper ─────────────────────────────────────────────── */
+function openSite(url: string) {
+  if ((window as any).electronAPI?.openExternal) (window as any).electronAPI.openExternal(url);
+  else window.open(url, '_blank');
+}
+
+/* ── SitePreviewBanner ───────────────────────────────────────────── */
+function SitePreviewBanner({ onNavigate }: { onNavigate: (p: PageId) => void }) {
+  const SITE_URL = APP_CONFIG.company.website;
+
+  return (
+    <div style={{
+      background: 'white', border: BDR, borderRadius: 12,
+      overflow: 'hidden', marginBottom: 20,
+    }}>
+      {/* Browser chrome bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 14px', background: '#F8FAFC', borderBottom: BDR,
+      }}>
+        {/* Traffic lights */}
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          {['#EF4444', '#F59E0B', '#22C55E'].map(c => (
+            <span key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c, display: 'inline-block' }} />
+          ))}
+        </div>
+        {/* URL pill */}
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center', gap: 7,
+          background: 'white', border: BDR, borderRadius: 6,
+          padding: '4px 10px', maxWidth: 400, margin: '0 auto',
+        }}>
+          <Wifi size={11} color="#22C55E" />
+          <span style={{ fontSize: 11, color: '#475569', fontFamily: "'JetBrains Mono', monospace", flex: 1 }}>
+            nolimit.cm
+          </span>
+          <span style={{ fontSize: 9, fontWeight: 700, background: '#DCFCE7', color: '#166534', padding: '1px 6px', borderRadius: 99 }}>
+            HTTPS
+          </span>
+        </div>
+        {/* CTA */}
+        <button
+          onClick={() => openSite(SITE_URL)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5, padding: '4px 13px',
+            borderRadius: 6, background: ACCENT, color: 'white',
+            fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
+            flexShrink: 0, transition: 'opacity 0.15s',
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.82'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+        >
+          <ExternalLink size={11} /> Ouvrir le site
+        </button>
+      </div>
+
+      {/* Preview body */}
+      <div style={{
+        position: 'relative', height: 152,
+        background: 'linear-gradient(135deg, #052e16 0%, #14532d 42%, #166534 72%, #15803d 100%)',
+        overflow: 'hidden', display: 'flex', alignItems: 'center',
+      }}>
+        {/* Decorative rings */}
+        {[
+          { w: 240, h: 240, top: -70, left: -50, op: 0.10 },
+          { w: 160, h: 160, top: -10, left: 30,  op: 0.08 },
+          { w: 320, h: 320, top: -80, right: -60, op: 0.05 },
+        ].map((r, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            width: r.w, height: r.h, borderRadius: '50%',
+            border: `1px solid rgba(74,222,128,${r.op})`,
+            top: r.top, left: (r as any).left, right: (r as any).right,
+            pointerEvents: 'none',
+          }} />
+        ))}
+        {/* Glow blob */}
+        <div style={{ position: 'absolute', width: 140, height: 140, borderRadius: '50%', background: 'rgba(74,222,128,0.06)', bottom: -40, right: 100, pointerEvents: 'none' }} />
+
+        {/* Left — branding */}
+        <div style={{ padding: '0 32px', flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: 10,
+              background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.14)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Globe size={19} color="#4ADE80" />
+            </div>
+            <div>
+              <p style={{ fontSize: 16, fontWeight: 800, color: 'white', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                No Limit Enterprise
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80', display: 'inline-block' }} />
+                <span style={{ fontSize: 11, color: 'rgba(187,247,208,0.70)' }}>En ligne · nolimit.cm</span>
+              </div>
+            </div>
+          </div>
+          <p style={{ fontSize: 12, color: 'rgba(187,247,208,0.55)', lineHeight: 1.55, maxWidth: 380 }}>
+            Produits naturels · Réservations · Boutique e-commerce · Newsletter
+          </p>
+        </div>
+
+        {/* Right — quick nav */}
+        <div style={{ padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, position: 'relative', zIndex: 1 }}>
+          {([
+            { label: 'Réservations', page: 'site-reservations' },
+            { label: 'Commandes',    page: 'site-commandes' },
+            { label: 'Messages',     page: 'site-messages' },
+            { label: 'Newsletter',   page: 'site-newsletter' },
+          ] as { label: string; page: PageId }[]).map(l => (
+            <button
+              key={l.label}
+              onClick={() => onNavigate(l.page)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '4px 12px', borderRadius: 6,
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.10)',
+                color: 'rgba(187,247,208,0.80)', fontSize: 11.5, fontWeight: 600,
+                cursor: 'pointer', transition: 'background 0.12s, color 0.12s',
+                fontFamily: "'Plus Jakarta Sans', sans-serif", textAlign: 'left',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.18)'; e.currentTarget.style.color = '#A7F3D0'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(187,247,208,0.80)'; }}
+            >
+              <ArrowUpRight size={11} /> {l.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main ────────────────────────────────────────────────────────── */
 export function SiteDashboardPage({ onNavigate }: Props) {
   const [stats,   setStats]   = useState<SiteStats | null>(null);
@@ -209,6 +347,9 @@ export function SiteDashboardPage({ onNavigate }: Props) {
           <RefreshCw size={12} /> Actualiser
         </button>
       </div>
+
+      {/* ── Site preview banner ── */}
+      <SitePreviewBanner onNavigate={nav} />
 
       {/* ── KPI row ── */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
