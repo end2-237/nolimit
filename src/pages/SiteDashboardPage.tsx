@@ -130,7 +130,17 @@ export function SiteDashboardPage({ onNavigate }: Props) {
   const [resRows, setResRows] = useState<Reservation[]>([]);
   const [msgRows, setMsgRows] = useState<ContactMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [winW, setWinW]       = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
   const { user } = useAuth();
+
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const isNarrow = winW < 900;
+  const isMobile = winW < 600;
 
   const nav = (page: PageId) => onNavigate?.(page);
 
@@ -201,7 +211,7 @@ export function SiteDashboardPage({ onNavigate }: Props) {
       </div>
 
       {/* ── KPI row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
         <KpiTile
           label="Réservations" value={fmt(resTotal)}
           sub={`${resPending} en attente`}
@@ -229,7 +239,7 @@ export function SiteDashboardPage({ onNavigate }: Props) {
       </div>
 
       {/* ── Middle row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
 
         {/* Réservations card */}
         <div style={{ background: 'white', border: BDR, borderRadius: 10, padding: '18px 20px' }}>
@@ -317,17 +327,19 @@ export function SiteDashboardPage({ onNavigate }: Props) {
       </div>
 
       {/* ── Bottom row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isNarrow ? '1fr 1fr' : '1fr 1fr 1fr', gap: 16 }}>
 
         {/* Taux de traitement */}
         <div style={{ background: 'white', border: BDR, borderRadius: 10, padding: '18px 20px' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: T1, marginBottom: 14 }}>Taux de traitement</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <ResponsiveContainer width={90} height={90}>
+            <div style={{ width: 90, height: 90, flexShrink: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
               <RadialBarChart cx="50%" cy="50%" innerRadius={28} outerRadius={44} startAngle={90} endAngle={-270} data={[{ value: treated }]}>
                 <RadialBar background={{ fill: '#F1F5F9' }} dataKey="value" fill={ACCENT} cornerRadius={4} />
               </RadialBarChart>
             </ResponsiveContainer>
+            </div>
             <div>
               <p style={{ fontSize: 32, fontWeight: 900, color: treated > 70 ? ACCENT : treated > 40 ? '#D97706' : '#DC2626', letterSpacing: '-0.05em', lineHeight: 1 }}>
                 {treated}%

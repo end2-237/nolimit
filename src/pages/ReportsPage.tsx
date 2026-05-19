@@ -597,6 +597,15 @@ export function ReportsPage() {
   const BDR = '1px solid #E2E8F0';
   const ACCENT = '#16A34A';
 
+  const [winW, setWinW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isNarrow = winW < 900;
+  const isMobile = winW < 600;
+
   return (
     <div className="snl-page">
       {/* Header */}
@@ -620,7 +629,7 @@ export function ReportsPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Quick stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: 12 }}>
           {[
             { label: 'Produits', value: stats.totalProducts, sub: 'références', color: T1 },
             { label: 'Valeur stock', value: stats.totalValue.toLocaleString('fr-FR'), sub: 'XAF', color: ACCENT, mono: true },
@@ -638,7 +647,7 @@ export function ReportsPage() {
         {/* Rapports spéciaux */}
         <div>
           <p style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Rapports Interactifs</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 12 }}>
             {[
               { onClick: () => setShowCAModal(true), icon: DollarSign, iconBg: '#DCFCE7', iconColor: ACCENT, title: "Chiffre d'Affaires", desc: 'Rapport des ventes (sorties) avec sélection de dates' },
               { onClick: () => setShowDamageModal(true), icon: Truck, iconBg: '#FEF3C7', iconColor: '#D97706', title: 'Dégâts de Transport', desc: 'Pertes liées au transport avec sélection de dates' },
@@ -670,7 +679,7 @@ export function ReportsPage() {
         {hasPermission('export') && (
           <div>
             <p style={{ fontSize: 11, fontWeight: 700, color: T3, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Exports Rapides · Excel</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isNarrow ? '1fr 1fr' : 'repeat(3,1fr)', gap: 12 }}>
               {[
                 { id: 'inventory', label: 'Inventaire complet', desc: 'Multi-feuilles : résumé, stock par site', icon: BarChart3, iconBg: '#DBEAFE', iconColor: '#1D4ED8', fn: exportInventoryXLSXQuick },
                 { id: 'movements', label: 'Mouvements', desc: 'Par type, colorisé, feuilles séparées', icon: TrendingUp, iconBg: '#DCFCE7', iconColor: ACCENT, fn: exportMovementsXLSXQuick },
@@ -704,7 +713,7 @@ export function ReportsPage() {
         )}
 
         {/* Résumé mouvements */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : 'repeat(2,1fr)', gap: 12 }}>
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-sm">Résumé des Mouvements</CardTitle></CardHeader>
             <CardContent>
