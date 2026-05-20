@@ -21,6 +21,7 @@ import syncRouter, { cleanupExpiredSessions } from './routes/sync';
 import statsRouter from './routes/stats';
 import alertsRouter from './routes/alerts';
 import siteRouter from './routes/site';
+import uploadsRouter from './routes/uploads';
 
 dotenv.config();
 
@@ -77,6 +78,7 @@ app.use('/api/sync',      syncRouter);
 app.use('/api/alerts',    alertsRouter);
 app.use('/api/stats',     statsRouter);
 app.use('/api/site',      siteRouter);
+app.use('/api/uploads',   uploadsRouter);
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 

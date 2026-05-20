@@ -51,7 +51,7 @@ export function getPublicUrl(path: string, bucket = SUPABASE_BUCKET): string {
   return `${url}/storage/v1/object/public/${bucket}/${path}`;
 }
 
-/* ── Upload ────────────────────────────────────────────────────── */
+/* ── Upload (proxied via SNL backend to avoid CORS) ───────────── */
 
 export interface UploadOptions {
   bucket?:   string;
@@ -59,40 +59,38 @@ export interface UploadOptions {
   onProgress?: (pct: number) => void;
 }
 
+function getApiBase(): string {
+  try {
+    const saved = localStorage.getItem('snl_api_url');
+    if (saved?.startsWith('http') && saved.includes('/api')) return saved.replace(/\/+$/, '');
+  } catch {}
+  return 'https://snl-api.vps.buyticle.com/api';
+}
+
 export async function uploadFile(
   file: File,
   filename: string,
   opts: UploadOptions = {},
 ): Promise<string> {
-  const { url, key } = getSupabaseConfig();
-  if (!url || !key) {
-    throw new Error('Supabase non configuré — ajoutez l\'URL et la clé API dans Paramètres → Stockage');
-  }
-
   const bucket = opts.bucket ?? SUPABASE_BUCKET;
-  const folder = opts.folder ? `${opts.folder}/` : '';
-  const path   = `${folder}${filename}`;
+  const folder = opts.folder ?? 'products';
 
-  /* Simuler la progression avant l'envoi (XHR serait plus propre
-     mais fetch ne supporte pas nativement onprogress) */
   opts.onProgress?.(10);
 
-  const endpoint = `${url}/storage/v1/object/${bucket}/${path}`;
-  const headers = {
-    apikey:          key,
-    Authorization:   `Bearer ${key}`,
-    'Content-Type':  file.type || 'application/octet-stream',
-    'x-upsert':      'true',
-    'Cache-Control': '3600',
+  const params = new URLSearchParams({
+    bucket,
+    folder,
+    filename,
+  });
+  const endpoint = `${getApiBase()}/uploads/image?${params}`;
+
+  const token = (window as any).__snl_auth_token__ as string | undefined;
+  const headers: Record<string, string> = {
+    'Content-Type': file.type || 'application/octet-stream',
   };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  // Essayer POST d'abord (nouveau fichier), puis PUT (upsert) si ça échoue
-  let res = await fetch(endpoint, { method: 'POST', headers, body: file });
-
-  if (!res.ok && res.status !== 409) {
-    // Certaines versions Supabase self-hosted préfèrent PUT pour upsert
-    res = await fetch(endpoint, { method: 'PUT', headers, body: file });
-  }
+  const res = await fetch(endpoint, { method: 'POST', headers, body: file });
 
   opts.onProgress?.(90);
 
@@ -100,16 +98,16 @@ export async function uploadFile(
     let body = res.statusText;
     try {
       const json = await res.json();
-      body = json.message || json.error || JSON.stringify(json);
+      body = json.error || json.message || JSON.stringify(json);
     } catch {
       body = await res.text().catch(() => res.statusText);
     }
     throw new Error(`Upload échoué (HTTP ${res.status}): ${body}`);
   }
 
+  const data = await res.json();
   opts.onProgress?.(100);
-
-  return getPublicUrl(path, bucket);
+  return data.url as string;
 }
 
 /* ── Upload image produit ──────────────────────────────────────── */
