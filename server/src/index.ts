@@ -5,7 +5,11 @@ import { createServer } from 'http';
 
 import { testConnection, query } from './db';
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 import { setupWebSocket } from './websocket';
 import usersRouter from './routes/users';
 import movementsRouter from './routes/movements';
