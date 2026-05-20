@@ -3,8 +3,8 @@
  * Pas de SDK : appels REST directs pour garder le bundle minimal.
  *
  * Configuration (priorité localStorage > VITE env) :
- *   snl_supabase_url  / VITE_SUPABASE_URL
- *   snl_supabase_key  / VITE_SUPABASE_ANON_KEY
+ *   snl_supabase_url  / VITE_STORAGE_URL      ← URL du serveur de stockage
+ *   snl_supabase_key  / VITE_STORAGE_KEY       ← clé anon/service_role du bucket
  */
 
 export const SUPABASE_BUCKET = 'nolimit_bucket';
@@ -21,13 +21,13 @@ const DEFAULT_SUPABASE_URL = 'https://storage.vps.buyticle.com';
 export function getSupabaseConfig(): SupabaseConfig {
   const url = (
     localStorage.getItem('snl_supabase_url') ||
-    (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
+    (import.meta.env.VITE_STORAGE_URL as string | undefined) ||
     DEFAULT_SUPABASE_URL
   ).replace(/\/$/, '');
 
   const key = (
     localStorage.getItem('snl_supabase_key') ||
-    (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
+    (import.meta.env.VITE_STORAGE_KEY as string | undefined) ||
     ''
   );
 
