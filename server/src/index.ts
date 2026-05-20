@@ -3,7 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 
-import { testConnection } from './db';
+import { testConnection, query } from './db';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { setupWebSocket } from './websocket';
 import usersRouter from './routes/users';
 import movementsRouter from './routes/movements';
@@ -74,11 +76,26 @@ app.use('/api/site',      siteRouter);
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 
+async function runMigrations() {
+  const migrations = ['002-add-missing-columns.sql'];
+  for (const file of migrations) {
+    try {
+      const sql = readFileSync(join(__dirname, 'migrations', file), 'utf-8');
+      await query(sql);
+      console.log(`[Migration] ✅ ${file}`);
+    } catch (e: any) {
+      console.warn(`[Migration] ⚠️  ${file}: ${e.message}`);
+    }
+  }
+}
+
 async function start() {
   try {
     const dbOk = await testConnection();
     if (!dbOk) {
       console.warn('[Server] Base de données non disponible — mode sans persistance');
+    } else {
+      await runMigrations();
     }
 
     httpServer.listen(PORT, () => {
