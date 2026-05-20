@@ -12,15 +12,17 @@ export const SUPABASE_BUCKET = 'nolimit_bucket';
 /* ── Config ────────────────────────────────────────────────────── */
 
 export interface SupabaseConfig {
-  url: string;  // ex: https://supabase.vps.buyticle.com
+  url: string;  // ex: https://storage.vps.buyticle.com
   key: string;  // anon key ou service_role key
 }
+
+const DEFAULT_SUPABASE_URL = 'https://storage.vps.buyticle.com';
 
 export function getSupabaseConfig(): SupabaseConfig {
   const url = (
     localStorage.getItem('snl_supabase_url') ||
     (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
-    ''
+    DEFAULT_SUPABASE_URL
   ).replace(/\/$/, '');
 
   const key = (

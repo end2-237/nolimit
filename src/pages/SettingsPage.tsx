@@ -646,7 +646,7 @@ function SupabaseStoragePanel() {
             className="mt-1.5 font-mono text-sm"
             value={url}
             onChange={e => { setUrl(e.target.value); setTestResult(null); }}
-            placeholder="https://supabase.vps.buyticle.com"
+            placeholder="https://storage.vps.buyticle.com"
           />
         </div>
         <div>
