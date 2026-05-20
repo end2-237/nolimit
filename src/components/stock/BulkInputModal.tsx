@@ -227,6 +227,8 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
     const qty = parseInt(quantity);
     if (!qty || qty <= 0) { setError('Quantité invalide'); return; }
     if (!product) { setError('Aucun produit sélectionné'); return; }
+    if (availableStock <= 0) { setError(`Stock épuisé sur ce site — aucune sortie possible`); return; }
+    if (qty > availableStock) { setError(`Stock insuffisant — disponible : ${availableStock} ${product.unit || 'unité(s)'}`); return; }
 
     const result = await db.createMovement({
       type: 'out',
@@ -337,9 +339,15 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{product?.unit || 'unité(s)'}</span>
               </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Disponible sur {siteOptions.find(s => s.id === site)?.name}: <strong className="font-mono">{availableStock}</strong>
-              </p>
+              {availableStock <= 0 ? (
+                <p className="text-xs text-red-600 font-semibold mt-1">
+                  ⚠ Stock épuisé sur {siteOptions.find(s => s.id === site)?.name} — choisissez un autre site
+                </p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">
+                  Disponible sur {siteOptions.find(s => s.id === site)?.name}: <strong className="font-mono">{availableStock}</strong>
+                </p>
+              )}
               {quantity && parseInt(quantity) > 0 && estimatedCA > 0 && (
                 <p className="text-xs text-green-600 font-semibold mt-0.5">
                   CA estimé: {estimatedCA.toLocaleString('fr-FR')} XAF
@@ -366,7 +374,8 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              <Button type="submit" className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+              <Button type="submit" disabled={availableStock <= 0}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
                 <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Enregistrer la sortie
               </Button>
             </div>

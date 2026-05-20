@@ -481,18 +481,29 @@ export function InventoryDashboard() {
                               >
                                 <Plus size={11} /> Entrée
                               </button>
-                              <button
-                                onClick={() => { setSelectedProduct(product); setShowStockOut(true); }}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                                  padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600,
-                                  background: '#FEE2E2', color: '#991B1B', border: 'none', cursor: 'pointer',
-                                  fontFamily: 'inherit',
-                                }}
-                                title="Vente"
-                              >
-                                <ShoppingCart size={11} /> Vente
-                              </button>
+                              {(() => {
+                                const totalStock = displaySites.reduce((s, sid) => s + (product.stock[sid] || 0), 0);
+                                const isExhausted = totalStock <= 0;
+                                return (
+                                  <button
+                                    onClick={() => { if (!isExhausted) { setSelectedProduct(product); setShowStockOut(true); } }}
+                                    disabled={isExhausted}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600,
+                                      background: isExhausted ? '#F1F5F9' : '#FEE2E2',
+                                      color: isExhausted ? '#94A3B8' : '#991B1B',
+                                      border: 'none',
+                                      cursor: isExhausted ? 'not-allowed' : 'pointer',
+                                      fontFamily: 'inherit',
+                                      opacity: isExhausted ? 0.7 : 1,
+                                    }}
+                                    title={isExhausted ? 'Stock épuisé' : 'Vente'}
+                                  >
+                                    <ShoppingCart size={11} /> {isExhausted ? 'Épuisé' : 'Vente'}
+                                  </button>
+                                );
+                              })()}
                               <button
                                 onClick={() => { setSelectedProduct(product); setShowTransportDamage(true); }}
                                 style={{
