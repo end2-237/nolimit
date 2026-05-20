@@ -2,11 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Search, Plus, Filter, Grid3X3, List, Package,
   Edit2, Trash2, ArrowUpRight, ArrowDownLeft, RefreshCw,
-  Image as ImageIcon, X, CheckCircle, AlertCircle, Upload, Scan, Barcode,
+  Image as ImageIcon, X, CheckCircle, AlertCircle, Scan, Barcode,
 } from 'lucide-react';
 
 import { Button } from '../components/ui/button';
-import { Label } from '../components/ui/label';
 import { db } from '../services/database';
 import { useAuth } from '../stores/authStore';
 import { APP_CONFIG } from '../config/app.config';
@@ -14,6 +13,7 @@ import { ProductFormModal } from '../components/stock/ProductFormModal';
 import { BulkInputModal, StockOutModal } from '../components/stock/BulkInputModal';
 import { BarcodeScannerModal } from '../components/stock/BarcodeScannerModal';
 import { ProductBarcodeModal } from '../components/stock/ProductBarcodeModal';
+import { ImageUploader } from '../components/ImageUploader';
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
 const T1 = '#0F172A', T2 = '#64748B', T3 = '#94A3B8';
@@ -40,30 +40,23 @@ const catColors: Record<string, { bg: string; text: string }> = {
 // ─── Image Upload Modal ────────────────────────────────────────────────────────
 
 function ImageModal({ product, onClose, onSaved }: { product: any; onClose: () => void; onSaved: () => void }) {
-  const [preview, setPreview] = useState<string | null>(product?.image_url || null);
+  const [imageUrl, setImageUrl] = useState<string | null>(product?.image_url || null);
+  const [saving, setSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const handleSave = () => {
-    if (!preview) return;
-    db.updateProduct(product.id, { image_url: preview } as any);
-    setIsSuccess(true);
-    setTimeout(() => { onSaved(); onClose(); }, 800);
-  };
-
-  const handleRemove = () => {
-    setPreview(null);
-    db.updateProduct(product.id, { image_url: null } as any);
-    onSaved();
-    onClose();
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await db.updateProduct(product.id, { image_url: imageUrl } as any);
+      setIsSuccess(true);
+      setTimeout(() => { onSaved(); onClose(); }, 800);
+    } catch (e: any) {
+      setError(e?.message || 'Erreur lors de la sauvegarde');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -89,40 +82,24 @@ function ImageModal({ product, onClose, onSaved }: { product: any; onClose: () =
           </div>
         ) : (
           <div className="px-6 py-5 space-y-4">
-            {/* Preview */}
-            <div className="w-full h-48 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden relative">
-              {preview ? (
-                <>
-                  <img src={preview} alt="preview" className="w-full h-full object-contain" />
-                  <button
-                    onClick={handleRemove}
-                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </>
-              ) : (
-                <div className="text-center text-gray-400">
-                  <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs">Aucune photo</p>
-                </div>
-              )}
-            </div>
+            <ImageUploader
+              value={imageUrl}
+              onChange={setImageUrl}
+              folder="products"
+              filePrefix={product?.sku || product?.name?.slice(0, 20) || 'img'}
+              label="Photo du produit"
+            />
 
-            {/* Upload */}
-            <label className="block">
-              <div className="flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-green-300 rounded-xl cursor-pointer hover:border-green-500 hover:bg-green-50 transition-colors">
-                <Upload className="w-4 h-4 text-green-600" />
-                <span className="text-sm text-green-700 font-medium">Choisir une image</span>
+            {error && (
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-3">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {error}
               </div>
-              <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
-            </label>
-            <p className="text-xs text-gray-400 text-center">JPG, PNG, WebP — Max 5MB</p>
+            )}
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              <Button onClick={handleSave} disabled={!preview} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
-                Sauvegarder
+              <Button onClick={handleSave} disabled={saving} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                {saving ? 'Sauvegarde…' : 'Sauvegarder'}
               </Button>
             </div>
           </div>
