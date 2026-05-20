@@ -232,12 +232,14 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
       type: 'out',
       status: 'confirmed',
       product_id: product.id,
+      product_name: product.name,
       from_site_id: site,
       to_site_id: null,
       quantity: qty,
       reason,
       reference: `SRT-${Date.now().toString(36).toUpperCase()}`,
       user_id: user?.id || 1,
+      user_name: user?.full_name || '',
     });
 
     if ('error' in result) {

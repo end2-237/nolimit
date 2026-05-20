@@ -127,6 +127,15 @@ export function InventoryDashboard() {
   const activeSites   = db.getSites();
   const allowedSites  = getAllowedSites().filter(sid => activeSites.find(s => s.id === sid));
 
+  const [winW, setWinW] = useState(window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isMobile = winW < 600;
+  const isNarrow = winW < 900;
+
   const [selectedSite, setSelectedSite]       = useState<string>('all');
   const [searchQuery,  setSearchQuery]         = useState('');
   const [showBulkInput, setShowBulkInput]      = useState(false);
@@ -198,7 +207,7 @@ export function InventoryDashboard() {
     <div style={{ minHeight: '100%', background: BG, display: 'flex', flexDirection: 'column' }}>
 
       {/* ── Top bar ─────────────────────────────────────────────── */}
-      <div style={{ background: SURFACE, borderBottom: BDR, padding: '16px 24px', flexShrink: 0 }}>
+      <div style={{ background: SURFACE, borderBottom: BDR, padding: isMobile ? '12px 14px' : '16px 24px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
           {/* Title */}
           <div>
@@ -213,39 +222,43 @@ export function InventoryDashboard() {
           {/* Actions */}
           {hasPermission('create') && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setShowTransfer(true)}
-                className="snl-btn snl-btn-secondary"
-              >
-                <RefreshCw size={13} /> Transfert
-              </button>
-              <button
-                onClick={() => { setSelectedProduct(null); setShowTransportDamage(true); }}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '0 14px', height: 34, borderRadius: 6,
-                  fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-                  border: '1px solid #FED7AA', background: '#FFF7ED',
-                  color: '#C2410C', fontFamily: 'inherit',
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = '#FFEDD5'}
-                onMouseLeave={e => e.currentTarget.style.background = '#FFF7ED'}
-              >
-                <Truck size={13} /> Perte
-              </button>
+              {!isMobile && (
+                <button
+                  onClick={() => setShowTransfer(true)}
+                  className="snl-btn snl-btn-secondary"
+                >
+                  <RefreshCw size={13} /> Transfert
+                </button>
+              )}
+              {!isMobile && (
+                <button
+                  onClick={() => { setSelectedProduct(null); setShowTransportDamage(true); }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '0 14px', height: 34, borderRadius: 6,
+                    fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                    border: '1px solid #FED7AA', background: '#FFF7ED',
+                    color: '#C2410C', fontFamily: 'inherit',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#FFEDD5'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#FFF7ED'}
+                >
+                  <Truck size={13} /> Perte
+                </button>
+              )}
               <button
                 onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
                 className="snl-btn snl-btn-primary"
               >
-                <Plus size={13} /> Nouveau produit
+                <Plus size={13} /> {isMobile ? 'Ajouter' : 'Nouveau produit'}
               </button>
             </div>
           )}
         </div>
 
         {/* ── KPI row ─────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : isNarrow ? 'repeat(3,1fr)' : 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
           <StatTile
             label="Valeur stock"
             value={totalValue > 999999 ? `${(totalValue / 1000000).toFixed(1)}M` : totalValue.toLocaleString('fr-FR')}
@@ -307,7 +320,7 @@ export function InventoryDashboard() {
       </div>
 
       {/* ── Content ─────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '12px 14px' : '20px 24px' }}>
 
         {isAdmin && <PendingApprovalsPanel />}
 
