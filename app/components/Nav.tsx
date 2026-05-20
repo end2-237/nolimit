@@ -14,6 +14,10 @@ const NAV_ITEMS = [
   { id: 'contact', label: 'Contact' },
 ];
 
+const NAV_LINK_ITEMS = [
+  { href: '/almanach', label: "L'Almanach" },
+];
+
 function Logo({ color = 'currentColor' }: { color?: string }) {
   return (
     <a
@@ -57,6 +61,12 @@ export function Nav({ onBook }: { onBook: () => void }) {
                 {it.label}
               </a>
             ))}
+            {NAV_LINK_ITEMS.map((it) => (
+              <a key={it.href} href={it.href}
+                style={{ fontSize: 13, fontWeight: 500, letterSpacing: '0.04em', color: solid ? 'var(--terracotta)' : 'rgba(245,241,234,0.92)', transition: 'color .3s ease', fontStyle: 'italic' }}>
+                {it.label}
+              </a>
+            ))}
           </nav>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -84,6 +94,12 @@ export function Nav({ onBook }: { onBook: () => void }) {
               <a key={it.id} href={`#${it.id}`}
                 onClick={(e) => { e.preventDefault(); scrollToId(it.id); setMenuOpen(false); }}
                 style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(36px, 10vw, 80px)', fontWeight: 300, letterSpacing: '-0.03em', color: 'var(--cream)', opacity: 0.9, display: 'block', lineHeight: 1.1, animationDelay: `${idx * 60}ms`, animation: 'slideUp .5s ease both' }}>
+                {it.label}
+              </a>
+            ))}
+            {NAV_LINK_ITEMS.map((it, idx) => (
+              <a key={it.href} href={it.href} onClick={() => setMenuOpen(false)}
+                style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(28px, 7vw, 60px)', fontWeight: 300, letterSpacing: '-0.03em', color: 'var(--terracotta)', opacity: 0.9, display: 'block', lineHeight: 1.1, fontStyle: 'italic', animationDelay: `${(NAV_ITEMS.length + idx) * 60}ms`, animation: 'slideUp .5s ease both' }}>
                 {it.label}
               </a>
             ))}

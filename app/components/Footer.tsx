@@ -28,7 +28,7 @@ export function Footer() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 32, paddingTop: 60 }} className="footer-grid">
-          <FooterCol title="Liens rapides" items={['Accueil', 'Manifeste', 'Nos centres', 'Praticiens', 'Boutique', 'Journal', 'Réserver']} />
+          <FooterCol title="Liens rapides" items={['Accueil', 'Manifeste', 'Nos centres', 'Praticiens', 'Boutique', 'Journal', 'Réserver', <a href="/almanach" style={{ color: 'var(--terracotta)', fontStyle: 'italic', transition: 'color .3s' }}>L'Almanach</a>]} />
           <FooterCol title="Nos soins" items={['Naturopathie', 'Acupuncture', 'Sophrologie', 'Massage thérapeutique', 'Nutrition', 'Tous les soins']} />
           <FooterCol title="Aide & service" items={['Livraison & retrait', 'Retours sous 14 jours', 'Support client', 'Suivi de commande', 'Mentions légales', 'CGV']} />
           <FooterCol
