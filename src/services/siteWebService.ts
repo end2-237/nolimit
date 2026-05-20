@@ -1,16 +1,21 @@
 import { getAuthToken } from './api';
 
-const API_URL = (() => {
+function getSiteApiUrl(): string {
   try {
     const saved = localStorage.getItem('snl_api_url');
-    if (saved?.startsWith('http') && saved.includes('/api')) return saved.replace(/\/+$/, '');
+    if (saved?.startsWith('http') && saved.includes('/api')) {
+      const url = saved.replace(/\/+$/, '');
+      // In Electron, snl_api_url may point to localhost (local DB has no site data)
+      // Always use the VPS for site web data
+      if (!url.includes('localhost') && !url.includes('127.0.0.1')) return url;
+    }
   } catch {}
   return import.meta.env.VITE_API_URL || 'https://snl-api.vps.buyticle.com/api';
-})();
+}
 
 async function apiFetch<T>(path: string): Promise<T> {
   const token = getAuthToken();
-  const res = await fetch(`${API_URL}/site${path}`, {
+  const res = await fetch(`${getSiteApiUrl()}/site${path}`, {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -22,7 +27,7 @@ async function apiFetch<T>(path: string): Promise<T> {
 
 async function apiPatch(path: string, body: object): Promise<void> {
   const token = getAuthToken();
-  const res = await fetch(`${API_URL}/site${path}`, {
+  const res = await fetch(`${getSiteApiUrl()}/site${path}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',

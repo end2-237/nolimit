@@ -13,7 +13,7 @@
  *
  * Extras : bip Web Audio · déduplication 1,5s · historique 5 scans · badge match
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   X, Scan, Camera, CameraOff, Package, Plus, TrendingUp, TrendingDown,
   AlertTriangle, CheckCircle, Keyboard, RefreshCw, Zap, ScanLine,

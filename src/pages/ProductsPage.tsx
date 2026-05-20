@@ -131,11 +131,20 @@ export function ProductsPage() {
   const [showScanner, setShowScanner] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
 
+  const [winW, setWinW] = useState(window.innerWidth);
+  const isMobile = winW < 640;
+
   const load = useCallback(() => {
     setProducts(db.getStocksGroupedByProduct(allowedSites));
   }, [allowedSites.join(',')]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -247,7 +256,7 @@ export function ProductsPage() {
       </div>
 
       {/* KPI tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Références',   value: stats.total,                                      color: T1,       sub: 'produits',  mono: false },
           { label: 'Valeur totale', value: stats.totalValue.toLocaleString('fr-FR'),          color: ACCENT,   sub: 'XAF',       mono: true  },
