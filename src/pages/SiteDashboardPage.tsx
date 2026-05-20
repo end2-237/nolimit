@@ -282,19 +282,29 @@ export function SiteDashboardPage({ onNavigate }: Props) {
 
   const nav = (page: PageId) => onNavigate?.(page);
 
+  const EMPTY_STATS: SiteStats = {
+    reservations: { total: '0', pending: '0' },
+    commandes:    { total: '0', pending: '0', revenue: '0' },
+    newsletter:   { total: '0' },
+    messages:     { total: '0', unread: '0' },
+  };
+
   const load = async () => {
     setLoading(true);
     try {
       const [s, r, m] = await Promise.all([
         siteWebService.getStats(),
-        siteWebService.getReservations(),
-        siteWebService.getMessages(),
+        siteWebService.getReservations().catch(() => [] as Reservation[]),
+        siteWebService.getMessages().catch(() => [] as ContactMessage[]),
       ]);
       setStats(s);
       setResRows(r.slice(0, 5));
       setMsgRows(m.slice(0, 5));
-    } catch { /* handled in component */ }
-    finally { setLoading(false); }
+    } catch {
+      setStats(EMPTY_STATS);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -306,26 +316,16 @@ export function SiteDashboardPage({ onNavigate }: Props) {
     </div>
   );
 
-  if (!stats) return (
-    <div className="snl-page">
-      <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 10, padding: '14px 18px' }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: '#991B1B', marginBottom: 2 }}>Erreur de connexion</p>
-        <p style={{ fontSize: 12, color: '#DC2626' }}>Impossible de charger les données du site. Vérifiez la configuration backend.</p>
-        <button onClick={load} className="snl-btn" style={{ marginTop: 12, background: '#DC2626', color: 'white', border: 'none', borderRadius: 6, padding: '0 14px', height: 32, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit' }}>
-          <RefreshCw size={12} /> Réessayer
-        </button>
-      </div>
-    </div>
-  );
+  const displayStats = stats ?? EMPTY_STATS;
 
-  const resTotal    = n(stats.reservations?.total);
-  const resPending  = n(stats.reservations?.pending);
-  const cmdTotal    = n(stats.commandes?.total);
-  const cmdPending  = n(stats.commandes?.pending);
-  const cmdRevenue  = n(stats.commandes?.revenue);
-  const nlTotal     = n(stats.newsletter?.total);
-  const msgTotal    = n(stats.messages?.total);
-  const msgUnread   = n(stats.messages?.unread);
+  const resTotal    = n(displayStats.reservations?.total);
+  const resPending  = n(displayStats.reservations?.pending);
+  const cmdTotal    = n(displayStats.commandes?.total);
+  const cmdPending  = n(displayStats.commandes?.pending);
+  const cmdRevenue  = n(displayStats.commandes?.revenue);
+  const nlTotal     = n(displayStats.newsletter?.total);
+  const msgTotal    = n(displayStats.messages?.total);
+  const msgUnread   = n(displayStats.messages?.unread);
 
   const treated     = resTotal > 0 ? Math.round(((resTotal - resPending) / resTotal) * 100) : 0;
 

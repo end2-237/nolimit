@@ -83,7 +83,7 @@ app.use('/api/uploads',   uploadsRouter);
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 
 async function runMigrations() {
-  const migrations = ['002-add-missing-columns.sql'];
+  const migrations = ['002-add-missing-columns.sql', '003-site-tables.sql'];
   for (const file of migrations) {
     try {
       const sql = readFileSync(join(__dirname, 'migrations', file), 'utf-8');

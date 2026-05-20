@@ -6,23 +6,23 @@ const router = Router();
 
 // ── Stats dashboard ──────────────────────────────────────────────────────────
 router.get('/stats', authMiddleware, async (req: AuthRequest, res) => {
-  try {
-    const [resRes, cmdRes, nlRes, msgRes] = await Promise.all([
-      query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='pending') AS pending FROM reservations`),
-      query(`SELECT COUNT(*) AS total, COALESCE(SUM(total),0) AS revenue, COUNT(*) FILTER (WHERE status='pending') AS pending FROM commandes`),
-      query(`SELECT COUNT(*) AS total FROM newsletter_subscribers WHERE active=true`),
-      query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='new') AS unread FROM contact_messages`),
-    ]);
-    res.json({
-      reservations: resRes.rows[0],
-      commandes:    cmdRes.rows[0],
-      newsletter:   nlRes.rows[0],
-      messages:     msgRes.rows[0],
-    });
-  } catch (err: any) {
-    console.error('[site/stats]', err.message);
-    res.status(500).json({ error: err.message });
-  }
+  const safe = async (sql: string, fallback: object) => {
+    try { return (await query(sql)).rows[0] ?? fallback; }
+    catch { return fallback; }
+  };
+
+  const [reservations, commandes, newsletter, messages] = await Promise.all([
+    safe(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='pending') AS pending FROM reservations`,
+         { total: '0', pending: '0' }),
+    safe(`SELECT COUNT(*) AS total, COALESCE(SUM(total),0) AS revenue, COUNT(*) FILTER (WHERE status='pending') AS pending FROM commandes`,
+         { total: '0', pending: '0', revenue: '0' }),
+    safe(`SELECT COUNT(*) AS total FROM newsletter_subscribers WHERE active=true`,
+         { total: '0' }),
+    safe(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='new') AS unread FROM contact_messages`,
+         { total: '0', unread: '0' }),
+  ]);
+
+  res.json({ reservations, commandes, newsletter, messages });
 });
 
 // ── Réservations ─────────────────────────────────────────────────────────────
