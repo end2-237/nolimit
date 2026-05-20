@@ -81,7 +81,7 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
   
   const isCustomSubType = form.sub_type === 'Autre' || (form.sub_type && !subTypeOptions.includes(form.sub_type));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.price || !form.threshold) {
       setError('Veuillez remplir tous les champs obligatoires');
@@ -97,7 +97,7 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
     }
 
     const finalSubType = form.sub_type === 'Autre' ? customSubType.trim() : form.sub_type;
-    
+
     const data = {
       name: form.name,
       sku: form.sku || generateSKU(form.category, form.name, db.getExistingSkus()),
@@ -114,14 +114,17 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
       updated_at: new Date().toISOString(),
     };
 
-    if (isEdit) {
-      db.updateProduct(product.id, data);
-    } else {
-      db.createProduct(data);
+    try {
+      if (isEdit) {
+        await db.updateProduct(product.id, data);
+      } else {
+        await db.createProduct(data);
+      }
+      setIsSuccess(true);
+      setTimeout(onClose, 1200);
+    } catch (e: any) {
+      setError(e?.message || 'Erreur lors de la sauvegarde');
     }
-
-    setIsSuccess(true);
-    setTimeout(onClose, 1200);
   };
 
   const categoryColors: Record<string, string> = {

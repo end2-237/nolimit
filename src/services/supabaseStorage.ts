@@ -77,22 +77,34 @@ export async function uploadFile(
      mais fetch ne supporte pas nativement onprogress) */
   opts.onProgress?.(10);
 
-  const res = await fetch(`${url}/storage/v1/object/${bucket}/${path}`, {
-    method: 'POST',
-    headers: {
-      apikey:        key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': file.type || 'application/octet-stream',
-      'x-upsert':    'true',
-    },
-    body: file,
-  });
+  const endpoint = `${url}/storage/v1/object/${bucket}/${path}`;
+  const headers = {
+    apikey:          key,
+    Authorization:   `Bearer ${key}`,
+    'Content-Type':  file.type || 'application/octet-stream',
+    'x-upsert':      'true',
+    'Cache-Control': '3600',
+  };
+
+  // Essayer POST d'abord (nouveau fichier), puis PUT (upsert) si ça échoue
+  let res = await fetch(endpoint, { method: 'POST', headers, body: file });
+
+  if (!res.ok && res.status !== 409) {
+    // Certaines versions Supabase self-hosted préfèrent PUT pour upsert
+    res = await fetch(endpoint, { method: 'PUT', headers, body: file });
+  }
 
   opts.onProgress?.(90);
 
   if (!res.ok) {
-    const body = await res.text().catch(() => res.statusText);
-    throw new Error(`Upload échoué (${res.status}): ${body}`);
+    let body = res.statusText;
+    try {
+      const json = await res.json();
+      body = json.message || json.error || JSON.stringify(json);
+    } catch {
+      body = await res.text().catch(() => res.statusText);
+    }
+    throw new Error(`Upload échoué (HTTP ${res.status}): ${body}`);
   }
 
   opts.onProgress?.(100);
