@@ -287,17 +287,41 @@ function AlmanachNav() {
 function AlmanachHero() {
   return (
     <section style={{
-      minHeight: '100dvh', background: T.ink,
+      minHeight: '100dvh', background: '#192916',
       display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
       padding: 'clamp(100px,14vw,180px) 0 clamp(64px,8vw,120px)',
       position: 'relative', overflow: 'hidden',
     }}>
-      {/* Subtle background texture lines */}
-      <div aria-hidden style={{
-        position: 'absolute', inset: 0, opacity: 0.04,
-        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 80px, rgba(245,241,234,1) 80px, rgba(245,241,234,1) 81px)',
-        pointerEvents: 'none',
-      }} />
+      {/* Organic botanical SVG background */}
+      <svg aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'hidden' }} preserveAspectRatio="xMidYMid slice" viewBox="0 0 1440 900">
+        {/* Large background circles */}
+        <circle cx="1150" cy="180" r="480" fill="rgba(61,79,60,0.45)" />
+        <circle cx="1150" cy="180" r="320" fill="rgba(45,62,44,0.5)" />
+        <circle cx="-80" cy="780" r="380" fill="rgba(184,147,90,0.05)" />
+        <circle cx="720" cy="1100" r="520" fill="rgba(168,184,158,0.04)" />
+        {/* Stroke rings */}
+        <circle cx="1150" cy="180" r="560" fill="none" stroke="rgba(168,184,158,0.07)" strokeWidth="1.5" />
+        <circle cx="1150" cy="180" r="640" fill="none" stroke="rgba(168,184,158,0.04)" strokeWidth="1" />
+        {/* Botanical leaf curves */}
+        <path d="M 200 -40 C 400 100 500 300 380 520 C 260 740 120 800 0 860" stroke="rgba(168,184,158,0.09)" strokeWidth="2" fill="none" />
+        <path d="M 280 -20 C 480 80 560 280 480 500 C 400 720 260 800 180 900" stroke="rgba(184,147,90,0.06)" strokeWidth="1.5" fill="none" />
+        <path d="M 800 900 C 900 700 1100 600 1200 400 C 1300 200 1350 50 1440 -20" stroke="rgba(168,184,158,0.06)" strokeWidth="1" fill="none" />
+        {/* Leaf-shaped accent */}
+        <ellipse cx="320" cy="420" rx="18" ry="48" fill="rgba(168,184,158,0.08)" transform="rotate(-28 320 420)" />
+        <ellipse cx="380" cy="360" rx="12" ry="32" fill="rgba(184,147,90,0.07)" transform="rotate(-42 380 360)" />
+        <ellipse cx="260" cy="480" rx="10" ry="28" fill="rgba(168,184,158,0.06)" transform="rotate(-15 260 480)" />
+        {/* Dot clusters */}
+        <circle cx="140" cy="200" r="3" fill="rgba(245,241,234,0.12)" />
+        <circle cx="160" cy="220" r="1.8" fill="rgba(245,241,234,0.08)" />
+        <circle cx="155" cy="190" r="2.5" fill="rgba(184,147,90,0.18)" />
+        <circle cx="180" cy="235" r="1.5" fill="rgba(245,241,234,0.07)" />
+        <circle cx="1280" cy="720" r="3.5" fill="rgba(168,184,158,0.1)" />
+        <circle cx="1300" cy="745" r="2" fill="rgba(184,147,90,0.12)" />
+        <circle cx="1260" cy="740" r="1.5" fill="rgba(245,241,234,0.06)" />
+        {/* Fine cross-hatch accent */}
+        <line x1="60" y1="0" x2="60" y2="900" stroke="rgba(245,241,234,0.02)" strokeWidth="1" />
+        <line x1="0" y1="840" x2="1440" y2="840" stroke="rgba(245,241,234,0.03)" strokeWidth="1" />
+      </svg>
 
       {/* Edition badge */}
       <div className="container">
@@ -369,6 +393,96 @@ function AlmanachHero() {
    RITUEL DU MOIS
 ───────────────────────────────────────────── */
 function RituelDuMois() {
+  const downloadCard = async () => {
+    const canvas = document.createElement('canvas');
+    const W = 720, H = 1280;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Background
+    ctx.fillStyle = '#3D4F3C';
+    ctx.beginPath();
+    ctx.rect(0, 0, W, H);
+    ctx.fill();
+
+    // Subtle dot grid
+    ctx.fillStyle = 'rgba(168,184,158,0.07)';
+    for (let y = 0; y < H; y += 50) for (let x = 0; x < W; x += 50) { ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI * 2); ctx.fill(); }
+
+    // Large decorative circle
+    ctx.strokeStyle = 'rgba(168,184,158,0.08)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(W * 0.85, H * 0.18, 280, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W * 0.85, H * 0.18, 180, 0, Math.PI * 2); ctx.stroke();
+
+    // Top badge bg
+    ctx.fillStyle = 'rgba(245,241,234,0.09)';
+    ctx.beginPath(); ctx.roundRect(32, 44, 180, 28, 14); ctx.fill();
+
+    // Top left label
+    ctx.fillStyle = 'rgba(245,241,234,0.5)';
+    ctx.font = '600 11px sans-serif'; ctx.letterSpacing = '2px';
+    ctx.fillText('#RituelNoLimit', 46, 62);
+
+    // Top right date
+    ctx.fillStyle = 'rgba(245,241,234,0.4)';
+    ctx.font = '500 11px sans-serif';
+    ctx.textAlign = 'right'; ctx.fillText('MAI 2026', W - 32, 62); ctx.textAlign = 'left';
+
+    // Section label
+    ctx.fillStyle = '#A8B89E';
+    ctx.font = 'italic 14px serif';
+    ctx.fillText('— Le rituel du mois', 40, H / 2 - 100);
+
+    // Divider line
+    ctx.fillStyle = 'rgba(245,241,234,0.15)'; ctx.fillRect(40, H / 2 - 80, 60, 1);
+
+    // Title line 1
+    ctx.fillStyle = '#F5F1EA';
+    ctx.font = '300 52px serif';
+    ctx.fillText('Le bain de pieds', 40, H / 2 - 20);
+
+    // Title line 2
+    ctx.fillStyle = 'rgba(245,241,234,0.85)';
+    ctx.font = 'italic 300 48px serif';
+    ctx.fillText('au laurier-sauce', 40, H / 2 + 48);
+
+    // Duration
+    ctx.fillStyle = 'rgba(245,241,234,0.55)';
+    ctx.font = '500 14px sans-serif';
+    ctx.fillText('7 minutes  ·  Avant le coucher', 40, H / 2 + 108);
+
+    // Separator
+    ctx.fillStyle = 'rgba(245,241,234,0.12)'; ctx.fillRect(40, H / 2 + 130, W - 80, 1);
+
+    // Bottom logo
+    ctx.fillStyle = '#F5F1EA';
+    ctx.font = '300 28px serif';
+    ctx.fillText('No Limit', 40, H - 52);
+    ctx.fillStyle = '#B8593D';
+    ctx.font = 'italic 300 28px serif';
+    ctx.fillText('.', 40 + ctx.measureText('No Limit').width + 2, H - 52);
+
+    // Bottom right badge
+    ctx.fillStyle = 'rgba(245,241,234,0.28)';
+    ctx.font = '700 10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('ACCÈS LIBRE', W - 40, H - 52);
+    ctx.textAlign = 'left';
+
+    // Export via jsPDF (lazy import)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const { jsPDF } = await import('jspdf');
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
+    const pW = pdf.internal.pageSize.getWidth();
+    const pH = pdf.internal.pageSize.getHeight();
+    const ratio = W / H;
+    const drawW = Math.min(pW - 16, (pH - 16) * ratio);
+    const drawH = drawW / ratio;
+    pdf.addImage(dataUrl, 'JPEG', (pW - drawW) / 2, (pH - drawH) / 2, drawW, drawH);
+    pdf.save('rituel-nolimit-mai-2026.pdf');
+  };
+
   return (
     <section id="rituel" style={{
       background: T.creamWarm,
@@ -463,7 +577,7 @@ function RituelDuMois() {
             {/* Download button */}
             <Reveal delay={200}>
               <button
-                onClick={() => window.print()}
+                onClick={downloadCard}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 10,
                   fontFamily: T.sans, fontSize: 13, fontWeight: 600, letterSpacing: '0.02em',
@@ -477,7 +591,7 @@ function RituelDuMois() {
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Télécharger en carte
+                Télécharger la carte (PDF)
               </button>
             </Reveal>
           </div>
@@ -550,7 +664,17 @@ function PlanteDuMois() {
       background: T.cream,
       padding: 'clamp(80px,12vw,160px) 0',
       borderTop: '1px solid rgba(26,26,26,0.07)',
+      position: 'relative', overflow: 'hidden',
     }}>
+      {/* Artemisia afra — subtle botanical photo background */}
+      <div aria-hidden style={{
+        position: 'absolute', top: 0, right: 0, width: '50%', height: '100%',
+        backgroundImage: 'url(https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Artemisia_afra_2.jpg/800px-Artemisia_afra_2.jpg)',
+        backgroundSize: 'cover', backgroundPosition: 'center left',
+        opacity: 0.07, maskImage: 'linear-gradient(to left, rgba(0,0,0,0.8) 0%, transparent 80%)',
+        WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,0.8) 0%, transparent 80%)',
+        pointerEvents: 'none',
+      }} />
       <div className="container">
         <Reveal>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'clamp(48px,7vw,96px)' }}>
@@ -650,26 +774,22 @@ function PlanteDuMois() {
 }
 
 /* ─────────────────────────────────────────────
-   CAPSULE AUDIO
+   CAPSULE AUDIO — Web Audio API (cohérence cardiaque synthétisée)
 ───────────────────────────────────────────── */
 function CapsuleAudio() {
-  const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [unavailable, setUnavailable] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [phase, setPhase] = useState<'inhale' | 'exhale' | 'idle'>('idle');
+  const [circleScale, setCircleScale] = useState(1);
 
-  const toggle = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (playing) {
-      a.pause();
-      setPlaying(false);
-    } else {
-      a.play().catch(() => setUnavailable(true));
-      setPlaying(true);
-    }
-  };
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
+  const pauseElapsedRef = useRef<number>(0);
+  const sourceNodesRef = useRef<AudioBufferSourceNode[]>([]);
+
+  const TOTAL = 420; // 7 minutes
+  const CYCLE = 10;  // 5s inhale + 5s exhale
 
   const fmt = (s: number) => {
     const m = Math.floor(s / 60);
@@ -677,35 +797,111 @@ function CapsuleAudio() {
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const stopAudio = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    if (audioCtxRef.current) {
+      try { audioCtxRef.current.suspend(); } catch {}
+    }
+    setPlaying(false);
+    setPhase('idle');
+  }, []);
 
-  const handleBar = (e: React.MouseEvent<HTMLDivElement>) => {
-    const a = audioRef.current;
-    if (!a || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    a.currentTime = ratio * duration;
+  const startAudio = useCallback(() => {
+    // Create or resume AudioContext
+    if (!audioCtxRef.current) {
+      const AC = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      audioCtxRef.current = new AC();
+    }
+    const ctx = audioCtxRef.current;
+    if (ctx.state === 'suspended') ctx.resume();
+
+    const offset = pauseElapsedRef.current;
+    startTimeRef.current = ctx.currentTime - offset;
+
+    // Schedule tones for the remaining duration
+    const remaining = TOTAL - offset;
+    const cycles = Math.ceil(remaining / CYCLE);
+
+    for (let i = 0; i < cycles; i++) {
+      const cycleOffset = i * CYCLE;
+      if (cycleOffset >= remaining) break;
+      const absStart = startTimeRef.current + offset + cycleOffset;
+
+      // Inhale: 0–5s rising sine 170→210 Hz
+      const osc1 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      osc1.connect(g1); g1.connect(ctx.destination);
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(170, absStart);
+      osc1.frequency.linearRampToValueAtTime(210, absStart + 4.6);
+      g1.gain.setValueAtTime(0, absStart);
+      g1.gain.linearRampToValueAtTime(0.07, absStart + 0.4);
+      g1.gain.setValueAtTime(0.07, absStart + 4.3);
+      g1.gain.linearRampToValueAtTime(0, absStart + 5.0);
+      osc1.start(absStart); osc1.stop(absStart + 5.0);
+
+      // Exhale: 5–10s falling sine 210→150 Hz
+      const osc2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      osc2.connect(g2); g2.connect(ctx.destination);
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(210, absStart + 5.0);
+      osc2.frequency.linearRampToValueAtTime(150, absStart + 9.6);
+      g2.gain.setValueAtTime(0, absStart + 5.0);
+      g2.gain.linearRampToValueAtTime(0.055, absStart + 5.4);
+      g2.gain.setValueAtTime(0.055, absStart + 9.2);
+      g2.gain.linearRampToValueAtTime(0, absStart + 10.0);
+      osc2.start(absStart + 5.0); osc2.stop(absStart + 10.0);
+    }
+
+    setPlaying(true);
+
+    // Animation loop
+    const tick = () => {
+      const now = ctx.currentTime - startTimeRef.current;
+      const clamped = Math.min(now, TOTAL);
+      setElapsed(clamped);
+      pauseElapsedRef.current = clamped;
+
+      const inCycle = clamped % CYCLE;
+      const isInhale = inCycle < 5;
+      setPhase(isInhale ? 'inhale' : 'exhale');
+      // Smooth circle scale: 1.0 → 1.35 on inhale, 1.35 → 1.0 on exhale
+      if (isInhale) {
+        setCircleScale(1 + (inCycle / 5) * 0.35);
+      } else {
+        setCircleScale(1.35 - ((inCycle - 5) / 5) * 0.35);
+      }
+
+      if (clamped < TOTAL) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        setPlaying(false); setPhase('idle'); setCircleScale(1); pauseElapsedRef.current = 0; setElapsed(0);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const toggle = () => {
+    if (playing) { stopAudio(); } else { startAudio(); }
   };
 
-  // Fake waveform bars
-  const bars = Array.from({ length: 48 }, (_, i) => {
-    const heights = [30, 45, 60, 38, 70, 55, 40, 75, 50, 35, 62, 80, 45, 55, 70, 38, 65, 48, 72, 56, 42, 68, 35, 78, 52, 44, 66, 58, 40, 74, 48, 62, 36, 70, 55, 45, 68, 50, 38, 76, 44, 60, 34, 72, 48, 56, 42, 64];
-    return heights[i % heights.length];
-  });
+  const restart = () => {
+    pauseElapsedRef.current = 0;
+    setElapsed(0);
+    if (playing) { stopAudio(); }
+    setPhase('idle'); setCircleScale(1);
+  };
+
+  useEffect(() => () => { cancelAnimationFrame(rafRef.current); audioCtxRef.current?.close(); }, []);
+
+  const pct = (elapsed / TOTAL) * 100;
+
+  const phaseLabel = phase === 'inhale' ? 'Inspirez' : phase === 'exhale' ? 'Expirez' : '';
+  const phaseColor = phase === 'inhale' ? T.gold : phase === 'exhale' ? T.sageLight : 'rgba(245,241,234,0.3)';
 
   return (
-    <section id="audio" style={{
-      background: T.ink,
-      padding: 'clamp(80px,12vw,160px) 0',
-    }}>
-      <audio
-        ref={audioRef}
-        src={AUDIO.src}
-        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-        onEnded={() => setPlaying(false)}
-      />
-
+    <section id="audio" style={{ background: T.ink, padding: 'clamp(80px,12vw,160px) 0' }}>
       <div className="container">
         <Reveal>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'clamp(48px,7vw,96px)' }}>
@@ -720,11 +916,7 @@ function CapsuleAudio() {
           {/* Left: info */}
           <div>
             <Reveal>
-              <h2 style={{
-                fontFamily: T.serif, fontWeight: 300, letterSpacing: '-0.03em',
-                fontSize: 'clamp(36px,6vw,80px)', lineHeight: 0.95, color: T.cream,
-                marginBottom: 20,
-              }}>
+              <h2 style={{ fontFamily: T.serif, fontWeight: 300, letterSpacing: '-0.03em', fontSize: 'clamp(36px,6vw,80px)', lineHeight: 0.95, color: T.cream, marginBottom: 20 }}>
                 {AUDIO.titre}
               </h2>
             </Reveal>
@@ -745,70 +937,75 @@ function CapsuleAudio() {
             </Reveal>
           </div>
 
-          {/* Right: player */}
+          {/* Right: synthesized breathing player */}
           <Reveal delay={80}>
-            <div style={{
-              background: 'rgba(245,241,234,0.04)',
-              border: '1px solid rgba(245,241,234,0.1)',
-              borderRadius: 20, padding: 'clamp(28px,3.5vw,48px)',
-            }}>
-              {/* Waveform */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2, height: 60, marginBottom: 28 }}>
-                {bars.map((h, i) => {
-                  const ratio = i / bars.length;
-                  const active = ratio < pct / 100;
-                  return (
-                    <div key={i} style={{
-                      flex: 1, borderRadius: 2,
-                      height: `${h}%`,
-                      background: active ? T.gold : 'rgba(245,241,234,0.15)',
-                      transition: 'background .1s',
-                    }} />
-                  );
-                })}
+            <div style={{ background: 'rgba(245,241,234,0.04)', border: '1px solid rgba(245,241,234,0.1)', borderRadius: 20, padding: 'clamp(28px,3.5vw,48px)' }}>
+
+              {/* Breathing circle */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, marginBottom: 36 }}>
+                <div style={{ position: 'relative', width: 140, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {/* Outer glow ring */}
+                  <div style={{
+                    position: 'absolute', borderRadius: '50%',
+                    width: 140, height: 140,
+                    background: `radial-gradient(circle, ${phase === 'inhale' ? 'rgba(184,147,90,0.12)' : 'rgba(168,184,158,0.08)'} 0%, transparent 70%)`,
+                    transform: `scale(${circleScale})`,
+                    transition: 'transform 0.15s ease-out, background 0.5s',
+                  }} />
+                  {/* Main circle */}
+                  <div style={{
+                    width: 88, height: 88, borderRadius: '50%',
+                    border: `2px solid ${phaseColor}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transform: `scale(${circleScale})`,
+                    transition: 'transform 0.15s ease-out, border-color 0.5s',
+                    boxShadow: playing ? `0 0 24px -4px ${phaseColor}` : 'none',
+                  }}>
+                    <div style={{ width: 52, height: 52, borderRadius: '50%', background: playing ? phaseColor : 'rgba(245,241,234,0.08)', transition: 'background 0.5s', opacity: 0.4 }} />
+                  </div>
+                </div>
+
+                {/* Phase label */}
+                <p style={{ fontFamily: T.serif, fontStyle: 'italic', fontSize: 22, color: phaseColor, transition: 'color 0.5s', minHeight: 30, textAlign: 'center', letterSpacing: '-0.01em' }}>
+                  {phaseLabel || (playing ? '…' : 'Cohérence cardiaque')}
+                </p>
+
+                {/* Cycle hint */}
+                <p style={{ fontFamily: T.sans, fontSize: 11, color: 'rgba(245,241,234,0.3)', letterSpacing: '0.08em', textAlign: 'center' }}>
+                  5 sec · 5 sec
+                </p>
               </div>
 
               {/* Progress bar */}
-              <div
-                onClick={handleBar}
-                style={{
-                  height: 3, background: 'rgba(245,241,234,0.12)', borderRadius: 99,
-                  cursor: 'pointer', marginBottom: 16, position: 'relative',
-                }}
-              >
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, height: '100%',
-                  background: T.gold, borderRadius: 99,
-                  width: `${pct}%`, transition: 'width .1s linear',
-                }} />
+              <div style={{ height: 3, background: 'rgba(245,241,234,0.1)', borderRadius: 99, marginBottom: 12, position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', background: T.gold, borderRadius: 99, width: `${pct}%`, transition: 'width .2s linear' }} />
               </div>
 
               {/* Time */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 28 }}>
-                <span style={{ fontFamily: T.sans, fontSize: 11, color: 'rgba(245,241,234,0.4)', fontWeight: 500 }}>{fmt(currentTime)}</span>
-                <span style={{ fontFamily: T.sans, fontSize: 11, color: 'rgba(245,241,234,0.4)', fontWeight: 500 }}>{duration > 0 ? fmt(duration) : '7:00'}</span>
+                <span style={{ fontFamily: T.sans, fontSize: 11, color: 'rgba(245,241,234,0.4)', fontWeight: 500 }}>{fmt(elapsed)}</span>
+                <span style={{ fontFamily: T.sans, fontSize: 11, color: 'rgba(245,241,234,0.4)', fontWeight: 500 }}>7:00</span>
               </div>
 
               {/* Controls */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-                {/* Rewind 10s */}
-                <button onClick={() => { if (audioRef.current) audioRef.current.currentTime -= 10; }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(245,241,234,0.5)', padding: 8 }} aria-label="Reculer 10s">
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M10 4V1L6 5l4 4V5c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6H2c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8z" fill="currentColor" opacity=".7"/>
-                    <text x="10" y="13" textAnchor="middle" fontSize="5.5" fill="currentColor" fontFamily="sans-serif" opacity=".9">10</text>
+                {/* Restart */}
+                <button onClick={restart} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(245,241,234,0.4)', padding: 8 }} aria-label="Recommencer">
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <path d="M9 2V0L5.5 3.5 9 7V4.5A5.5 5.5 0 1 1 3.5 10H1.5A7.5 7.5 0 1 0 9 2z" fill="currentColor" opacity=".8"/>
                   </svg>
                 </button>
 
-                {/* Play/Pause */}
+                {/* Play / Pause */}
                 <button
                   onClick={toggle}
-                  aria-label={playing ? 'Pause' : 'Écouter'}
+                  aria-label={playing ? 'Pause' : 'Démarrer la séance'}
                   style={{
-                    width: 64, height: 64, borderRadius: '50%',
+                    width: 68, height: 68, borderRadius: '50%',
                     background: T.gold, border: 'none', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'transform .2s, background .3s',
-                    boxShadow: `0 8px 24px -6px rgba(184,147,90,0.5)`,
+                    transition: 'transform .2s, box-shadow .3s',
+                    boxShadow: playing ? `0 12px 32px -6px rgba(184,147,90,0.6)` : `0 6px 20px -4px rgba(184,147,90,0.35)`,
                   }}
                   onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.06)')}
                   onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
@@ -819,41 +1016,14 @@ function CapsuleAudio() {
                   }
                 </button>
 
-                {/* Forward 10s */}
-                <button onClick={() => { if (audioRef.current) audioRef.current.currentTime += 10; }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(245,241,234,0.5)', padding: 8 }} aria-label="Avancer 10s">
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M10 4V1l4 4-4 4V5c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6h2c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8z" fill="currentColor" opacity=".7"/>
-                    <text x="10" y="13" textAnchor="middle" fontSize="5.5" fill="currentColor" fontFamily="sans-serif" opacity=".9">10</text>
-                  </svg>
-                </button>
+                {/* Spacer symmetry */}
+                <div style={{ width: 34 }} />
               </div>
 
-              {/* Unavailable notice */}
-              {unavailable && (
-                <p style={{ fontFamily: T.sans, fontSize: 12, color: 'rgba(245,241,234,0.4)', textAlign: 'center', marginTop: 20 }}>
-                  Capsule disponible le 1er juin 2026
-                </p>
-              )}
-
-              {/* Download */}
-              {!unavailable && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
-                  <a
-                    href={AUDIO.src}
-                    download
-                    style={{
-                      fontFamily: T.sans, fontSize: 12, fontWeight: 500, color: 'rgba(245,241,234,0.45)',
-                      display: 'flex', alignItems: 'center', gap: 7,
-                      textDecoration: 'none', letterSpacing: '0.04em',
-                    }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M6 1v7M3.5 5.5L6 8l2.5-2.5M2 10h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Télécharger l'audio
-                  </a>
-                </div>
-              )}
+              <p style={{ fontFamily: T.sans, fontSize: 11, color: 'rgba(245,241,234,0.25)', textAlign: 'center', marginTop: 20, lineHeight: 1.6 }}>
+                Son synthétisé — aucun fichier à télécharger.<br />
+                Casque recommandé pour une meilleure expérience.
+              </p>
             </div>
           </Reveal>
         </div>
@@ -1534,6 +1704,166 @@ function PontsSociaux() {
 }
 
 /* ─────────────────────────────────────────────
+   CAPSULE VIDÉO — placée après l'agenda, avant la question
+───────────────────────────────────────────── */
+function CapsuleVideo() {
+  const [accepted, setAccepted] = useState(false);
+
+  return (
+    <section style={{
+      background: '#0F1F0E',
+      padding: 'clamp(72px,10vw,140px) 0',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Subtle background tone */}
+      <div aria-hidden style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage: 'radial-gradient(ellipse 70% 60% at 75% 50%, rgba(61,79,60,0.35) 0%, transparent 70%)',
+      }} />
+
+      <div className="container" style={{ position: 'relative' }}>
+        <Reveal>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'clamp(32px,4vw,56px)' }}>
+            <div style={{ width: 32, height: 1, background: T.sageLight }} />
+            <span style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: T.sageLight, textTransform: 'uppercase' }}>
+              Pratique guidée
+            </span>
+          </div>
+        </Reveal>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 'clamp(36px,5vw,80px)', alignItems: 'center' }} className="video-grid">
+          {/* Left: description */}
+          <div>
+            <Reveal delay={40}>
+              <h2 style={{
+                fontFamily: T.serif, fontWeight: 300, letterSpacing: '-0.03em',
+                fontSize: 'clamp(28px,4vw,52px)', lineHeight: 1.05,
+                color: T.cream, marginBottom: 20,
+              }}>
+                Voir la<br />
+                <em style={{ fontStyle: 'italic', color: T.sageLight }}>cohérence<br />cardiaque</em><br />
+                en pratique
+              </h2>
+            </Reveal>
+            <Reveal delay={80}>
+              <p style={{ fontFamily: T.sans, fontSize: 14, lineHeight: 1.75, color: 'rgba(245,241,234,0.55)', marginBottom: 24 }}>
+                Une démonstration de 3 minutes par Dr Fabrice Lacroix, cardiologue.
+                Le visuel du cycle respiratoire aide à synchroniser la respiration sans compter.
+              </p>
+            </Reveal>
+            <Reveal delay={110}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {[
+                  { label: 'Durée', val: '3 min 42 s' },
+                  { label: 'Fréquence', val: '5 sec / 5 sec' },
+                  { label: 'Utilité', val: 'Réduction du cortisol' },
+                ].map(({ label, val }) => (
+                  <div key={label} style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
+                    <span style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: T.sageLight, letterSpacing: '0.06em', minWidth: 70 }}>{label}</span>
+                    <span style={{ fontFamily: T.sans, fontSize: 13, color: 'rgba(245,241,234,0.5)' }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+
+          {/* Right: video embed */}
+          <Reveal delay={60}>
+            <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', aspectRatio: '16/9', background: 'rgba(245,241,234,0.04)', border: '1px solid rgba(245,241,234,0.08)' }}>
+              {accepted ? (
+                <iframe
+                  src="https://www.youtube.com/embed/VXpbPJGJsNU?autoplay=1&rel=0&modestbranding=1&color=white"
+                  title="Cohérence cardiaque — pratique guidée"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                />
+              ) : (
+                /* Privacy-friendly click-to-load */
+                <button
+                  onClick={() => setAccepted(true)}
+                  style={{
+                    position: 'absolute', inset: 0, width: '100%', height: '100%',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                  }}
+                >
+                  {/* Thumbnail placeholder */}
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #1B2B1A 0%, #0F1F0E 100%)' }} />
+                  {/* Leaf icon */}
+                  <svg aria-hidden style={{ position: 'relative', zIndex: 1, opacity: 0.12 }} width="80" height="80" viewBox="0 0 24 24" fill={T.sageLight}>
+                    <path d="M17 8C8 10 5.9 16.17 3.82 19.83L5.71 21l1-1.9C7 18.5 7.5 18 8 18c4 0 10-4 10-10z"/>
+                  </svg>
+                  {/* Play button */}
+                  <div style={{
+                    position: 'relative', zIndex: 1,
+                    width: 64, height: 64, borderRadius: '50%',
+                    background: T.gold, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 12px 32px -8px rgba(184,147,90,0.5)',
+                    transition: 'transform .2s',
+                  }}>
+                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M7 4l14 7-14 7V4z" fill={T.ink}/></svg>
+                  </div>
+                  <p style={{ position: 'relative', zIndex: 1, fontFamily: T.sans, fontSize: 13, color: 'rgba(245,241,234,0.6)', fontWeight: 500, marginTop: 4 }}>
+                    Lancer la vidéo
+                  </p>
+                  <p style={{ position: 'relative', zIndex: 1, fontFamily: T.sans, fontSize: 11, color: 'rgba(245,241,234,0.25)', maxWidth: 280, textAlign: 'center', lineHeight: 1.5 }}>
+                    Contenu YouTube. En cliquant, vous acceptez que YouTube charge ses cookies.
+                  </p>
+                </button>
+              )}
+            </div>
+          </Reveal>
+        </div>
+      </div>
+
+      <style>{`
+        @media (max-width: 820px) { .video-grid { grid-template-columns: 1fr !important; } }
+      `}</style>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   BACK TO TOP BUTTON
+───────────────────────────────────────────── */
+function BackToTop() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 500);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  return (
+    <button
+      onClick={scrollTop}
+      aria-label="Remonter en haut"
+      style={{
+        position: 'fixed', bottom: 28, right: 28, zIndex: 90,
+        width: 48, height: 48, borderRadius: '50%',
+        background: T.sage, border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 6px 24px -4px rgba(61,79,60,0.5)',
+        transition: 'opacity .3s, transform .3s',
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(12px)',
+        pointerEvents: visible ? 'auto' : 'none',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = T.ink)}
+      onMouseLeave={e => (e.currentTarget.style.background = T.sage)}
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 13V3M4 7l4-4 4 4" stroke={T.cream} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
+/* ─────────────────────────────────────────────
    ALMANACH FOOTER
 ───────────────────────────────────────────── */
 function AlmanachFooter() {
@@ -1582,6 +1912,7 @@ export function AlmanachClient() {
         <RituelDuMois />
         <PlanteDuMois />
         <CapsuleAudio />
+        <CapsuleVideo />
         <MurCommunaute />
         <AgendaLibre />
         <QuestionDuMois />
@@ -1589,6 +1920,7 @@ export function AlmanachClient() {
         <PontsSociaux />
       </main>
       <AlmanachFooter />
+      <BackToTop />
 
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
