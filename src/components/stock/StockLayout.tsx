@@ -3,7 +3,7 @@ import {
   Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard,
   ShoppingBag, ChevronRight, LogOut, Users, Menu, X, Globe,
   BarChart3, CalendarCheck, ShoppingCart, Mail, MessageSquare,
-  ChevronDown, Shield, PanelLeftClose, PanelLeftOpen,
+  ChevronDown, Shield, PanelLeftClose, PanelLeftOpen, ClipboardList,
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/app.config';
 import {
@@ -16,7 +16,7 @@ import { OfflineIndicator } from '../OfflineIndicator';
 
 export type PageId =
   | 'dashboard' | 'products' | 'movements' | 'alerts' | 'reports'
-  | 'settings' | 'users'
+  | 'settings' | 'users' | 'ordonnances'
   | 'site' | 'site-dashboard' | 'site-reservations' | 'site-commandes'
   | 'site-newsletter' | 'site-messages';
 
@@ -71,12 +71,13 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
   };
 
   const navigationItems: { id: PageId; label: string; icon: typeof Package }[] = [
-    { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-    { id: 'products',  label: 'Produits',         icon: ShoppingBag },
-    { id: 'movements', label: 'Mouvements',        icon: ArrowLeftRight },
-    { id: 'alerts',    label: 'Alertes',           icon: Bell },
-    { id: 'reports',   label: 'Rapports',          icon: FileText },
-    { id: 'settings',  label: 'Paramètres',        icon: Settings },
+    { id: 'dashboard',   label: 'Tableau de bord', icon: LayoutDashboard },
+    { id: 'products',    label: 'Produits',         icon: ShoppingBag },
+    { id: 'movements',   label: 'Mouvements',       icon: ArrowLeftRight },
+    { id: 'ordonnances', label: 'Ordonnances',      icon: ClipboardList },
+    { id: 'alerts',      label: 'Alertes',          icon: Bell },
+    { id: 'reports',     label: 'Rapports',         icon: FileText },
+    { id: 'settings',    label: 'Paramètres',       icon: Settings },
     ...(hasPermission('manage_users') ? [{ id: 'users' as PageId, label: 'Utilisateurs', icon: Users }] : []),
   ];
 

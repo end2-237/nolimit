@@ -1,52 +1,48 @@
 -- ============================================================
 -- Migration : Intégration Site Vitrine Nolimit
 -- Schéma : nolimit
+-- Coller dans Supabase SQL Editor (ou psql)
 -- ============================================================
 
 SET search_path = nolimit;
 
--- 1. Colonne is_published sur la table products
+-- ============================================================
+-- 1. Colonne is_published
+-- ============================================================
+
 ALTER TABLE products
   ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false;
 
--- Index pour la query de la vitrine (ne lit que les publiés)
 CREATE INDEX IF NOT EXISTS idx_products_is_published
   ON products (is_published)
   WHERE is_published = true;
 
 -- ============================================================
--- 2. Row Level Security — lecture publique des produits publiés
+-- 2. RLS sur products
 -- ============================================================
 
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 
--- Anon peut lire uniquement les produits publiés (vitrine)
+-- Anon lit uniquement les produits publiés (vitrine)
 DROP POLICY IF EXISTS "vitrine_read_published" ON products;
 CREATE POLICY "vitrine_read_published"
-  ON products
-  FOR SELECT
-  TO anon
+  ON products FOR SELECT TO anon
   USING (is_published = true);
 
--- Authentifiés peuvent tout lire (back-office SNL)
+-- Authentifiés lisent tout (back-office SNL)
 DROP POLICY IF EXISTS "authenticated_read_all" ON products;
 CREATE POLICY "authenticated_read_all"
-  ON products
-  FOR SELECT
-  TO authenticated
+  ON products FOR SELECT TO authenticated
   USING (true);
 
--- Authentifiés peuvent modifier
+-- Authentifiés écrivent tout
 DROP POLICY IF EXISTS "authenticated_write" ON products;
 CREATE POLICY "authenticated_write"
-  ON products
-  FOR ALL
-  TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  ON products FOR ALL TO authenticated
+  USING (true) WITH CHECK (true);
 
 -- ============================================================
--- 3. Table site_config — paramètres dynamiques du site vitrine
+-- 3. Table site_config
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS site_config (
@@ -76,6 +72,16 @@ CREATE POLICY "site_config_write"
   ON site_config FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================
+-- 4. Exposer le schéma nolimit à PostgREST (self-hosted)
+--    Si ton postgrest.conf a déjà db-schema = "nolimit, public",
+--    cette étape est inutile.
+-- ============================================================
+
+-- Vérifie dans ta config PostgREST (fichier postgrest.conf ou variable env) :
+-- db-schema = "nolimit, public"
+-- Si manquant, ajoute-le et redémarre PostgREST.
+
+-- ============================================================
 -- Vérification
 -- ============================================================
 
@@ -84,3 +90,8 @@ FROM information_schema.columns
 WHERE table_schema = 'nolimit'
   AND table_name   = 'products'
   AND column_name  = 'is_published';
+
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'nolimit'
+  AND table_name   = 'site_config';
