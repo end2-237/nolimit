@@ -21,8 +21,9 @@ import { db, Product } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
 import { APP_CONFIG } from '../../config/app.config';
 import {
+  generateOrdonnanceBarcode,
   createOrdonnance,
-  markOrdonnancePaid,
+  payOrdonnance,
   type OrdonnanceItem,
   type Ordonnance,
 } from '../../services/ordonnances';
@@ -181,6 +182,23 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
     return { success: errs.length === 0, errors: errs };
   }
 
+  // ── Données communes à toute création d'ordonnance
+  function buildOrdonnanceData(status: 'pending' | 'paid') {
+    return {
+      barcode:        generateOrdonnanceBarcode(),
+      client_name:    clientName.trim(),
+      client_phone:   clientPhone.trim() || undefined,
+      client_address: clientAddress.trim() || undefined,
+      site_id:        siteId,
+      items:          buildItems(),
+      total,
+      status,
+      created_by:     user!.id,
+      created_by_name: user!.full_name,
+      note:           note.trim() || undefined,
+    };
+  }
+
   // ── Action : Payer maintenant
   async function handlePayNow() {
     if (!validate() || !user) return;
@@ -188,32 +206,24 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
     setErrors([]);
 
     try {
-      // 1. Créer l'ordonnance en attente
-      const ord = createOrdonnance({
-        client_name:    clientName.trim(),
-        client_phone:   clientPhone.trim() || undefined,
-        client_address: clientAddress.trim() || undefined,
-        site_id:        siteId,
-        items:          buildItems(),
-        total,
-        status:         'pending',
-        created_by:     user.id,
-        created_by_name: user.full_name,
-        note:           note.trim() || undefined,
-      });
+      // 1. Créer l'ordonnance (en pending d'abord — on la paie après les mouvements)
+      const ordData = buildOrdonnanceData('pending');
+      const ord = await createOrdonnance(ordData);
 
       // 2. Créer les mouvements de stock
       const { success, errors: mvErrs } = await createMovements(ord);
 
       if (!success) {
+        // Mouvements partiellement en échec — on signale mais on marque quand même
+        // les items réussis (les erreurs sont liées au stock insuffisant côté API)
         setErrors(mvErrs);
         setLoading(false);
         return;
       }
 
-      // 3. Marquer comme payée
-      markOrdonnancePaid(ord.id);
-      const paidOrd = { ...ord, status: 'paid' as const, paid_at: new Date().toISOString() };
+      // 3. Marquer comme payée (API ou outbox offline)
+      await payOrdonnance(ord.barcode);
+      const paidOrd: Ordonnance = { ...ord, status: 'paid', paid_at: new Date().toISOString() };
 
       window.dispatchEvent(new CustomEvent('snl:stock-updated'));
       onCreated(paidOrd);
@@ -231,18 +241,8 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
     setErrors([]);
 
     try {
-      const ord = createOrdonnance({
-        client_name:    clientName.trim(),
-        client_phone:   clientPhone.trim() || undefined,
-        client_address: clientAddress.trim() || undefined,
-        site_id:        siteId,
-        items:          buildItems(),
-        total,
-        status:         'pending',
-        created_by:     user.id,
-        created_by_name: user.full_name,
-        note:           note.trim() || undefined,
-      });
+      const ordData = buildOrdonnanceData('pending');
+      const ord = await createOrdonnance(ordData);
 
       // Imprimer immédiatement (barcodes uniquement)
       printOrdonnance(ord, APP_CONFIG.company?.name ?? 'SNL');

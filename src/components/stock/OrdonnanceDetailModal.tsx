@@ -23,7 +23,7 @@ import { db } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
 import { APP_CONFIG } from '../../config/app.config';
 import {
-  markOrdonnancePaid,
+  payOrdonnance,
   deleteOrdonnance,
   type Ordonnance,
 } from '../../services/ordonnances';
@@ -131,11 +131,10 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
         return;
       }
 
-      const updated = markOrdonnancePaid(ord.id);
-      if (updated) {
-        setOrd(updated);
-        onUpdated(updated);
-      }
+      await payOrdonnance(ord.barcode);
+      const updated: Ordonnance = { ...ord, status: 'paid', paid_at: new Date().toISOString() };
+      setOrd(updated);
+      onUpdated(updated);
       window.dispatchEvent(new CustomEvent('snl:stock-updated'));
     } catch (e: any) {
       setErrors([e?.message ?? 'Erreur inattendue']);
@@ -150,8 +149,10 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
   }
 
   // ── Action : Supprimer
-  function handleDelete() {
-    deleteOrdonnance(ord.id);
+  async function handleDelete() {
+    try {
+      await deleteOrdonnance(ord.barcode);
+    } catch {}
     onUpdated(null);
   }
 
@@ -214,6 +215,15 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
             >
               {isPaid ? '✓ Payée' : '⏳ En attente'}
             </span>
+            {ord._offline && (
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(99,102,241,0.1)', color: '#6366F1' }}
+                title="Créée hors-ligne — sera synchronisée à la prochaine connexion"
+              >
+                ⟳ Hors-ligne
+              </span>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"

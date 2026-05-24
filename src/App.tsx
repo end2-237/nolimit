@@ -23,6 +23,7 @@ import { notifService } from './services/notifications';
 import { SyncProvider, useSync } from './context/SyncProvider';
 import { startConnectivityMonitor } from './services/connectivity';
 import { processOutbox } from './services/outbox';
+import { processOrdonnancesOutbox } from './services/ordonnances';
 import { startSiteOrderPolling, stopSiteOrderPolling } from './services/siteOrderSync';
 
 // Start connectivity monitor as early as possible
@@ -162,13 +163,15 @@ function AppInner() {
       window.dispatchEvent(new CustomEvent('snl:stock-updated'));
       window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
       setAlertCount(db.getAlerts(false).length);
-      // Then flush outbox
+      // Flush outbox movements
       const { sent } = await processOutbox();
       if (sent > 0) {
         await db.refresh();
         window.dispatchEvent(new CustomEvent('snl:stock-updated'));
         window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
       }
+      // Flush ordonnances outbox (create / pay / delete hors-ligne)
+      processOrdonnancesOutbox().catch(() => {});
     };
     window.addEventListener('snl:online', onOnline);
     return () => window.removeEventListener('snl:online', onOnline);

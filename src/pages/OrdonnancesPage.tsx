@@ -15,6 +15,7 @@ import {
   ClipboardList, RefreshCw, Barcode,
 } from 'lucide-react';
 import {
+  loadOrdonnances,
   getOrdonnances,
   findOrdonnanceByBarcode,
   isOrdonnanceBarcode,
@@ -39,6 +40,7 @@ type Tab = 'all' | 'pending' | 'paid';
 
 export function OrdonnancesPage() {
   const [ordonnances, setOrdonnances]     = useState<Ordonnance[]>([]);
+  const [loadingData, setLoadingData]     = useState(true);
   const [tab, setTab]                     = useState<Tab>('all');
   const [search, setSearch]               = useState('');
   const [showForm, setShowForm]           = useState(false);
@@ -50,14 +52,24 @@ export function OrdonnancesPage() {
   const [scanSuccess, setScanSuccess]     = useState('');
   const scanRef = useRef<HTMLInputElement>(null);
 
-  // ── Charger les ordonnances
-  const reload = useCallback(() => {
-    setOrdonnances(getOrdonnances());
-  }, []);
+  // ── Charger les ordonnances (API online / IDB offline)
+  const reload = useCallback(async (force = false) => {
+    if (force || loadingData) {
+      setLoadingData(true);
+      try {
+        await loadOrdonnances();
+      } finally {
+        setOrdonnances(getOrdonnances());
+        setLoadingData(false);
+      }
+    } else {
+      setOrdonnances(getOrdonnances());
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    reload(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Filtrage
   const filtered = ordonnances.filter(ord => {
@@ -109,13 +121,13 @@ export function OrdonnancesPage() {
   // ── Callback après création
   function handleCreated(ord: Ordonnance) {
     setShowForm(false);
-    reload();
+    setOrdonnances(getOrdonnances());
     setSelectedOrd(ord);
   }
 
   // ── Callback après mise à jour / suppression dans le detail
   function handleUpdated(ord: Ordonnance | null) {
-    reload();
+    setOrdonnances(getOrdonnances());
     if (!ord) {
       setSelectedOrd(null);
     } else {
@@ -329,7 +341,7 @@ export function OrdonnancesPage() {
 
           {/* Rafraîchir */}
           <button
-            onClick={reload}
+            onClick={() => reload(true)}
             style={{
               width: 34, height: 34, borderRadius: 8,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -348,11 +360,23 @@ export function OrdonnancesPage() {
             border: BDR, overflow: 'hidden', flex: 1,
           }}
         >
-          {filtered.length === 0 ? (
+          {loadingData ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 12 }}>
+              <div style={{
+                width: 22, height: 22, borderRadius: 99,
+                border: `3px solid #E2E8F0`,
+                borderTopColor: ACCENT,
+                animation: 'spin 0.8s linear infinite',
+              }} />
+              <p style={{ fontSize: 13, color: T2 }}>Chargement des ordonnances…</p>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          ) : filtered.length === 0 ? (
             <EmptyState tab={tab} hasSearch={!!search.trim()} onNew={() => setShowForm(true)} />
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+
                 <thead>
                   <tr style={{ background: '#F8FAFC' }}>
                     {['Code-barre', 'Client', 'Articles', 'Total', 'Site', 'Date', 'Statut', ''].map(h => (
@@ -504,18 +528,29 @@ function OrdonnanceRow({
 
       {/* Statut */}
       <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          fontSize: 11, fontWeight: 600,
-          padding: '3px 9px', borderRadius: 99,
-          background: isPaid ? 'rgba(22,163,74,0.1)' : 'rgba(217,119,6,0.1)',
-          color: isPaid ? '#16A34A' : '#D97706',
-        }}>
-          {isPaid
-            ? <><CheckCircle style={{ width: 10, height: 10 }} /> Payée</>
-            : <><Clock style={{ width: 10, height: 10 }} /> En attente</>
-          }
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            fontSize: 11, fontWeight: 600,
+            padding: '3px 9px', borderRadius: 99,
+            background: isPaid ? 'rgba(22,163,74,0.1)' : 'rgba(217,119,6,0.1)',
+            color: isPaid ? '#16A34A' : '#D97706',
+          }}>
+            {isPaid
+              ? <><CheckCircle style={{ width: 10, height: 10 }} /> Payée</>
+              : <><Clock style={{ width: 10, height: 10 }} /> En attente</>
+            }
+          </span>
+          {ord._offline && (
+            <span style={{
+              fontSize: 9, fontWeight: 700,
+              padding: '2px 6px', borderRadius: 99,
+              background: 'rgba(99,102,241,0.1)', color: '#6366F1',
+            }} title="Hors-ligne — sera synchronisée à la reconnexion">
+              ⟳
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Action */}

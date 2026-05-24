@@ -4,9 +4,13 @@
  */
 
 const DB_NAME = 'snl_offline';
-const DB_VERSION = 1;
+// v2 — ajout des stores ordonnances + ordonnances_outbox
+const DB_VERSION = 2;
 
-type StoreName = 'products' | 'stocks' | 'users' | 'movements' | 'alerts' | 'auth_cache' | 'outbox';
+type StoreName =
+  | 'products' | 'stocks' | 'users' | 'movements' | 'alerts'
+  | 'auth_cache' | 'outbox'
+  | 'ordonnances' | 'ordonnances_outbox';
 
 let _db: IDBDatabase | null = null;
 
@@ -16,7 +20,9 @@ function openDB(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
-      const stores: { name: StoreName; key: string; autoIncrement?: boolean }[] = [
+
+      // Stores v1 (créés si absents pour les nouvelles installations)
+      const v1Stores: { name: StoreName; key: string; autoIncrement?: boolean }[] = [
         { name: 'products',   key: 'id' },
         { name: 'stocks',     key: 'id' },
         { name: 'users',      key: 'id' },
@@ -25,11 +31,24 @@ function openDB(): Promise<IDBDatabase> {
         { name: 'auth_cache', key: 'username' },
         { name: 'outbox',     key: 'localId', autoIncrement: true },
       ];
-      stores.forEach(({ name, key, autoIncrement }) => {
+      v1Stores.forEach(({ name, key, autoIncrement }) => {
         if (!db.objectStoreNames.contains(name)) {
           db.createObjectStore(name, { keyPath: key, autoIncrement: !!autoIncrement });
         }
       });
+
+      // Stores v2 — ordonnances
+      // Clé = barcode (string, généré côté client, stable en mode offline)
+      if (!db.objectStoreNames.contains('ordonnances')) {
+        db.createObjectStore('ordonnances', { keyPath: 'barcode' });
+      }
+      // Outbox spécifique aux ordonnances
+      if (!db.objectStoreNames.contains('ordonnances_outbox')) {
+        db.createObjectStore('ordonnances_outbox', {
+          keyPath: 'localId',
+          autoIncrement: true,
+        });
+      }
     };
     req.onsuccess = (e) => {
       _db = (e.target as IDBOpenDBRequest).result;
@@ -180,5 +199,101 @@ export async function setOutboxError(localId: number, error: string): Promise<vo
 
 export async function getOutboxCount(): Promise<number> {
   const s = await tx('outbox');
+  return promisify(s.count());
+}
+
+// ─── Ordonnances cache ────────────────────────────────────────────────────────
+
+/** Remplace le cache local d'ordonnances par la liste fraîche reçue de l'API */
+export async function persistOrdonnancesCache(ordonnances: any[]): Promise<void> {
+  try {
+    const s = await tx('ordonnances', 'readwrite');
+    await promisify(s.clear());
+    await Promise.all(ordonnances.map(o => promisify(s.put(o))));
+  } catch (e) {
+    console.warn('[offline] persistOrdonnancesCache error', e);
+  }
+}
+
+/** Récupère le cache local d'ordonnances (utilisé hors-ligne) */
+export async function loadOrdonnancesCache(): Promise<any[]> {
+  try {
+    return await getAll<any>('ordonnances');
+  } catch {
+    return [];
+  }
+}
+
+/** Persiste une seule ordonnance (create ou update partiel) */
+export async function putOrdonnanceCache(ordonnance: any): Promise<void> {
+  try {
+    const s = await tx('ordonnances', 'readwrite');
+    await promisify(s.put(ordonnance));
+  } catch (e) {
+    console.warn('[offline] putOrdonnanceCache error', e);
+  }
+}
+
+/** Supprime une ordonnance du cache local par son barcode */
+export async function deleteOrdonnanceCache(barcode: string): Promise<void> {
+  try {
+    const s = await tx('ordonnances', 'readwrite');
+    await promisify(s.delete(barcode));
+  } catch {}
+}
+
+// ─── Ordonnances outbox ───────────────────────────────────────────────────────
+//
+//  Chaque entrée représente une mutation (create / pay / delete) effectuée
+//  hors-ligne et en attente d'envoi au serveur.
+//
+//  Pour 'create' : data contient l'objet ordonnance complet.
+//  Pour 'pay'    : seul le barcode est nécessaire.
+//  Pour 'delete' : seul le barcode est nécessaire.
+
+export interface OrdonnanceOutboxItem {
+  localId?: number;
+  action: 'create' | 'pay' | 'delete';
+  barcode: string;
+  data?: any;           // ordonnance complète pour 'create'
+  createdAt: string;
+  retryCount: number;
+  lastError?: string;
+}
+
+export async function addToOrdonnancesOutbox(item: Omit<OrdonnanceOutboxItem, 'localId' | 'createdAt' | 'retryCount'>): Promise<number> {
+  const s = await tx('ordonnances_outbox', 'readwrite');
+  const entry: Omit<OrdonnanceOutboxItem, 'localId'> = {
+    ...item,
+    createdAt: new Date().toISOString(),
+    retryCount: 0,
+  };
+  const key = await promisify<number>(s.add(entry));
+  window.dispatchEvent(new CustomEvent('snl:ordonnances-outbox-changed'));
+  return key;
+}
+
+export async function getOrdonnancesOutbox(): Promise<OrdonnanceOutboxItem[]> {
+  return getAll<OrdonnanceOutboxItem>('ordonnances_outbox');
+}
+
+export async function removeFromOrdonnancesOutbox(localId: number): Promise<void> {
+  const s = await tx('ordonnances_outbox', 'readwrite');
+  await promisify(s.delete(localId));
+  window.dispatchEvent(new CustomEvent('snl:ordonnances-outbox-changed'));
+}
+
+export async function incrementOrdonnancesOutboxRetry(localId: number, error: string): Promise<void> {
+  const s = await tx('ordonnances_outbox', 'readwrite');
+  const item = await promisify<OrdonnanceOutboxItem>(s.get(localId));
+  if (item) {
+    item.retryCount += 1;
+    item.lastError = error;
+    await promisify(s.put(item));
+  }
+}
+
+export async function getOrdonnancesOutboxCount(): Promise<number> {
+  const s = await tx('ordonnances_outbox');
   return promisify(s.count());
 }

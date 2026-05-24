@@ -183,6 +183,36 @@ export const Reports = {
     request(`/reports/${id}`, { method: 'DELETE' }),
 };
 
+// ─── Ordonnances ─────────────────────────────────────────────────────────────
+
+export const Ordonnances = {
+  /** Retourne toutes les ordonnances (avec items agrégés) */
+  getAll: (filters?: { status?: string; site_id?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) params.append(k, String(v));
+      });
+    }
+    return request(`/ordonnances?${params.toString()}`);
+  },
+
+  /** Récupère une ordonnance par son code-barre */
+  getByBarcode: (barcode: string) => request(`/ordonnances/${barcode}`),
+
+  /** Crée une ordonnance (+ items). Idempotent sur le barcode. */
+  create: (data: any) =>
+    request('/ordonnances', { method: 'POST', body: JSON.stringify(data) }),
+
+  /** Marque comme payée (status seulement — les mouvements sont séparés) */
+  pay: (barcode: string) =>
+    request(`/ordonnances/${barcode}/pay`, { method: 'PATCH' }),
+
+  /** Supprime une ordonnance */
+  delete: (barcode: string) =>
+    request(`/ordonnances/${barcode}`, { method: 'DELETE' }),
+};
+
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export const Stats = {
@@ -190,6 +220,6 @@ export const Stats = {
 };
 
 export default {
-  Users, Products, Stocks, Movements, Alerts, Reports, Stats,
+  Users, Products, Stocks, Movements, Alerts, Reports, Stats, Ordonnances,
   setAuthToken, getAuthToken, clearAuthToken,
 };
