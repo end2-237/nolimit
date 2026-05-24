@@ -12,7 +12,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Plus, Search, Scan, Clock, CheckCircle, FileText,
   User, Calendar, DollarSign, ChevronRight, Package,
-  ClipboardList, RefreshCw, Barcode,
+  ClipboardList, RefreshCw, Barcode, Camera,
 } from 'lucide-react';
 import {
   loadOrdonnances,
@@ -23,6 +23,7 @@ import {
 } from '../services/ordonnances';
 import { OrdonnanceFormModal } from '../components/stock/OrdonnanceFormModal';
 import { OrdonnanceDetailModal } from '../components/stock/OrdonnanceDetailModal';
+import { OrdonnanceScannerModal } from '../components/stock/OrdonnanceScannerModal';
 import { db } from '../services/database';
 
 // ─── Style constants ──────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ export function OrdonnancesPage() {
   const [search, setSearch]               = useState('');
   const [showForm, setShowForm]           = useState(false);
   const [selectedOrd, setSelectedOrd]     = useState<Ordonnance | null>(null);
+  const [showScanner, setShowScanner]     = useState(false);
 
   // Scanner USB state
   const [scanInput, setScanInput]         = useState('');
@@ -226,6 +228,23 @@ export function OrdonnancesPage() {
             <span style={{ fontSize: 11, color: T3 }}>
               (pistolet USB ou saisie manuelle)
             </span>
+            <button
+              onClick={() => setShowScanner(true)}
+              style={{
+                marginLeft: 'auto',
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px', borderRadius: 7,
+                background: 'rgba(22,163,74,0.08)',
+                color: ACCENT,
+                border: '1px solid rgba(22,163,74,0.2)',
+                cursor: 'pointer',
+                fontSize: 11, fontWeight: 700,
+              }}
+              title="Scanner avec la caméra"
+            >
+              <Camera style={{ width: 13, height: 13 }} />
+              Caméra
+            </button>
           </div>
           <form
             onSubmit={e => { e.preventDefault(); handleScan(scanInput); }}
@@ -429,6 +448,21 @@ export function OrdonnancesPage() {
           ordonnance={selectedOrd}
           onClose={() => setSelectedOrd(null)}
           onUpdated={handleUpdated}
+        />
+      )}
+
+      {showScanner && (
+        <OrdonnanceScannerModal
+          onClose={() => setShowScanner(false)}
+          onFound={(barcode, ord) => {
+            setShowScanner(false);
+            if (ord) {
+              setSelectedOrd(ord);
+            } else {
+              setScanError(`Ordonnance introuvable pour le code ${barcode}.`);
+              setTimeout(() => setScanError(''), 5000);
+            }
+          }}
         />
       )}
     </div>

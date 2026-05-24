@@ -4,11 +4,17 @@
  * Le document imprimé affiche UNIQUEMENT les codes-barres des produits
  * (pas les noms ni les prix) afin d'éviter que le client ne les achète ailleurs.
  *
- * Architecture : rendu JsBarcode dans des SVG temporaires du DOM courant,
- * sérialisation via XMLSerializer, puis injection dans une fenêtre d'impression.
+ * Architecture : les valeurs des codes sont injectées en data-code sur des <svg>,
+ * JsBarcode est chargé depuis le CDN DANS la fenêtre d'impression et les rend
+ * localement — évite tout problème de sérialisation SVG cross-window.
+ *
+ * Actions disponibles dans la fenêtre d'impression :
+ *   - "Imprimer"        → window.print() → dialogue d'impression système
+ *   - "Télécharger PDF" → window.print() → l'utilisateur choisit "Enregistrer en PDF"
+ *
+ * Pas d'impression automatique à l'ouverture.
  */
 
-import JsBarcode from 'jsbarcode';
 import type { Ordonnance } from '../services/ordonnances';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -21,89 +27,14 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/**
- * Crée un SVG temporaire dans le body, appelle JsBarcode dessus,
- * retourne le SVG sérialisé, puis nettoie le DOM.
- */
-function renderBarcodeSVG(
-  code: string,
-  opts: {
-    width?: number;
-    height?: number;
-    displayValue?: boolean;
-    fontSize?: number;
-    margin?: number;
-  } = {}
-): string {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = 'position:absolute;left:-9999px;top:-9999px;visibility:hidden';
-  document.body.appendChild(svg);
-  try {
-    JsBarcode(svg, code, {
-      format:       'CODE128',
-      width:        opts.width        ?? 2,
-      height:       opts.height       ?? 60,
-      displayValue: opts.displayValue ?? true,
-      fontSize:     opts.fontSize     ?? 12,
-      fontOptions:  'bold',
-      textMargin:   5,
-      margin:       opts.margin       ?? 8,
-      background:   '#ffffff',
-      lineColor:    '#000000',
-      font:         'monospace',
-    });
-    return new XMLSerializer().serializeToString(svg);
-  } catch {
-    // code non encodable (ne devrait pas arriver avec nos préfixes numériques)
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60"><text x="10" y="30" font-size="12">${escapeHtml(code)}</text></svg>`;
-  } finally {
-    document.body.removeChild(svg);
-  }
-}
-
 // ─── Impression principale ────────────────────────────────────────────────────
 
 export function printOrdonnance(ord: Ordonnance, companyName = 'SNL'): void {
-  // Code-barre de l'ordonnance (grand format pour re-scan)
-  const ordBarcodeSvg = renderBarcodeSVG(ord.barcode, {
-    width: 3,
-    height: 90,
-    displayValue: true,
-    fontSize: 14,
-    margin: 10,
-  });
-
-  // Code-barre de chaque article (format moyen)
-  const itemRows = ord.items.map(item => {
-    const svg = renderBarcodeSVG(item.barcode, {
-      width: 2,
-      height: 60,
-      displayValue: true,
-      fontSize: 11,
-      margin: 6,
-    });
-    return { svg, quantity: item.quantity, unit: item.unit };
-  });
-
   const dateStr = new Date(ord.created_at).toLocaleDateString('fr-FR', {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
   });
-
-  const itemsHtml = itemRows
-    .map(
-      row => `
-    <div class="item">
-      <div class="item-barcode">${row.svg}</div>
-      <div class="item-qty">
-        <span class="qty-label">Qté</span>
-        <span class="qty-value">${row.quantity}</span>
-        <span class="qty-unit">${escapeHtml(row.unit)}</span>
-      </div>
-    </div>`
-    )
-    .join('');
 
   const clientPhone = ord.client_phone
     ? `<p><span class="lbl">Tél :</span> ${escapeHtml(ord.client_phone)}</p>`
@@ -114,6 +45,28 @@ export function printOrdonnance(ord: Ordonnance, companyName = 'SNL'): void {
   const noteHtml = ord.note
     ? `<div class="note">Note : ${escapeHtml(ord.note)}</div>`
     : '';
+
+  // Chaque article : <svg class="bc" data-code="..." data-w="2" data-h="60">
+  const itemsHtml = ord.items
+    .map(
+      item => `
+    <div class="item">
+      <div class="item-barcode">
+        <svg class="bc"
+          data-code="${escapeHtml(item.barcode)}"
+          data-w="2"
+          data-h="60"
+          data-fs="11"
+          style="max-width:100%;display:block;"></svg>
+      </div>
+      <div class="item-qty">
+        <span class="qty-label">Qté</span>
+        <span class="qty-value">${item.quantity}</span>
+        <span class="qty-unit">${escapeHtml(item.unit)}</span>
+      </div>
+    </div>`
+    )
+    .join('');
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -129,10 +82,47 @@ export function printOrdonnance(ord: Ordonnance, companyName = 'SNL'): void {
       color: #000;
       font-size: 13px;
     }
+    /* ── Barre d'actions (masquée à l'impression) ── */
+    .actions-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 10px 20px;
+      background: #1e293b;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+    }
+    .actions-bar .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 22px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      transition: opacity 0.15s;
+    }
+    .actions-bar .btn:hover { opacity: 0.88; }
+    .btn-print { background: #16a34a; color: #fff; }
+    .btn-pdf   { background: #2563eb; color: #fff; }
+    .btn-close { background: #475569; color: #fff; }
+    .actions-bar .hint {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-left: 8px;
+    }
+    /* ── Page ── */
     .page {
       max-width: 180mm;
       margin: 0 auto;
-      padding: 12mm 15mm;
+      padding: 70px 15mm 12mm;   /* top = hauteur barre actions */
     }
     /* ── En-tête ── */
     .header {
@@ -201,7 +191,7 @@ export function printOrdonnance(ord: Ordonnance, companyName = 'SNL'): void {
       border-bottom: 1px dashed #ccc;
     }
     .item-barcode { flex: 1; min-width: 0; }
-    .item-barcode svg { max-width: 100%; height: auto; }
+    .item-barcode svg { max-width: 100%; height: auto; display: block; }
     .item-qty {
       display: flex;
       flex-direction: column;
@@ -240,17 +230,34 @@ export function printOrdonnance(ord: Ordonnance, companyName = 'SNL'): void {
       color: #888;
       line-height: 1.6;
     }
+    /* ── Impression : masquer la barre, supprimer le padding top ── */
     @media print {
       @page {
         margin: 8mm;
         size: A4 portrait;
       }
+      .actions-bar { display: none !important; }
       .page { padding: 0; }
       body { font-size: 12px; }
     }
   </style>
 </head>
 <body>
+
+  <!-- Barre d'actions (visible à l'écran, invisible à l'impression) -->
+  <div class="actions-bar" id="actionsBar">
+    <button class="btn btn-print" onclick="window.print()">
+      🖨️ Imprimer
+    </button>
+    <button class="btn btn-pdf" onclick="window.print()">
+      📥 Télécharger PDF
+    </button>
+    <button class="btn btn-close" onclick="window.close()">
+      ✕ Fermer
+    </button>
+    <span class="hint">Pour PDF : choisissez « Enregistrer en PDF » dans le dialogue d'impression</span>
+  </div>
+
   <div class="page">
 
     <div class="header">
@@ -259,7 +266,15 @@ export function printOrdonnance(ord: Ordonnance, companyName = 'SNL'): void {
       <div class="date">Date : ${dateStr}</div>
     </div>
 
-    <div class="ord-barcode">${ordBarcodeSvg}</div>
+    <!-- Code-barre de l'ordonnance (grand format, re-scannable) -->
+    <div class="ord-barcode">
+      <svg class="bc"
+        data-code="${escapeHtml(ord.barcode)}"
+        data-w="3"
+        data-h="90"
+        data-fs="14"
+        style="max-width:100%;display:block;"></svg>
+    </div>
 
     <div class="client-section">
       <div class="title">Client</div>
@@ -285,15 +300,45 @@ export function printOrdonnance(ord: Ordonnance, companyName = 'SNL'): void {
     </div>
 
   </div>
+
+  <!--
+    JsBarcode chargé dans cette fenêtre → les SVG sont rendus ICI,
+    pas sérialisés depuis la fenêtre parente (ce qui ne fonctionne pas).
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
   <script>
-    window.onload = function() {
-      window.print();
-    };
+    (function renderBarcodes() {
+      var svgs = document.querySelectorAll('svg.bc');
+      svgs.forEach(function(svg) {
+        var code = svg.getAttribute('data-code') || '';
+        var w    = parseFloat(svg.getAttribute('data-w')  || '2');
+        var h    = parseFloat(svg.getAttribute('data-h')  || '60');
+        var fs   = parseFloat(svg.getAttribute('data-fs') || '12');
+        if (!code) return;
+        try {
+          JsBarcode(svg, code, {
+            format:       'CODE128',
+            width:        w,
+            height:       h,
+            displayValue: true,
+            fontSize:     fs,
+            fontOptions:  'bold',
+            textMargin:   5,
+            margin:       8,
+            background:   '#ffffff',
+            lineColor:    '#000000',
+            font:         'monospace',
+          });
+        } catch (e) {
+          svg.innerHTML = '<text x="10" y="30" font-size="12" fill="#c00">Erreur : ' + code + '<\\/text>';
+        }
+      });
+    })();
   <\/script>
 </body>
 </html>`;
 
-  const win = window.open('', '_blank', 'width=860,height=700');
+  const win = window.open('', '_blank', 'width=860,height=750,scrollbars=yes');
   if (win) {
     win.document.write(html);
     win.document.close();
