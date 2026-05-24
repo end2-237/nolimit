@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import JsBarcode from 'jsbarcode';
 import {
   X, Printer, CreditCard, Clock, CheckCircle, User, Phone,
@@ -120,10 +121,10 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
       })
     : null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
-      style={{ background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(3px)' }}
+      className="fixed inset-0 flex items-center justify-center p-2 sm:p-4"
+      style={{ background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(3px)', zIndex: 9999 }}
     >
       <div
         className="relative flex flex-col w-full bg-white rounded-2xl shadow-2xl overflow-hidden"
@@ -349,7 +350,8 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

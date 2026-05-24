@@ -19,6 +19,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Camera, CameraOff, AlertTriangle, CheckCircle,
   ScanLine, RefreshCw, Scan,
@@ -319,10 +320,13 @@ export function OrdonnanceScannerModal({ onClose, onFound }: Props) {
 
   const pulse = cameraActive && !pausedRef.current && frameCount % 2 === 0;
 
-  return (
+  // createPortal → rendu sur document.body pour échapper à tout conteneur
+  // scrollable (main overflow:auto dans StockLayout) qui décale position:fixed
+  // sur iOS Safari.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(15,23,42,0.70)', backdropFilter: 'blur(4px)' }}
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ background: 'rgba(15,23,42,0.70)', backdropFilter: 'blur(4px)', zIndex: 9999 }}
     >
       <div
         className="bg-white rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden"
@@ -522,6 +526,7 @@ export function OrdonnanceScannerModal({ onClose, onFound }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

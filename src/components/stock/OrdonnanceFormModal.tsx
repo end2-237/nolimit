@@ -6,6 +6,7 @@
  */
 
 import { useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Search, Plus, Minus, Trash2, User, Phone, MapPin,
   FileText, ShoppingCart, CreditCard, Clock, AlertCircle,
@@ -194,10 +195,10 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
   const panelCls = (p: MobilePanel) =>
     `${mobilePanel === p ? '' : 'hidden'} lg:flex flex-col`;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3"
-      style={{ background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(3px)' }}
+      className="fixed inset-0 flex items-center justify-center p-2 sm:p-3"
+      style={{ background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(3px)', zIndex: 9999 }}
     >
       <div
         className="relative flex flex-col w-full bg-white rounded-2xl shadow-2xl overflow-hidden"
@@ -574,6 +575,7 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
