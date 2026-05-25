@@ -33,11 +33,21 @@ export function Manifeste() {
 
           <div style={{ position: 'relative' }}>
             <Reveal>
-              <div className="ph sage" style={{ aspectRatio: '3 / 4', borderRadius: '60% 40% 55% 45% / 50% 55% 45% 50%', position: 'relative', overflow: 'hidden' }} />
+              <div style={{ aspectRatio: '3 / 4', borderRadius: '60% 40% 55% 45% / 50% 55% 45% 50%', position: 'relative', overflow: 'hidden' }}>
+                <img
+                  src="https://images.pexels.com/photos/1327838/pexels-photo-1327838.jpeg?auto=compress&cs=tinysrgb&w=600&h=800&fit=crop"
+                  alt="Plantes médicinales naturelles"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              </div>
             </Reveal>
             <Reveal delay={250}>
-              <div style={{ position: 'absolute', bottom: -40, right: -20, width: '55%', aspectRatio: '1 / 1', borderRadius: '50% 50% 60% 40% / 55% 45% 55% 45%', background: 'var(--terracotta)', mixBlendMode: 'multiply' }}>
-                <div className="ph warm" style={{ width: '100%', height: '100%', borderRadius: 'inherit' }} />
+              <div style={{ position: 'absolute', bottom: -40, right: -20, width: '55%', aspectRatio: '1 / 1', borderRadius: '50% 50% 60% 40% / 55% 45% 55% 45%', overflow: 'hidden', mixBlendMode: 'multiply' }}>
+                <img
+                  src="https://images.pexels.com/photos/3850622/pexels-photo-3850622.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop"
+                  alt="Préparation naturelle"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
               </div>
             </Reveal>
           </div>
