@@ -3,6 +3,8 @@
  *
  * • Mobile (< lg) : onglets Client | Catalogue | Panier, un seul panneau visible
  * • Desktop (lg+) : trois panneaux côte-à-côte
+ * • Mode création  : prop initialOrdonnance absent
+ * • Mode édition   : prop initialOrdonnance présent → pré-remplit tous les champs
  */
 
 import { useState, useMemo, useRef } from 'react';
@@ -10,7 +12,7 @@ import { createPortal } from 'react-dom';
 import {
   X, Search, Plus, Minus, Trash2, User, Phone, MapPin,
   FileText, ShoppingCart, CreditCard, Clock, AlertCircle,
-  CheckCircle, Loader2, Package,
+  CheckCircle, Loader2, Package, Edit3,
 } from 'lucide-react';
 import { db, Product } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
@@ -18,6 +20,7 @@ import { APP_CONFIG } from '../../config/app.config';
 import {
   generateOrdonnanceBarcode,
   createOrdonnance,
+  updateOrdonnance,
   payOrdonnance,
   type OrdonnanceItem,
   type Ordonnance,
@@ -27,7 +30,12 @@ import { printOrdonnance } from '../../utils/ordonnancePrint';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CartItem { product: Product; quantity: number; }
-interface Props    { onClose: () => void; onCreated: (ord: Ordonnance) => void; }
+
+interface Props {
+  onClose: () => void;
+  onSaved: (ord: Ordonnance) => void;
+  initialOrdonnance?: Ordonnance; // si présent → mode édition
+}
 
 // ─── Style constants ──────────────────────────────────────────────────────────
 
@@ -38,22 +46,47 @@ const ACCENT = '#16A34A';
 
 type MobilePanel = 'client' | 'catalog' | 'cart';
 
+// ─── Helper : reconstruit le panier depuis les items d'une ordonnance ─────────
+
+function buildInitialCart(ord: Ordonnance): CartItem[] {
+  const products = db.getProducts();
+  const byId: Record<number, Product> = {};
+  products.forEach(p => { byId[p.id] = p; });
+
+  return ord.items.map(item => ({
+    product: byId[item.product_id] ?? ({
+      id:       item.product_id,
+      name:     item.product_name,
+      barcode:  item.barcode,
+      sku:      item.sku,
+      price:    item.price,
+      unit:     item.unit,
+      category: '',
+      stock:    {},
+    } as unknown as Product),
+    quantity: item.quantity,
+  }));
+}
+
 // ─── Composant ────────────────────────────────────────────────────────────────
 
-export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
+export function OrdonnanceFormModal({ onClose, onSaved, initialOrdonnance }: Props) {
   const { user } = useAuth();
-  const sites = db.getSites();
+  const sites      = db.getSites();
+  const isEditing  = !!initialOrdonnance;
 
-  // ── Champs client
-  const [clientName,    setClientName]    = useState('');
-  const [clientPhone,   setClientPhone]   = useState('');
-  const [clientAddress, setClientAddress] = useState('');
-  const [note,          setNote]          = useState('');
-  const [siteId,        setSiteId]        = useState(sites[0]?.id ?? '');
+  // ── Champs client (pré-remplis en mode édition)
+  const [clientName,    setClientName]    = useState(initialOrdonnance?.client_name    ?? '');
+  const [clientPhone,   setClientPhone]   = useState(initialOrdonnance?.client_phone   ?? '');
+  const [clientAddress, setClientAddress] = useState(initialOrdonnance?.client_address ?? '');
+  const [note,          setNote]          = useState(initialOrdonnance?.note           ?? '');
+  const [siteId,        setSiteId]        = useState(initialOrdonnance?.site_id        ?? (sites[0]?.id ?? ''));
 
   // ── Catalogue & panier
   const [productSearch, setProductSearch] = useState('');
-  const [cart,          setCart]          = useState<CartItem[]>([]);
+  const [cart,          setCart]          = useState<CartItem[]>(() =>
+    isEditing ? buildInitialCart(initialOrdonnance!) : []
+  );
 
   // ── UI state
   const [loading,      setLoading]      = useState(false);
@@ -144,7 +177,8 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
     }));
   }
 
-  async function createMovements(ord: Ordonnance): Promise<{ success: boolean; errors: string[] }> {
+  // ── Crée les mouvements de stock pour une ordonnance
+  async function createMovementsForOrd(ord: Ordonnance): Promise<{ success: boolean; errors: string[] }> {
     const errs: string[] = [];
     for (const item of ord.items) {
       const result = await db.createMovement({
@@ -160,15 +194,16 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
     return { success: errs.length === 0, errors: errs };
   }
 
-  function buildOrdonnanceData(status: 'pending' | 'paid') {
+  // ── Données communes du patch
+  function buildPatch() {
     return {
-      barcode: generateOrdonnanceBarcode(),
-      client_name: clientName.trim(),
-      client_phone: clientPhone.trim() || undefined,
+      client_name:    clientName.trim(),
+      client_phone:   clientPhone.trim()   || undefined,
       client_address: clientAddress.trim() || undefined,
-      site_id: siteId, items: buildItems(), total, status,
-      created_by: user!.id, created_by_name: user!.full_name,
-      note: note.trim() || undefined,
+      site_id:        siteId,
+      items:          buildItems(),
+      total,
+      note:           note.trim() || undefined,
     };
   }
 
@@ -177,14 +212,27 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
     if (!validate() || !user) return;
     setLoading(true); setErrors([]);
     try {
-      const ordData = buildOrdonnanceData('pending');
-      const ord = await createOrdonnance(ordData);
-      const { success, errors: mvErrs } = await createMovements(ord);
+      let ord: Ordonnance;
+
+      if (isEditing) {
+        ord = await updateOrdonnance(initialOrdonnance!.barcode, buildPatch());
+      } else {
+        ord = await createOrdonnance({
+          barcode: generateOrdonnanceBarcode(),
+          ...buildPatch(),
+          status:          'pending',
+          created_by:      user.id,
+          created_by_name: user.full_name,
+        });
+      }
+
+      const { success, errors: mvErrs } = await createMovementsForOrd(ord);
       if (!success) { setErrors(mvErrs); setLoading(false); return; }
+
       await payOrdonnance(ord.barcode);
       const paidOrd: Ordonnance = { ...ord, status: 'paid', paid_at: new Date().toISOString() };
       window.dispatchEvent(new CustomEvent('snl:stock-updated'));
-      onCreated(paidOrd);
+      onSaved(paidOrd);
     } catch (e: any) { setErrors([e?.message ?? 'Erreur inattendue']); }
     finally { setLoading(false); }
   }
@@ -194,10 +242,22 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
     if (!validate() || !user) return;
     setLoading(true); setErrors([]);
     try {
-      const ordData = buildOrdonnanceData('pending');
-      const ord = await createOrdonnance(ordData);
+      let ord: Ordonnance;
+
+      if (isEditing) {
+        ord = await updateOrdonnance(initialOrdonnance!.barcode, buildPatch());
+      } else {
+        ord = await createOrdonnance({
+          barcode: generateOrdonnanceBarcode(),
+          ...buildPatch(),
+          status:          'pending',
+          created_by:      user.id,
+          created_by_name: user.full_name,
+        });
+      }
+
       printOrdonnance(ord, APP_CONFIG.company?.name ?? 'SNL');
-      onCreated(ord);
+      onSaved(ord);
     } catch (e: any) { setErrors([e?.message ?? 'Erreur inattendue']); }
     finally { setLoading(false); }
   }
@@ -224,14 +284,23 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
         >
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.2)' }}>
-              <FileText className="w-4 h-4" style={{ color: ACCENT }} />
+              style={{
+                background: isEditing ? 'rgba(37,99,235,0.1)' : 'rgba(22,163,74,0.1)',
+                border: `1px solid ${isEditing ? 'rgba(37,99,235,0.2)' : 'rgba(22,163,74,0.2)'}`,
+              }}>
+              {isEditing
+                ? <Edit3 className="w-4 h-4" style={{ color: '#2563EB' }} />
+                : <FileText className="w-4 h-4" style={{ color: ACCENT }} />}
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm font-bold truncate" style={{ color: T1 }}>Nouvelle Ordonnance</h2>
-              <p className="text-xs hidden sm:block" style={{ color: T2 }}>
-                Sélectionnez les produits et les informations client
-              </p>
+              <h2 className="text-sm font-bold truncate" style={{ color: T1 }}>
+                {isEditing ? 'Modifier l\'ordonnance' : 'Nouvelle Ordonnance'}
+              </h2>
+              {isEditing
+                ? <p className="text-[10px] font-mono" style={{ color: T2 }}>{initialOrdonnance!.barcode}</p>
+                : <p className="text-xs hidden sm:block" style={{ color: T2 }}>
+                    Sélectionnez les produits et les informations client
+                  </p>}
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 flex-shrink-0" style={{ color: T2 }}>
@@ -252,7 +321,6 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors relative"
               style={{
                 color: mobilePanel === t.id ? ACCENT : T2,
-                borderBottom: mobilePanel === t.id ? `2px solid ${ACCENT}` : '2px solid transparent',
                 background: 'transparent', border: 'none', cursor: 'pointer',
                 borderBottomWidth: 2,
                 borderBottomColor: mobilePanel === t.id ? ACCENT : 'transparent',
@@ -473,43 +541,54 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
                   </p>
                 </div>
               ) : (
-                cart.map(ci => (
-                  <div key={ci.product.id} className="flex flex-col px-4 py-3"
-                    style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="text-xs font-semibold leading-tight flex-1 min-w-0" style={{ color: T1 }}>
-                        {ci.product.name}
-                      </p>
-                      <button
-                        onClick={() => setCart(prev => prev.filter(c => c.product.id !== ci.product.id))}
-                        className="flex-shrink-0 p-0.5 rounded hover:bg-red-50 transition-colors"
-                        style={{ color: '#94A3B8' }}>
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center rounded-lg overflow-hidden" style={{ border: BDR }}>
-                        <button onClick={() => setQty(ci.product.id, ci.quantity - 1)}
-                          className="w-7 h-7 flex items-center justify-center hover:bg-gray-100"
-                          style={{ color: T1 }}>
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <input type="number" min={1} value={ci.quantity}
-                          onChange={e => setQty(ci.product.id, parseInt(e.target.value) || 1)}
-                          className="w-9 h-7 text-center text-xs font-bold outline-none border-x"
-                          style={{ borderColor: '#E2E8F0', color: T1 }} />
-                        <button onClick={() => setQty(ci.product.id, ci.quantity + 1)}
-                          className="w-7 h-7 flex items-center justify-center hover:bg-gray-100"
-                          style={{ color: T1 }}>
-                          <Plus className="w-3 h-3" />
+                cart.map(ci => {
+                  const stockQty = stockBySite[ci.product.id] ?? 0;
+                  const overStock = ci.quantity > stockQty;
+                  return (
+                    <div key={ci.product.id} className="flex flex-col px-4 py-3"
+                      style={{ borderBottom: '1px solid #F1F5F9' }}>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold leading-tight" style={{ color: T1 }}>
+                            {ci.product.name}
+                          </p>
+                          {overStock && (
+                            <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#D97706' }}>
+                              ⚠ Stock: {stockQty} {ci.product.unit}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setCart(prev => prev.filter(c => c.product.id !== ci.product.id))}
+                          className="flex-shrink-0 p-0.5 rounded hover:bg-red-50 transition-colors"
+                          style={{ color: '#94A3B8' }}>
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
-                      <span className="text-xs font-bold" style={{ color: T1 }}>
-                        {(ci.product.price * ci.quantity).toLocaleString()} F
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center rounded-lg overflow-hidden" style={{ border: overStock ? '1px solid #FDE68A' : BDR }}>
+                          <button onClick={() => setQty(ci.product.id, ci.quantity - 1)}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-gray-100"
+                            style={{ color: T1 }}>
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <input type="number" min={1} value={ci.quantity}
+                            onChange={e => setQty(ci.product.id, parseInt(e.target.value) || 1)}
+                            className="w-9 h-7 text-center text-xs font-bold outline-none border-x"
+                            style={{ borderColor: '#E2E8F0', color: overStock ? '#D97706' : T1 }} />
+                          <button onClick={() => setQty(ci.product.id, ci.quantity + 1)}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-gray-100"
+                            style={{ color: T1 }}>
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <span className="text-xs font-bold" style={{ color: T1 }}>
+                          {(ci.product.price * ci.quantity).toLocaleString()} F
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -586,7 +665,9 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
               {loading
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <Clock className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">Payer plus tard &amp;&nbsp;</span>Imprimer
+              {isEditing
+                ? <><span className="hidden sm:inline">Enregistrer &amp;&nbsp;</span>Imprimer</>
+                : <><span className="hidden sm:inline">Payer plus tard &amp;&nbsp;</span>Imprimer</>}
             </button>
 
             {/* Payer maintenant */}
@@ -595,9 +676,7 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
               disabled={loading || cart.length === 0 || stockIssues.length > 0}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold text-white transition-colors"
               style={{
-                background: loading || cart.length === 0 || stockIssues.length > 0
-                  ? '#86EFAC'
-                  : ACCENT,
+                background: loading || cart.length === 0 || stockIssues.length > 0 ? '#86EFAC' : ACCENT,
                 cursor: stockIssues.length > 0 ? 'not-allowed' : undefined,
               }}
               title={stockIssues.length > 0 ? 'Stock insuffisant pour un ou plusieurs articles' : undefined}
@@ -605,7 +684,7 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
               {loading
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <CreditCard className="w-3.5 h-3.5" />}
-              <span>Payer maintenant</span>
+              <span>{isEditing ? 'Enregistrer & Payer' : 'Payer maintenant'}</span>
             </button>
           </div>
         </div>

@@ -43,6 +43,7 @@ export function OrdonnancesPage() {
   const [search,      setSearch]      = useState('');
   const [showForm,    setShowForm]    = useState(false);
   const [selectedOrd, setSelectedOrd] = useState<Ordonnance | null>(null);
+  const [editingOrd,  setEditingOrd]  = useState<Ordonnance | null>(null);
   const [showScanner, setShowScanner] = useState(false);
 
   // Scanner USB state
@@ -108,8 +109,9 @@ export function OrdonnancesPage() {
     }
   }
 
-  function handleCreated(ord: Ordonnance) {
+  function handleSaved(ord: Ordonnance) {
     setShowForm(false);
+    setEditingOrd(null);
     setOrdonnances(getOrdonnances());
     setSelectedOrd(ord);
   }
@@ -117,6 +119,11 @@ export function OrdonnancesPage() {
   function handleUpdated(ord: Ordonnance | null) {
     setOrdonnances(getOrdonnances());
     setSelectedOrd(ord ?? null);
+  }
+
+  function handleEdit(ord: Ordonnance) {
+    setSelectedOrd(null);  // ferme le détail
+    setEditingOrd(ord);    // ouvre le formulaire en mode édition
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -398,18 +405,31 @@ export function OrdonnancesPage() {
       </div>
 
       {/* ── Modals ──────────────────────────────────────────────────── */}
+
+      {/* Création */}
       {showForm && (
         <OrdonnanceFormModal
           onClose={() => setShowForm(false)}
-          onCreated={handleCreated}
+          onSaved={handleSaved}
         />
       )}
 
+      {/* Édition */}
+      {editingOrd && (
+        <OrdonnanceFormModal
+          onClose={() => setEditingOrd(null)}
+          onSaved={handleSaved}
+          initialOrdonnance={editingOrd}
+        />
+      )}
+
+      {/* Détail */}
       {selectedOrd && (
         <OrdonnanceDetailModal
           ordonnance={selectedOrd}
           onClose={() => setSelectedOrd(null)}
           onUpdated={handleUpdated}
+          onEdit={handleEdit}
         />
       )}
 

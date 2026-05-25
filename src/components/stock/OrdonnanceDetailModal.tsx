@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import JsBarcode from 'jsbarcode';
 import {
   X, Printer, CreditCard, Clock, CheckCircle, User, Phone,
-  MapPin, Calendar, MapPinIcon, AlertCircle, Loader2, Trash2,
+  MapPin, Calendar, MapPinIcon, AlertCircle, Loader2, Trash2, Edit3,
 } from 'lucide-react';
 import { db } from '../../services/database';
 import { useAuth } from '../../stores/authStore';
@@ -29,6 +29,7 @@ interface Props {
   ordonnance: Ordonnance;
   onClose: () => void;
   onUpdated: (ord: Ordonnance | null) => void;
+  onEdit: (ord: Ordonnance) => void;
 }
 
 // ─── Style constants ──────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ function BarcodeSVG({
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
-export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdated }: Props) {
+export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdated, onEdit }: Props) {
   const { user } = useAuth();
   const [ord,        setOrd]        = useState<Ordonnance>(initialOrd);
   const [loading,    setLoading]    = useState(false);
@@ -355,6 +356,18 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
           >
             <Trash2 className="w-3.5 h-3.5" /> Supprimer
           </button>
+
+          {/* Modifier — uniquement pour les ordonnances en attente */}
+          {!isPaid && (
+            <button
+              onClick={() => onEdit(ord)}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-50 transition-colors"
+              style={{ color: '#2563EB', border: '1px solid #BFDBFE' }}
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Modifier
+            </button>
+          )}
 
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={onClose} disabled={loading}

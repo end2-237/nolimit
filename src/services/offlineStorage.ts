@@ -253,7 +253,7 @@ export async function deleteOrdonnanceCache(barcode: string): Promise<void> {
 
 export interface OrdonnanceOutboxItem {
   localId?: number;
-  action: 'create' | 'pay' | 'delete';
+  action: 'create' | 'update' | 'pay' | 'delete';
   barcode: string;
   data?: any;           // ordonnance complète pour 'create'
   createdAt: string;

@@ -203,6 +203,50 @@ export async function payOrdonnance(barcode: string): Promise<void> {
 }
 
 /**
+ * Met à jour une ordonnance en attente (infos client, articles, total, site, note).
+ *
+ * En ligne  → PUT /api/ordonnances/:barcode → retourne l'objet mis à jour.
+ * Hors-ligne → mise à jour locale + ordonnances_outbox.
+ *
+ * Seules les ordonnances au statut 'pending' peuvent être modifiées.
+ */
+export async function updateOrdonnance(
+  barcode: string,
+  patch: Pick<Ordonnance, 'client_name' | 'client_phone' | 'client_address' | 'site_id' | 'items' | 'total' | 'note'>
+): Promise<Ordonnance> {
+  const idx = _cache.findIndex(o => o.barcode === barcode);
+  if (idx === -1) throw new Error('Ordonnance introuvable dans le cache');
+
+  const updated: Ordonnance = { ..._cache[idx], ...patch };
+
+  // Mise à jour immédiate du cache mémoire + IDB
+  _cache[idx] = updated;
+  await putOrdonnanceCache(updated);
+
+  if (isOnline()) {
+    try {
+      const result: Ordonnance = await OrdonnancesApi.update(barcode, patch);
+      // Merge serveur → cache (l'ID serveur peut différer)
+      _cache[idx] = { ...updated, ...result };
+      await putOrdonnanceCache(_cache[idx]);
+      return _cache[idx];
+    } catch (e: any) {
+      const isNetworkError = e instanceof TypeError && e.message.includes('fetch');
+      if (!isNetworkError) {
+        // Erreur métier → annuler la mise à jour locale
+        _cache[idx] = { ..._cache[idx], ...patch }; // on garde quand même localement
+        throw e;
+      }
+    }
+  }
+
+  // Hors-ligne
+  await addToOrdonnancesOutbox({ action: 'update', barcode, data: patch });
+  window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+  return updated;
+}
+
+/**
  * Supprime une ordonnance.
  *
  * En ligne  → DELETE /api/ordonnances/:barcode
@@ -267,6 +311,10 @@ export async function processOrdonnancesOutbox(): Promise<{ sent: number; failed
               await putOrdonnanceCache(_cache[idx]);
             }
           }
+          break;
+
+        case 'update':
+          await OrdonnancesApi.update(item.barcode, item.data);
           break;
 
         case 'pay':

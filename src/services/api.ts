@@ -204,6 +204,10 @@ export const Ordonnances = {
   create: (data: any) =>
     request('/ordonnances', { method: 'POST', body: JSON.stringify(data) }),
 
+  /** Met à jour une ordonnance (infos client, articles, total) */
+  update: (barcode: string, data: any) =>
+    request(`/ordonnances/${barcode}`, { method: 'PUT', body: JSON.stringify(data) }),
+
   /** Marque comme payée (status seulement — les mouvements sont séparés) */
   pay: (barcode: string) =>
     request(`/ordonnances/${barcode}/pay`, { method: 'PATCH' }),
