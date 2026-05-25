@@ -91,6 +91,18 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
     [cart]
   );
 
+  // ── Vérification des stocks : articles dont la quantité dépasse le stock disponible
+  const stockIssues = useMemo(() => {
+    return cart
+      .filter(ci => ci.quantity > (stockBySite[ci.product.id] ?? 0))
+      .map(ci => ({
+        name:      ci.product.name,
+        needed:    ci.quantity,
+        available: stockBySite[ci.product.id] ?? 0,
+        unit:      ci.product.unit,
+      }));
+  }, [cart, stockBySite]);
+
   // ── Panier
   function addToCart(product: Product) {
     setCart(prev => {
@@ -513,6 +525,24 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
           </div>
         </div>
 
+        {/* ── Avertissement stock insuffisant ───────────────────────────── */}
+        {stockIssues.length > 0 && (
+          <div className="flex-shrink-0 flex items-start gap-2 px-4 sm:px-6 py-3"
+            style={{ borderTop: BDR, background: '#FFFBEB' }}>
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#D97706' }} />
+            <div className="flex-1 text-xs" style={{ color: '#92400E' }}>
+              <p className="font-semibold mb-1">Stock insuffisant — paiement immédiat impossible :</p>
+              {stockIssues.map((issue, i) => (
+                <p key={i}>
+                  • <span className="font-medium">{issue.name}</span> — besoin&nbsp;
+                  <strong>{issue.needed}</strong> {issue.unit}, disponible&nbsp;
+                  <strong>{issue.available}</strong>
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Erreurs ───────────────────────────────────────────────────── */}
         {(fieldError || errors.length > 0) && (
           <div className="flex-shrink-0 flex items-start gap-2 px-4 sm:px-6 py-3"
@@ -562,9 +592,15 @@ export function OrdonnanceFormModal({ onClose, onCreated }: Props) {
             {/* Payer maintenant */}
             <button
               onClick={handlePayNow}
-              disabled={loading || cart.length === 0}
+              disabled={loading || cart.length === 0 || stockIssues.length > 0}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold text-white transition-colors"
-              style={{ background: loading || cart.length === 0 ? '#86EFAC' : ACCENT }}
+              style={{
+                background: loading || cart.length === 0 || stockIssues.length > 0
+                  ? '#86EFAC'
+                  : ACCENT,
+                cursor: stockIssues.length > 0 ? 'not-allowed' : undefined,
+              }}
+              title={stockIssues.length > 0 ? 'Stock insuffisant pour un ou plusieurs articles' : undefined}
             >
               {loading
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

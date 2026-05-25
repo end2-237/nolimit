@@ -6,7 +6,7 @@
  * • Barcodes : max-width 100% (natif SVG)
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import JsBarcode from 'jsbarcode';
 import {
@@ -110,7 +110,23 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
     onUpdated(null);
   }
 
-  const isPaid  = ord.status === 'paid';
+  const isPaid = ord.status === 'paid';
+
+  // ── Vérification des stocks au chargement de l'ordonnance
+  const stockIssues = useMemo(() => {
+    if (isPaid) return []; // déjà payée, pas de vérification nécessaire
+    const stocks = db.getStocksGroupedByProduct();
+    const stockMap: Record<number, number> = {};
+    stocks.forEach(s => { stockMap[s.id] = s.stock?.[ord.site_id] ?? 0; });
+    return ord.items
+      .filter(item => item.quantity > (stockMap[item.product_id] ?? 0))
+      .map(item => ({
+        name:      item.product_name,
+        needed:    item.quantity,
+        available: stockMap[item.product_id] ?? 0,
+        unit:      item.unit,
+      }));
+  }, [ord, isPaid]);
   const dateStr = new Date(ord.created_at).toLocaleDateString('fr-FR', {
     day: '2-digit', month: 'long', year: 'numeric',
   });
@@ -272,6 +288,24 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
 
         </div>
 
+        {/* ── Avertissement stock insuffisant ─────────────────────────── */}
+        {!isPaid && stockIssues.length > 0 && (
+          <div className="flex-shrink-0 flex items-start gap-2 px-4 sm:px-6 py-3"
+            style={{ borderTop: BDR, background: '#FFFBEB' }}>
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#D97706' }} />
+            <div className="flex-1 text-xs" style={{ color: '#92400E' }}>
+              <p className="font-semibold mb-1">Stock insuffisant — paiement immédiat impossible :</p>
+              {stockIssues.map((issue, i) => (
+                <p key={i}>
+                  • <span className="font-medium">{issue.name}</span> — besoin&nbsp;
+                  <strong>{issue.needed}</strong> {issue.unit}, disponible&nbsp;
+                  <strong>{issue.available}</strong>
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Erreurs ──────────────────────────────────────────────────── */}
         {errors.length > 0 && (
           <div className="flex-shrink-0 flex items-start gap-2 px-4 sm:px-6 py-3"
@@ -337,9 +371,16 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
             </button>
 
             {!isPaid && (
-              <button onClick={handlePayNow} disabled={loading}
+              <button
+                onClick={handlePayNow}
+                disabled={loading || stockIssues.length > 0}
                 className="flex items-center gap-2 px-4 sm:px-5 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
-                style={{ background: loading ? '#86EFAC' : ACCENT }}>
+                style={{
+                  background: loading || stockIssues.length > 0 ? '#86EFAC' : ACCENT,
+                  cursor: stockIssues.length > 0 ? 'not-allowed' : undefined,
+                }}
+                title={stockIssues.length > 0 ? 'Stock insuffisant pour un ou plusieurs articles' : undefined}
+              >
                 {loading
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <CreditCard className="w-3.5 h-3.5" />}
