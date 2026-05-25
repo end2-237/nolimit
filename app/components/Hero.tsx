@@ -42,14 +42,14 @@ export function Hero({ onBook }: { onBook: () => void }) {
 
       <div className="container" style={{ position: 'relative', zIndex: 2, minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingTop: 140, paddingBottom: 60 }}>
         <div className="hero-eyebrow" style={{ position: 'absolute', top: 'clamp(80px, 12vh, 130px)', left: '4vw', right: '4vw', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, color: 'rgba(245,241,234,0.78)', fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'clamp(13px, 1.2vw, 15px)', fontWeight: 300, flexWrap: 'wrap' }}>
-          <span>— Médecine naturelle · Cameroun</span>
+          <span>— Produits de santé 100 % naturels · Cameroun</span>
           <span className="hero-eyebrow-cities">Douala · Yaoundé · Bafoussam</span>
         </div>
 
         <div style={{ maxWidth: 1100 }}>
           <Reveal>
             <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 18, fontWeight: 300, color: 'var(--sage-light)' }}>
-              Établi en 2019 — médecine naturelle à Douala, Yaoundé, Bafoussam
+              Fondé en 2024 — compléments alimentaires &amp; soins naturels à Douala, Yaoundé, Bafoussam
             </span>
           </Reveal>
           <h1 style={{ fontSize: 'clamp(56px, 11vw, 180px)', fontWeight: 300, color: 'var(--cream)', marginTop: 28, letterSpacing: '-0.035em', lineHeight: 0.94 }}>
@@ -65,14 +65,14 @@ export function Hero({ onBook }: { onBook: () => void }) {
           <Reveal delay={500}>
             <div style={{ marginTop: 40, display: 'flex', flexWrap: 'wrap', gap: 60, alignItems: 'flex-end', justifyContent: 'space-between' }}>
               <p style={{ maxWidth: 480, fontSize: 17, lineHeight: 1.65, color: 'rgba(245,241,234,0.88)' }}>
-                Un centre de soins qui réunit naturopathie, acupuncture, sophrologie et thérapies manuelles. Une approche sérieuse et sensorielle de la santé.
+                Compléments alimentaires, ampoules buvables et produits de santé 100 % naturels — sans produits chimiques. Importés des meilleures sources mondiales pour améliorer votre santé à prix abordable.
               </p>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 <button className="btn btn-primary" onClick={() => scrollToId('soins')}>
-                  Découvrir nos soins <Arrow />
+                  Découvrir nos produits <Arrow />
                 </button>
                 <button className="btn btn-ghost" onClick={onBook}>
-                  Réserver une séance
+                  Réserver un bilan
                 </button>
               </div>
             </div>
@@ -81,7 +81,7 @@ export function Hero({ onBook }: { onBook: () => void }) {
 
         {/* Stats */}
         <div className="hero-stats" style={{ marginTop: 80, display: 'flex', gap: 'clamp(32px,5vw,80px)', flexWrap: 'wrap', borderTop: '1px solid rgba(245,241,234,0.15)', paddingTop: 32 }}>
-          {[['2019', 'Fondé'], ['3', 'Centres'], ['12', 'Praticiens'], ['4 800+', 'Patients']].map(([n, l]) => (
+          {[['2024', 'Fondé'], ['3', 'Centres'], ['10+', 'Collaborateurs'], ['100 %', 'Naturel']].map(([n, l]) => (
             <div key={l}>
               <div style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(28px,4vw,52px)', fontWeight: 300, color: 'var(--cream)', letterSpacing: '-0.03em', lineHeight: 1 }}>{n}</div>
               <div style={{ fontFamily: 'var(--sans)', fontSize: 12, letterSpacing: '0.08em', color: 'rgba(245,241,234,0.55)', marginTop: 6 }}>{l}</div>

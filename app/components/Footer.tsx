@@ -28,26 +28,26 @@ export function Footer() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 32, paddingTop: 60 }} className="footer-grid">
-          <FooterCol title="Liens rapides" items={['Accueil', 'Manifeste', 'Nos centres', 'Praticiens', 'Boutique', 'Journal', 'Réserver', <a href="/almanach" style={{ color: 'var(--terracotta)', fontStyle: 'italic', transition: 'color .3s' }}>L'Almanach</a>]} />
-          <FooterCol title="Nos soins" items={['Naturopathie', 'Acupuncture', 'Sophrologie', 'Massage thérapeutique', 'Nutrition', 'Tous les soins']} />
-          <FooterCol title="Aide & service" items={['Livraison & retrait', 'Retours sous 14 jours', 'Support client', 'Suivi de commande', 'Mentions légales', 'CGV']} />
+          <FooterCol title="Liens rapides" items={['Accueil', 'Manifeste', 'Nos centres', 'Notre équipe', 'Produits & services', 'Journal', 'Réserver un bilan', <a href="/almanach" style={{ color: 'var(--terracotta)', fontStyle: 'italic', transition: 'color .3s' }}>L'Almanach</a>]} />
+          <FooterCol title="Produits & services" items={['Compléments alimentaires', 'Ampoules buvables', 'Phytothérapie naturelle', 'Massage des méridiens', 'Bilan de santé (Check-up)', 'Alcalinisation']} />
+          <FooterCol title="Informations" items={['Lun–Sam : 09h–19h (Douala/Yaoundé)', 'Lun–Sam : 08h–17h30 (Bafoussam)', 'Médecin : 09h–18h', 'Recrutement de jeunes', 'No Limit Group — Holding', 'Contact & commandes']} />
           <FooterCol
-            title="Nos adresses"
+            title="Nos centres"
             items={[
-              <><strong style={{ color: 'var(--cream)' }}>Douala</strong> — Bonapriso, rue Njo-Njo</>,
-              <><strong style={{ color: 'var(--cream)' }}>Yaoundé</strong> — Bastos, rue 1814</>,
-              <><strong style={{ color: 'var(--cream)' }}>Bafoussam</strong> — Avenue de l'Indépendance</>,
-              <>+237 6 99 11 47 22<br />bonjour@nolimit.cm</>,
+              <><strong style={{ color: 'var(--cream)' }}>Douala</strong> — Cameroun</>,
+              <><strong style={{ color: 'var(--cream)' }}>Yaoundé</strong> — Cameroun</>,
+              <><strong style={{ color: 'var(--cream)' }}>Bafoussam</strong> — Cameroun</>,
+              <>Partenaire : <strong style={{ color: 'var(--sage-light)' }}>Pharaon</strong></>,
             ]}
           />
         </div>
 
         <div style={{ marginTop: 80, paddingTop: 32, borderTop: '1px solid rgba(245,241,234,0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 20 }}>
           <span style={{ fontFamily: 'var(--sans)', fontSize: 12, color: 'rgba(245,241,234,0.55)' }}>
-            © 2026 No Limit Cameroun — Tous droits réservés · RCCM RC/DLA/2019/B/1247
+            © 2026 No Limit Solutions Santé Nature — Tous droits réservés · No Limit Group
           </span>
           <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 16, color: 'rgba(245,241,234,0.78)' }}>
-            Le soin commence par l'écoute.
+            La nature a une réponse. Nous aidons à la trouver.
           </span>
           <span style={{ fontFamily: 'var(--sans)', fontSize: 12, color: 'rgba(245,241,234,0.55)' }}>
             Direction artistique &nbsp;·&nbsp; Studio No&nbsp;Limit

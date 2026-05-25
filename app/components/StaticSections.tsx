@@ -4,12 +4,12 @@ import { Reveal } from './Reveal';
 
 // ─── Equipe ──────────────────────────────────────────────────────
 const TEAM = [
-  { name: 'Dr. Sylvie Abena', role: 'Naturopathe & fondatrice', site: 'Douala', img: 'sage', years: 14, bio: "Diplômée de l'Institut Européen de Diététique, Sylvie a exercé à Lyon avant de rentrer au Cameroun pour fonder Nolimit en 2019." },
-  { name: 'Inès Kamga', role: 'Sophrologue RNCP', site: 'Yaoundé', img: 'warm', years: 8, bio: "Spécialisée dans les troubles du sommeil et la gestion du stress professionnel. Inès anime aussi des ateliers collectifs en entreprise." },
-  { name: 'Marc Njoke', role: 'Acupuncteur & MTC', site: 'Douala', img: 'dark', years: 11, bio: "Formé à Pékin et Lyon, Marc pratique l'acupuncture traditionnelle combinée à la moxibustion et aux ventouses." },
-  { name: 'Laure Feugang', role: 'Nutrithérapeute', site: 'Bafoussam', img: '', years: 6, bio: "Ancienne chercheuse en biochimie, Laure traduit les données scientifiques en programmes alimentaires concrets et tenables." },
-  { name: 'Ahmed Tall', role: 'Thérapeute manuel', site: 'Douala', img: 'sage', years: 9, bio: "Maître en massage kobido et drainage lymphatique. Ahmed est également formé en réflexologie et en shiatsu." },
-  { name: 'Claire Noa', role: 'Phytothérapeute', site: 'Yaoundé', img: 'warm', years: 5, bio: "Spécialiste des plantes locales africaines, Claire travaille en collaboration avec des producteurs certifiés bio au Cameroun et au Sénégal." },
+  { name: 'Dr. No Limit', role: 'Chercheur & Médecin principal', site: 'Douala', img: 'sage', years: 30, bio: "Fondateur de la vision No Limit. Médecin et chercheur, il sélectionne les formules et supervise la qualité de l'ensemble des produits naturels proposés dans nos centres." },
+  { name: 'Direction générale', role: 'Management & Direction opérationnelle', site: 'Douala', img: 'dark', years: 2, bio: "Co-fondateur et directeur général, il assure la gestion quotidienne, les partenariats stratégiques et le développement commercial de No Limit à travers ses trois centres." },
+  { name: 'Équipe Douala', role: 'Conseillers santé naturelle', site: 'Douala', img: 'warm', years: 1, bio: "Trois conseillers formés à la prescription et à l'accompagnement des produits No Limit. Ils reçoivent les clients du lundi au samedi de 09h00 à 19h00." },
+  { name: 'Équipe Yaoundé', role: 'Conseillers santé naturelle', site: 'Yaoundé', img: '', years: 1, bio: "Trois conseillers formés à la prescription et à l'accompagnement des produits No Limit. Ils reçoivent les clients du lundi au samedi de 09h00 à 19h00." },
+  { name: 'Équipe Bafoussam', role: 'Conseillers santé naturelle', site: 'Bafoussam', img: 'sage', years: 1, bio: "Trois conseillers formés à la prescription et à l'accompagnement des produits No Limit. Ils reçoivent les clients du lundi au samedi de 08h00 à 17h30." },
+  { name: 'Partenariat Pharaon', role: 'Massages · Check-up · Alcalinisation', site: 'Tous centres', img: 'warm', years: 1, bio: "Depuis août 2025, No Limit s'est associé à Pharaon pour enrichir son offre de services : massages des méridiens, bilans de santé complets et soins d'alcalinisation." },
 ];
 
 export function Equipe() {
@@ -21,13 +21,13 @@ export function Equipe() {
             <Reveal><span className="eyebrow">03 — L'équipe</span></Reveal>
             <Reveal delay={100}>
               <h2 style={{ fontSize: 'clamp(40px, 6vw, 96px)', marginTop: 28, fontWeight: 300 }}>
-                Douze praticiens,<br /><em>une vision commune</em>.
+                Une équipe engagée,<br /><em>une vision commune</em>.
               </h2>
             </Reveal>
           </div>
           <Reveal delay={200}>
             <p style={{ maxWidth: 380, fontSize: 15, lineHeight: 1.75, color: 'var(--muted)' }}>
-              Formés dans des disciplines complémentaires, nos praticiens partagent une éthique commune : écouter avant de soigner.
+              Formés à la prescription de produits naturels, nos conseillers partagent une éthique commune : comprendre chaque client avant de recommander.
             </p>
           </Reveal>
         </div>
@@ -41,7 +41,7 @@ export function Equipe() {
                   <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 400 }}>{m.name}</div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <span style={{ fontSize: 13, color: 'var(--terracotta)' }}>{m.role}</span>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {m.site} · {m.years} ans d'exp.</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {m.site}{m.years > 1 ? ` · ${m.years} ans d'exp.` : ''}</span>
                   </div>
                   <p style={{ marginTop: 14, fontSize: 13, lineHeight: 1.7, color: 'var(--muted)' }}>{m.bio}</p>
                 </div>
@@ -73,15 +73,15 @@ export function Lieu() {
             </Reveal>
             <Reveal delay={200}>
               <p style={{ marginTop: 28, fontSize: 17, lineHeight: 1.8, color: 'var(--ink-soft)', maxWidth: 480 }}>
-                Chaque centre est conçu pour induire un état de calme dès le seuil franchi. Matériaux naturels, lumière tamisée, absence de bruit de fond. Le soin commence avant même de s'allonger.
+                Chaque centre est un espace d'accueil et de conseil dédié à votre santé naturelle. Vous y trouvez nos produits, nos conseillers formés et, selon le centre, les services Pharaon (massages, check-up, alcalinisation).
               </p>
             </Reveal>
             <Reveal delay={300}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 40 }}>
                 {[
-                  ['5 cabines individuelles insonorisées', 'par centre'],
-                  ['Tisanerie & espace de transition', 'entre deux soins'],
-                  ['Boutique intégrée', 'plantes, huiles, compléments'],
+                  ['Produits naturels disponibles sur place', 'compléments, ampoules, phyto-actifs'],
+                  ['Conseil personnalisé par un spécialiste', 'bilan de santé avec notre médecin'],
+                  ['Services Pharaon intégrés', 'massages méridiens, check-up, alcalinisation'],
                 ].map(([title, sub]) => (
                   <div key={title} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--terracotta)', marginTop: 8, flexShrink: 0 }} />
@@ -112,9 +112,9 @@ export function Lieu() {
 
 // ─── Centres ─────────────────────────────────────────────────────
 const CENTRES_DATA = [
-  { name: 'Douala', sub: 'Bonapriso', desc: 'Notre centre historique. 6 praticiens, parking privé, accessible depuis toutes les communes.', qty: '6 praticiens', img: 'sage' },
-  { name: 'Yaoundé', sub: 'Bastos', desc: 'Ouvert en 2021. 4 praticiens dans un espace résidentiel calme, à deux pas de l\'avenue Germaine.', qty: '4 praticiens', img: 'dark' },
-  { name: 'Bafoussam', sub: 'Centre-ville', desc: 'Notre antenne Ouest. 2 praticiens, rendez-vous sur réservation uniquement, mardi au samedi.', qty: '2 praticiens', img: 'warm' },
+  { name: 'Douala', sub: 'Cameroun', desc: 'Notre centre principal. Lun–Sam, 09h00–19h00. Consultation médecin : 09h00–18h00. Samedi : fermeture entre 15h00 et 16h00.', qty: '3+ conseillers', img: 'sage' },
+  { name: 'Yaoundé', sub: 'Cameroun', desc: 'Centre actif. Lun–Sam, 09h00–19h00. Consultation médecin : 09h00–18h00. Samedi : fermeture entre 15h00 et 16h00.', qty: '3+ conseillers', img: 'dark' },
+  { name: 'Bafoussam', sub: 'Cameroun', desc: 'Notre antenne Ouest. Lun–Sam, 08h00–17h30. Samedi : journée continue plus courte, fermeture entre 15h00 et 16h00.', qty: '3+ conseillers', img: 'warm' },
 ];
 
 export function Centres() {
@@ -126,13 +126,13 @@ export function Centres() {
             <Reveal><span className="eyebrow" style={{ color: 'var(--sage-light)' }}>04 — Nos centres</span></Reveal>
             <Reveal delay={100}>
               <h2 style={{ fontSize: 'clamp(40px, 6vw, 96px)', marginTop: 28, fontWeight: 300, color: 'var(--cream)' }}>
-                Trois villes,<br />une <em style={{ color: 'var(--sage-light)' }}>présence</em>.
+                Trois centres,<br />une <em style={{ color: 'var(--sage-light)' }}>mission</em>.
               </h2>
             </Reveal>
           </div>
           <Reveal delay={200}>
             <p style={{ maxWidth: 380, fontSize: 15, lineHeight: 1.75, color: 'rgba(245,241,234,0.7)' }}>
-              Que vous soyez à Douala, Yaoundé ou Bafoussam, un centre Nolimit est proche. Même équipe, même qualité.
+              Que vous soyez à Douala, Yaoundé ou Bafoussam, un centre No Limit est proche de vous. Mêmes produits, même qualité, même engagement.
             </p>
           </Reveal>
         </div>
@@ -189,9 +189,9 @@ export function Galerie() {
 
 // ─── Journal ─────────────────────────────────────────────────────
 const ARTICLES = [
-  { cat: 'Phytothérapie', title: 'L\'artemisia annua au Cameroun : efficacité et prudence', date: 'Mars 2026', img: 'sage', excerpt: 'Entre usage traditionnel millénaire et recherches cliniques récentes, le point sur une plante qui fait débat.' },
-  { cat: 'Nutrition', title: 'Chrono-nutrition : manger avec son horloge biologique', date: 'Fév. 2026', img: 'warm', excerpt: 'Pas de régime, juste la bonne fenêtre. Comment le timing des repas transforme l\'énergie sans frustration.' },
-  { cat: 'Sophrologie', title: 'Cohérence cardiaque : 5 minutes qui changent une journée', date: 'Jan. 2026', img: 'dark', excerpt: 'Trois respirations, une fréquence. Le protocole 365 expliqué simplement — et pourquoi ça fonctionne.' },
+  { cat: 'Compléments naturels', title: 'Pourquoi choisir les compléments naturels plutôt que chimiques ?', date: 'Avr. 2026', img: 'sage', excerpt: 'Les produits de synthèse ont des effets secondaires souvent ignorés. Nos compléments alimentaires 100 % naturels offrent une alternative efficace et sans danger.' },
+  { cat: 'Alcalinisation', title: 'Équilibrer son pH : ce que l\'alimentation ne peut pas faire seule', date: 'Mars 2026', img: 'warm', excerpt: 'Un corps trop acide favorise la fatigue, les inflammations et les maladies chroniques. Le protocole d\'alcalinisation de No Limit agit en profondeur.' },
+  { cat: 'Santé naturelle', title: 'Massage des méridiens : comment ça marche vraiment ?', date: 'Fév. 2026', img: 'dark', excerpt: 'Hérité de la médecine traditionnelle asiatique, le massage des méridiens libère les blocages énergétiques et stimule les fonctions vitales de l\'organisme.' },
 ];
 
 export function Journal() {

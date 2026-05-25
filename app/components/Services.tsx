@@ -4,20 +4,18 @@ import { useState } from 'react';
 import { Reveal, Arrow } from './Reveal';
 
 const SERVICES = [
-  { id: 'naturopathie', name: 'Naturopathie', cat: 'Corps', dur: '90 min', price: '72 000 FCFA', sub: "Bilan vital complet, plan d'hygiène et phytothérapie.", img: 'sage', bullets: ['Bilan iridologique', 'Anamnèse approfondie', 'Plan personnalisé sur 8 semaines'] },
-  { id: 'acupuncture', name: 'Acupuncture', cat: 'Énergie', dur: '60 min', price: '57 000 FCFA', sub: "Médecine chinoise, rééquilibrage des méridiens.", img: 'dark', bullets: ['Diagnostic des pouls', 'Aiguilles stériles à usage unique', 'Moxibustion si indiquée'] },
-  { id: 'sophrologie', name: 'Sophrologie', cat: 'Esprit', dur: '60 min', price: '51 000 FCFA', sub: "Relaxation dynamique, gestion du stress et du sommeil.", img: 'warm', bullets: ['Respiration consciente', 'Visualisations guidées', 'Cycle de 6 à 10 séances'] },
-  { id: 'massage', name: 'Massage thérapeutique', cat: 'Corps', dur: '75 min', price: '66 000 FCFA', sub: "Tissu profond, kobido, drainage manuel.", img: '', bullets: ['Huiles biologiques chauffées', 'Pression adaptée', 'Cabine chauffée à 24°C'] },
-  { id: 'reflexo', name: 'Réflexologie plantaire', cat: 'Énergie', dur: '50 min', price: '48 000 FCFA', sub: "Stimulation des zones réflexes, retour à l'équilibre.", img: 'sage', bullets: ['Cartographie complète des pieds', 'Travail des chaînes énergétiques', 'Carnet de suivi remis'] },
-  { id: 'phyto', name: 'Phytothérapie', cat: 'Corps', dur: '45 min', price: '42 000 FCFA', sub: "Plantes en synergie, formulations sur-mesure.", img: 'warm', bullets: ['Plantes françaises, traçables', 'Teintures-mères et EPS', 'Suivi mensuel inclus'] },
-  { id: 'nutri', name: 'Nutrition holistique', cat: 'Nutrition', dur: '60 min', price: '57 000 FCFA', sub: "Micro-nutrition, chrono-nutrition, ré-alimentation.", img: 'dark', bullets: ['Bilan biologique commenté', 'Programme 12 semaines', 'Recettes hebdomadaires'] },
-  { id: 'energetique', name: 'Soin énergétique', cat: 'Énergie', dur: '60 min', price: '54 000 FCFA', sub: "Reiki, harmonisation des centres énergétiques.", img: '', bullets: ['Posture allongée habillée', 'Imposition des mains', 'Espace de parole en fin de séance'] },
+  { id: 'complements', name: 'Compléments alimentaires', cat: 'Produits', dur: 'Cure 30 jours', price: 'Sur devis', sub: "Gamme de compléments 100 % naturels, sans additifs chimiques, pour renforcer vitalité et immunité.", img: 'sage', bullets: ["Ingrédients traçables, sélectionnés à l'international", "Formules adaptées à chaque besoin", "Disponibles dans nos trois centres"] },
+  { id: 'ampoules', name: 'Ampoules buvables', cat: 'Produits', dur: 'Cure personnalisée', price: 'Sur devis', sub: "Ampoules buvables à base d'extraits naturels pour une absorption optimale et un effet rapide.", img: 'dark', bullets: ["Concentration élevée en principes actifs", "Origine : Chine, Inde, Thaïlande, Bénin, Maroc", "Aucun conservateur artificiel"] },
+  { id: 'phyto', name: 'Phytothérapie naturelle', cat: 'Produits', dur: 'Conseil inclus', price: 'Sur devis', sub: "Plantes médicinales et tisanes thérapeutiques sélectionnées dans les pays partenaires.", img: 'warm', bullets: ["Plantes séchées, poudres et extraits", "Sourcing : Afrique du Sud, Maroc, Bénin", "Conseils personnalisés par notre médecin"] },
+  { id: 'meridiens', name: 'Massage des méridiens', cat: 'Services', dur: '60 min', price: 'Sur devis', sub: "Massage thérapeutique des lignes énergétiques du corps — en partenariat avec Pharaon.", img: '', bullets: ["Technique traditionnelle asiatique", "Améliore la circulation et réduit les tensions", "Disponible lundi – samedi"] },
+  { id: 'checkup', name: 'Bilan de santé (Check-up)', cat: 'Services', dur: '45 – 90 min', price: 'Sur devis', sub: "Évaluation complète de votre état de santé avec notre médecin principal — sans rendez-vous médical classique.", img: 'sage', bullets: ["Examen clinique complet", "Conseils nutritionnels et produits adaptés", "Suivi personnalisé inclus"] },
+  { id: 'alcalin', name: 'Alcalinisation', cat: 'Services', dur: 'Séance 45 min', price: 'Sur devis', sub: "Protocole de rééquilibrage du pH corporel par des méthodes 100 % naturelles — Pharaon.", img: 'dark', bullets: ["Détoxification naturelle du corps", "Améliore l'énergie et la digestion", "Protocole sur plusieurs séances"] },
 ];
 
-const CATS = ['Tous', 'Corps', 'Énergie', 'Esprit', 'Nutrition'];
+const CATS = ['Tous', 'Produits', 'Services'];
 
 function catColor(c: string) {
-  return c === 'Corps' ? 'var(--sage-light)' : c === 'Énergie' ? 'var(--terracotta-soft)' : c === 'Esprit' ? 'var(--gold)' : c === 'Nutrition' ? '#A8B89E' : 'var(--cream)';
+  return c === 'Produits' ? 'var(--sage-light)' : c === 'Services' ? 'var(--terracotta-soft)' : 'var(--cream)';
 }
 
 export function Services({ onBook }: { onBook: (svc?: string) => void }) {
@@ -33,13 +31,13 @@ export function Services({ onBook }: { onBook: (svc?: string) => void }) {
             <Reveal><span className="eyebrow">02 — Nos soins</span></Reveal>
             <Reveal delay={100}>
               <h2 style={{ fontSize: 'clamp(40px, 6vw, 96px)', marginTop: 28, fontWeight: 300, maxWidth: 880 }}>
-                Vingt-quatre soins,<br />une <em>écoute</em> singulière.
+                Nos produits &amp; services,<br />100 % <em>naturels</em>.
               </h2>
             </Reveal>
           </div>
           <Reveal delay={200}>
             <p style={{ maxWidth: 380, fontSize: 15, lineHeight: 1.75, color: 'var(--muted)' }}>
-              Chaque consultation commence par un temps d'écoute. Le soin n'est jamais imposé — il se construit avec vous, à votre rythme.
+              Chaque recommandation commence par un bilan. Le produit ou service n'est jamais imposé — il est sélectionné avec vous, en fonction de vos besoins réels.
             </p>
           </Reveal>
         </div>

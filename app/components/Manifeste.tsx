@@ -14,20 +14,20 @@ export function Manifeste() {
         <div style={{ position: 'relative' }}>
           <h2 style={{ fontSize: 'clamp(40px, 7.5vw, 132px)', fontWeight: 300, lineHeight: 1.02, letterSpacing: '-0.03em', maxWidth: 1300 }}>
             <WordsReveal text="Soigner sans" />{' '}
-            <em style={{ color: 'var(--terracotta)' }}><WordsReveal text="opposer," as="span" /></em>{' '}
+            <em style={{ color: 'var(--terracotta)' }}><WordsReveal text="chimie," as="span" /></em>{' '}
             <br />
             <WordsReveal text="prévenir sans" />{' '}
             <em style={{ color: 'var(--sage)' }}><WordsReveal text="alarmer," as="span" /></em>
             <br />
-            <WordsReveal text="accompagner sans" />{' '}
-            <em style={{ color: 'var(--gold)' }}><WordsReveal text="convertir." as="span" /></em>
+            <WordsReveal text="guérir avec" />{' '}
+            <em style={{ color: 'var(--gold)' }}><WordsReveal text="la nature." as="span" /></em>
           </h2>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'clamp(40px, 6vw, 100px)', marginTop: 120 }} className="manifeste-grid">
           <Reveal delay={0}>
             <p style={{ fontSize: 18, lineHeight: 1.75, color: 'var(--ink-soft)', marginTop: 60 }}>
-              Nolimit est né d'un constat simple&nbsp;: la santé n'est ni un combat, ni une discipline. C'est un équilibre vivant, qui se cultive dans le geste, l'écoute et la matière.
+              No Limit est né d'un constat simple&nbsp;: l'accès à une santé naturelle et abordable ne devrait pas être un privilège. Née en novembre 2024 sous le nom de Té Santé Nature, l'entreprise est devenue No Limit Solutions Santé Nature en janvier 2026.
             </p>
           </Reveal>
 
@@ -44,10 +44,10 @@ export function Manifeste() {
 
           <Reveal delay={150}>
             <p style={{ fontSize: 18, lineHeight: 1.75, color: 'var(--ink-soft)' }}>
-              Nous réunissons sous un même toit naturopathes, acupuncteurs, sophrologues et thérapeutes du corps — pour proposer une médecine intégrative, lucide, respectueuse de votre tempo.
+              Nos produits — compléments alimentaires, ampoules buvables et phyto-actifs — sont soigneusement sélectionnés et importés depuis la Chine, l'Inde, la Thaïlande, le Bénin, le Maroc et l'Afrique du Sud. En partenariat avec Pharaon, nos centres proposent également des massages des méridiens, des bilans de santé complets et des soins d'alcalinisation.
               <br /><br />
               <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 22, color: 'var(--sage)' }}>
-                Chaque soin commence par un silence. Celui de l'écoute.
+                La nature a une réponse. Nous aidons à la trouver.
               </span>
             </p>
           </Reveal>
