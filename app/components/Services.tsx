@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { Reveal, Arrow } from './Reveal';
 
 const SERVICES = [
-  { id: 'complements', name: 'Compléments alimentaires', cat: 'Produits', dur: 'Cure 30 jours', price: 'Sur devis', sub: "Gamme de compléments 100 % naturels, sans additifs chimiques, pour renforcer vitalité et immunité.", img: 'sage', bullets: ["Ingrédients traçables, sélectionnés à l'international", "Formules adaptées à chaque besoin", "Disponibles dans nos trois centres"] },
-  { id: 'ampoules', name: 'Ampoules buvables', cat: 'Produits', dur: 'Cure personnalisée', price: 'Sur devis', sub: "Ampoules buvables à base d'extraits naturels pour une absorption optimale et un effet rapide.", img: 'dark', bullets: ["Concentration élevée en principes actifs", "Origine : Chine, Inde, Thaïlande, Bénin, Maroc", "Aucun conservateur artificiel"] },
-  { id: 'phyto', name: 'Phytothérapie naturelle', cat: 'Produits', dur: 'Conseil inclus', price: 'Sur devis', sub: "Plantes médicinales et tisanes thérapeutiques sélectionnées dans les pays partenaires.", img: 'warm', bullets: ["Plantes séchées, poudres et extraits", "Sourcing : Afrique du Sud, Maroc, Bénin", "Conseils personnalisés par notre médecin"] },
-  { id: 'meridiens', name: 'Massage des méridiens', cat: 'Services', dur: '60 min', price: 'Sur devis', sub: "Massage thérapeutique des lignes énergétiques du corps — en partenariat avec Pharaon.", img: '', bullets: ["Technique traditionnelle asiatique", "Améliore la circulation et réduit les tensions", "Disponible lundi – samedi"] },
-  { id: 'checkup', name: 'Bilan de santé (Check-up)', cat: 'Services', dur: '45 – 90 min', price: 'Sur devis', sub: "Évaluation complète de votre état de santé avec notre médecin principal — sans rendez-vous médical classique.", img: 'sage', bullets: ["Examen clinique complet", "Conseils nutritionnels et produits adaptés", "Suivi personnalisé inclus"] },
-  { id: 'alcalin', name: 'Alcalinisation', cat: 'Services', dur: 'Séance 45 min', price: 'Sur devis', sub: "Protocole de rééquilibrage du pH corporel par des méthodes 100 % naturelles — Pharaon.", img: 'dark', bullets: ["Détoxification naturelle du corps", "Améliore l'énergie et la digestion", "Protocole sur plusieurs séances"] },
+  { id: 'complements', name: 'Compléments alimentaires', cat: 'Produits', dur: 'Cure 30 jours', price: 'Sur devis', sub: "Gamme de compléments 100 % naturels, sans additifs chimiques, pour renforcer vitalité et immunité.", imgUrl: 'https://images.pexels.com/photos/7615558/pexels-photo-7615558.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop', bullets: ["Ingrédients traçables, sélectionnés à l'international", "Formules adaptées à chaque besoin", "Disponibles dans nos trois centres"] },
+  { id: 'ampoules', name: 'Ampoules buvables', cat: 'Produits', dur: 'Cure personnalisée', price: 'Sur devis', sub: "Ampoules buvables à base d'extraits naturels pour une absorption optimale et un effet rapide.", imgUrl: 'https://images.pexels.com/photos/20419213/pexels-photo-20419213.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop', bullets: ["Concentration élevée en principes actifs", "Origine : Chine, Inde, Thaïlande, Bénin, Maroc", "Aucun conservateur artificiel"] },
+  { id: 'phyto', name: 'Phytothérapie naturelle', cat: 'Produits', dur: 'Conseil inclus', price: 'Sur devis', sub: "Plantes médicinales et tisanes thérapeutiques sélectionnées dans les pays partenaires.", imgUrl: 'https://images.pexels.com/photos/7526062/pexels-photo-7526062.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop', bullets: ["Plantes séchées, poudres et extraits", "Sourcing : Afrique du Sud, Maroc, Bénin", "Conseils personnalisés par notre médecin"] },
+  { id: 'meridiens', name: 'Massage des méridiens', cat: 'Services', dur: '60 min', price: 'Sur devis', sub: "Massage thérapeutique des lignes énergétiques du corps — en partenariat avec Pharaon.", imgUrl: 'https://images.pexels.com/photos/6628649/pexels-photo-6628649.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop', bullets: ["Technique traditionnelle asiatique", "Améliore la circulation et réduit les tensions", "Disponible lundi – samedi"] },
+  { id: 'checkup', name: 'Bilan de santé (Check-up)', cat: 'Services', dur: '45 – 90 min', price: 'Sur devis', sub: "Évaluation complète de votre état de santé avec notre médecin principal — sans rendez-vous médical classique.", imgUrl: 'https://images.pexels.com/photos/7659876/pexels-photo-7659876.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop', bullets: ["Examen clinique complet", "Conseils nutritionnels et produits adaptés", "Suivi personnalisé inclus"] },
+  { id: 'alcalin', name: 'Alcalinisation', cat: 'Services', dur: 'Séance 45 min', price: 'Sur devis', sub: "Protocole de rééquilibrage du pH corporel par des méthodes 100 % naturelles — Pharaon.", imgUrl: 'https://images.pexels.com/photos/4443434/pexels-photo-4443434.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&fit=crop', bullets: ["Détoxification naturelle du corps", "Améliore l'énergie et la digestion", "Protocole sur plusieurs séances"] },
 ];
 
 const CATS = ['Tous', 'Produits', 'Services'];
@@ -65,7 +65,11 @@ export function Services({ onBook }: { onBook: (svc?: string) => void }) {
             <Reveal key={s.id} delay={i * 60}>
               <article className="service-card" style={{ border: '1px solid rgba(26,26,26,0.1)', borderRadius: 12, overflow: 'hidden', cursor: 'pointer', transition: 'transform .3s ease, box-shadow .3s ease' }}
                 onClick={() => setOpen(open === s.id ? null : s.id)}>
-                <div className={`ph ${s.img}`} style={{ aspectRatio: '4/3' }} />
+                <img
+                  src={s.imgUrl}
+                  alt={s.name}
+                  style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }}
+                />
                 <div style={{ padding: '20px 20px 24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
                     <h3 style={{ fontSize: 18, fontWeight: 400 }}>{s.name}</h3>

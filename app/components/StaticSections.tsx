@@ -189,9 +189,9 @@ export function Galerie() {
 
 // ─── Journal ─────────────────────────────────────────────────────
 const ARTICLES = [
-  { cat: 'Compléments naturels', title: 'Pourquoi choisir les compléments naturels plutôt que chimiques ?', date: 'Avr. 2026', img: 'sage', excerpt: 'Les produits de synthèse ont des effets secondaires souvent ignorés. Nos compléments alimentaires 100 % naturels offrent une alternative efficace et sans danger.' },
-  { cat: 'Alcalinisation', title: 'Équilibrer son pH : ce que l\'alimentation ne peut pas faire seule', date: 'Mars 2026', img: 'warm', excerpt: 'Un corps trop acide favorise la fatigue, les inflammations et les maladies chroniques. Le protocole d\'alcalinisation de No Limit agit en profondeur.' },
-  { cat: 'Santé naturelle', title: 'Massage des méridiens : comment ça marche vraiment ?', date: 'Fév. 2026', img: 'dark', excerpt: 'Hérité de la médecine traditionnelle asiatique, le massage des méridiens libère les blocages énergétiques et stimule les fonctions vitales de l\'organisme.' },
+  { cat: 'Compléments naturels', title: 'Pourquoi choisir les compléments naturels plutôt que chimiques ?', date: 'Avr. 2026', imgUrl: 'https://images.pexels.com/photos/7615570/pexels-photo-7615570.jpeg?auto=compress&cs=tinysrgb&w=800&h=450&fit=crop', excerpt: 'Les produits de synthèse ont des effets secondaires souvent ignorés. Nos compléments alimentaires 100 % naturels offrent une alternative efficace et sans danger.' },
+  { cat: 'Alcalinisation', title: "Équilibrer son pH : ce que l'alimentation ne peut pas faire seule", date: 'Mars 2026', imgUrl: 'https://images.pexels.com/photos/4443434/pexels-photo-4443434.jpeg?auto=compress&cs=tinysrgb&w=800&h=450&fit=crop', excerpt: "Un corps trop acide favorise la fatigue, les inflammations et les maladies chroniques. Le protocole d'alcalinisation de No Limit agit en profondeur." },
+  { cat: 'Santé naturelle', title: 'Massage des méridiens : comment ça marche vraiment ?', date: 'Fév. 2026', imgUrl: 'https://images.pexels.com/photos/6628701/pexels-photo-6628701.jpeg?auto=compress&cs=tinysrgb&w=800&h=450&fit=crop', excerpt: "Hérité de la médecine traditionnelle asiatique, le massage des méridiens libère les blocages énergétiques et stimule les fonctions vitales de l'organisme." },
 ];
 
 export function Journal() {
@@ -219,7 +219,11 @@ export function Journal() {
           {ARTICLES.map((a, i) => (
             <Reveal key={i} delay={i * 80}>
               <article className="article-card" style={{ cursor: 'pointer', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(26,26,26,0.08)', transition: 'transform .3s ease, box-shadow .3s ease' }}>
-                <div className={`ph ${a.img}`} style={{ aspectRatio: '16/9' }} />
+                <img
+                  src={a.imgUrl}
+                  alt={a.title}
+                  style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
+                />
                 <div style={{ padding: '24px 24px 28px' }}>
                   <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--terracotta)' }}>{a.cat.toUpperCase()}</span>
                   <h3 style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(18px, 2vw, 24px)', fontWeight: 400, marginTop: 12, letterSpacing: '-0.01em', lineHeight: 1.25 }}>{a.title}</h3>
