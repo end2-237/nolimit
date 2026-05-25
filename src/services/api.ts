@@ -225,7 +225,49 @@ export const Stats = {
   dashboard: () => request('/stats/dashboard'),
 };
 
+// ─── Releases ─────────────────────────────────────────────────────────────────
+
+export const ReleasesApi = {
+  getAll: () => request('/releases'),
+
+  create: (data: any) =>
+    request('/releases', { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (id: number, data: any) =>
+    request(`/releases/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  togglePublish: (id: number) =>
+    request(`/releases/${id}/publish`, { method: 'PATCH' }),
+
+  delete: (id: number) =>
+    request(`/releases/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Upload binaire (streaming vers storage distant) ─────────────────────────
+
+export async function uploadFile(
+  file: File,
+  folder: string,
+  filename: string,
+): Promise<{ url: string }> {
+  const buffer = await file.arrayBuffer();
+  const url = `${API_URL}/uploads/image?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+    body: buffer,
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Upload échoué' }));
+    throw new Error(err.error || 'Upload échoué');
+  }
+  return response.json();
+}
+
 export default {
-  Users, Products, Stocks, Movements, Alerts, Reports, Stats, Ordonnances,
+  Users, Products, Stocks, Movements, Alerts, Reports, Stats, Ordonnances, ReleasesApi,
   setAuthToken, getAuthToken, clearAuthToken,
 };
