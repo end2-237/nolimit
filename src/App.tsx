@@ -15,6 +15,7 @@ import { SiteCommandesPage } from './pages/SiteCommandesPage';
 import { SiteNewsletterPage } from './pages/SiteNewsletterPage';
 import { SiteMessagesPage } from './pages/SiteMessagesPage';
 import { OrdonnancesPage } from './pages/OrdonnancesPage';
+import { DownloadsPage } from './pages/DownloadsPage';
 import { SplashScreen } from './components/SplashScreen';
 import { DBLoader } from './components/DBLoader';
 import { db } from './services/database';
@@ -307,6 +308,7 @@ function AppInner() {
       case 'settings': return <SettingsPage />;
       case 'users': return <UsersPage />;
       case 'ordonnances':        return <OrdonnancesPage />;
+      case 'downloads':          return <DownloadsPage />;
       case 'site':              return <SiteManagementPage />;
       case 'site-dashboard':    return <SiteDashboardPage onNavigate={setActivePage} />;
       case 'site-reservations': return <SiteReservationsPage />;

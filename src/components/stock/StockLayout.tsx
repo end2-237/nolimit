@@ -3,7 +3,7 @@ import {
   Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard,
   ShoppingBag, ChevronRight, LogOut, Users, Menu, X, Globe,
   BarChart3, CalendarCheck, ShoppingCart, Mail, MessageSquare,
-  ChevronDown, Shield, PanelLeftClose, PanelLeftOpen, ClipboardList,
+  ChevronDown, Shield, PanelLeftClose, PanelLeftOpen, ClipboardList, Download,
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/app.config';
 import {
@@ -16,7 +16,7 @@ import { OfflineIndicator } from '../OfflineIndicator';
 
 export type PageId =
   | 'dashboard' | 'products' | 'movements' | 'alerts' | 'reports'
-  | 'settings' | 'users' | 'ordonnances'
+  | 'settings' | 'users' | 'ordonnances' | 'downloads'
   | 'site' | 'site-dashboard' | 'site-reservations' | 'site-commandes'
   | 'site-newsletter' | 'site-messages';
 
@@ -77,6 +77,7 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
     { id: 'ordonnances', label: 'Ordonnances',      icon: ClipboardList },
     { id: 'alerts',      label: 'Alertes',          icon: Bell },
     { id: 'reports',     label: 'Rapports',         icon: FileText },
+    { id: 'downloads',   label: 'Téléchargements',  icon: Download },
     { id: 'settings',    label: 'Paramètres',       icon: Settings },
     ...(hasPermission('manage_users') ? [{ id: 'users' as PageId, label: 'Utilisateurs', icon: Users }] : []),
   ];

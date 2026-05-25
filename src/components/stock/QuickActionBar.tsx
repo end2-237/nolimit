@@ -257,6 +257,8 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
       { label: 'Rapport par Site',          icon: Filter,       action: () => onNavigate('reports') },
     ],
     outils: [
+      { label: 'Téléchargements',          icon: Download,     action: () => onNavigate('downloads') },
+      { separator: true },
       { label: 'Paramètres',               icon: Settings,     action: () => onNavigate('settings'),                   shortcut: 'Ctrl+,' },
       ...(hasPermission('manage_users') ? [
         { label: 'Gestion Utilisateurs',   icon: Users,        action: () => onNavigate('users') },
