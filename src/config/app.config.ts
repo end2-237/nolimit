@@ -3,7 +3,7 @@ import logoUrl from '../../public/icons/nol.png';
 export const APP_CONFIG = {
   name: 'Stock No Limit',
   shortName: 'SNL',
-  version: '1.1.0',
+  version: '2.0.0',
   description: 'Système de gestion de stock multi-sites',
   company: {
     name: 'No Limit Enterprise',

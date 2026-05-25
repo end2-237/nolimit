@@ -42,10 +42,10 @@ interface ReleaseForm {
 /* ── Fallback static data (offline / no backend) ────────────────── */
 const STATIC_RELEASES: Release[] = [
   {
-    id: -1, version: '1.1.0', is_published: true, is_latest: true, is_beta: false,
-    platform: 'windows', created_at: '2026-05-20T00:00:00Z',
-    title: 'SNL v1.1.0 — Ordonnances & Dashboard vitrine',
-    download_url: '/downloads/SNL-Setup-1.1.0.exe',
+    id: -1, version: '2.0.0', is_published: true, is_latest: true, is_beta: false,
+    platform: 'windows', created_at: '2026-05-25T00:00:00Z',
+    title: 'SNL v2.0.0 — Ordonnances, Releases & Dashboard vitrine',
+    download_url: '/downloads/SNL-Setup-2.0.0.exe',
     file_size: 89128960,
     changelog: [
       "Ajout des ordonnances avec mode hors-ligne et file d'attente",
@@ -101,6 +101,46 @@ function timeAgo(iso: string): string {
 
 const FONT = "'Plus Jakarta Sans', system-ui, sans-serif";
 const MONO = "'JetBrains Mono', 'Courier New', monospace";
+
+/* ── AssetRow — ligne de téléchargement dans la section Assets ── */
+function AssetRow({
+  href, filename, label, iconBg, icon, badgeColor, badgeBg,
+}: {
+  href: string; filename: string; label: string;
+  iconBg: string; icon: React.ReactNode;
+  badgeColor: string; badgeBg: string;
+}) {
+  return (
+    <a
+      href={href}
+      download
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 14px', textDecoration: 'none',
+        borderTop: '1px solid #F1F5F9', transition: 'background 0.12s',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F8FAFC'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+    >
+      <div style={{
+        width: 28, height: 28, borderRadius: 6,
+        background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        {icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', fontFamily: MONO }}>{filename}</div>
+        <div style={{ fontSize: 11, color: '#94A3B8' }}>{label}</div>
+      </div>
+      <span style={{
+        fontSize: 11, color: badgeColor, fontWeight: 700,
+        background: badgeBg, padding: '3px 10px', borderRadius: 6, flexShrink: 0,
+      }}>
+        Télécharger
+      </span>
+    </a>
+  );
+}
 
 /* ══════════════════════════════════════════════════════════════════
    ReleaseCard — carte de release style GitHub
@@ -335,37 +375,28 @@ function ReleaseCard({
               Binaire non disponible — déposer le fichier .exe pour activer ce lien.
             </div>
           )}
-          {/* Recovery always listed */}
-          <a
+          {/* Recovery */}
+          <AssetRow
             href="/downloads/snl-recuperation.zip"
-            download
-            style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 14px', textDecoration: 'none',
-              transition: 'background 0.12s',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#F1F5F9'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-          >
-            <div style={{
-              width: 28, height: 28, borderRadius: 6,
-              background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <Shield size={13} color="#D97706" />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', fontFamily: MONO }}>
-                snl-recuperation.zip
-              </div>
-              <div style={{ fontSize: 11, color: '#94A3B8' }}>Outil de récupération IndexedDB · ~39 Ko</div>
-            </div>
-            <span style={{
-              fontSize: 11, color: '#D97706', fontWeight: 700,
-              background: '#FFFBEB', padding: '3px 10px', borderRadius: 6, flexShrink: 0,
-            }}>
-              Télécharger
-            </span>
-          </a>
+            filename="snl-recuperation.zip"
+            label="Outil de récupération IndexedDB · ~39 Ko"
+            iconBg="#FEF3C7"
+            iconColor="#D97706"
+            badgeColor="#D97706"
+            badgeBg="#FFFBEB"
+            icon={<Shield size={13} color="#D97706" />}
+          />
+          {/* Migration SQL */}
+          <AssetRow
+            href="/downloads/005-releases.sql"
+            filename="005-releases.sql"
+            label="Migration SQL — table releases · ~2 Ko"
+            iconBg="#EFF6FF"
+            iconColor="#2563EB"
+            badgeColor="#2563EB"
+            badgeBg="#EFF6FF"
+            icon={<Zap size={13} color="#2563EB" />}
+          />
         </div>
       </div>
     </div>
