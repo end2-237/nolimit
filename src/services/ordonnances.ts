@@ -232,11 +232,19 @@ export async function updateOrdonnance(
       return _cache[idx];
     } catch (e: any) {
       const isNetworkError = e instanceof TypeError && e.message.includes('fetch');
-      if (!isNetworkError) {
-        // Erreur métier → annuler la mise à jour locale
-        _cache[idx] = { ..._cache[idx], ...patch }; // on garde quand même localement
-        throw e;
+      // 404 avec "Request failed" = endpoint pas encore déployé côté backend
+      // (les 404 métier "Ordonnance introuvable" ont un message différent)
+      const isEndpointMissing = e?.status === 404 && (
+        e?.message === 'Request failed' || e?.message === 'API request failed'
+      );
+      if (isNetworkError || isEndpointMissing) {
+        // Sauvegarde locale conservée, on met en outbox pour retry au prochain déploiement
+        await addToOrdonnancesOutbox({ action: 'update', barcode, data: patch });
+        window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+        return updated;
       }
+      // Erreur métier réelle (ex: 409 ordonnance déjà payée, 404 ordonnance introuvable) → on remonte
+      throw e;
     }
   }
 

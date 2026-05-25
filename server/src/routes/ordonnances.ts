@@ -227,6 +227,123 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── PUT /:barcode — Modifier une ordonnance en attente ──────────────────────
+//
+//  Remplace les infos client + les articles.
+//  Seules les ordonnances au statut 'pending' peuvent être modifiées.
+//  Les ordonnances déjà payées sont refusées (409).
+
+router.put('/:barcode', authMiddleware, async (req: AuthRequest, res) => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const { barcode } = req.params;
+    const {
+      client_name,
+      client_phone,
+      client_address,
+      site_id,
+      total,
+      note,
+      items = [],
+    } = req.body;
+
+    // Validation minimale
+    if (!client_name || !site_id || !Array.isArray(items) || items.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'client_name, site_id et items sont obligatoires' });
+    }
+
+    // Récupérer l'ordonnance existante
+    const existing = await client.query(
+      'SELECT id, status, created_by FROM ordonnances WHERE barcode = $1',
+      [barcode]
+    );
+
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ordonnance introuvable' });
+    }
+
+    const ord = existing.rows[0];
+
+    // Seules les ordonnances 'pending' sont modifiables
+    if (ord.status === 'paid') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Impossible de modifier une ordonnance déjà payée' });
+    }
+
+    // Operators ne peuvent modifier que leurs propres ordonnances
+    const isAdminOrManager = ['admin', 'manager'].includes(req.user?.role ?? '');
+    if (!isAdminOrManager && ord.created_by !== req.user?.userId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+
+    // Mettre à jour les infos client + total + note + site
+    await client.query(
+      `UPDATE ordonnances
+       SET client_name    = $1,
+           client_phone   = $2,
+           client_address = $3,
+           site_id        = $4,
+           total          = $5,
+           note           = $6
+       WHERE id = $7`,
+      [
+        client_name,
+        client_phone   || null,
+        client_address || null,
+        site_id,
+        total ?? 0,
+        note           || null,
+        ord.id,
+      ]
+    );
+
+    // Remplacer tous les articles (delete + re-insert)
+    await client.query('DELETE FROM ordonnance_items WHERE ordonnance_id = $1', [ord.id]);
+
+    for (const item of items) {
+      await client.query(
+        `INSERT INTO ordonnance_items
+           (ordonnance_id, product_id, product_name, barcode, sku, quantity, price, unit)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          ord.id,
+          item.product_id,
+          item.product_name,
+          item.barcode,
+          item.sku,
+          item.quantity,
+          item.price,
+          item.unit || 'piece',
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // Retourner l'ordonnance complète avec items agrégés
+    const full = await query(
+      `${BASE_SELECT} WHERE o.id = $1 ${GROUP_BY}`,
+      [ord.id]
+    );
+
+    const io: SocketIOServer | undefined = req.app.locals.io;
+    if (io) io.emit('ordonnance:updated', { barcode, site_id });
+
+    res.json(full.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[ordonnances] PUT /:barcode error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    client.release();
+  }
+});
+
 // ─── PATCH /:barcode/pay — Marquer comme payée ────────────────────────────────
 //
 //  Met à jour UNIQUEMENT le statut + paid_at.

@@ -55,7 +55,9 @@ async function request(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(error.error || 'API request failed');
+    const err = new Error(error.error || 'API request failed') as Error & { status: number };
+    err.status = response.status;
+    throw err;
   }
 
   return response.json();
