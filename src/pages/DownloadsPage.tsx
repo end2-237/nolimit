@@ -146,13 +146,14 @@ function AssetRow({
    ReleaseCard — carte de release style GitHub
 ══════════════════════════════════════════════════════════════════ */
 function ReleaseCard({
-  release, devMode, onEdit, onDelete, onTogglePublish,
+  release, devMode, onEdit, onDelete, onTogglePublish, isMobile = false,
 }: {
   release: Release;
   devMode: boolean;
   onEdit: (r: Release) => void;
   onDelete: (r: Release) => void;
   onTogglePublish: (r: Release) => void;
+  isMobile?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -161,51 +162,76 @@ function ReleaseCard({
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '120px 1fr',
+      gridTemplateColumns: isMobile ? '1fr' : '120px 1fr',
       gap: 0,
       borderBottom: '1px solid #E2E8F0',
-      paddingBottom: 40,
-      marginBottom: 40,
+      paddingBottom: isMobile ? 28 : 40,
+      marginBottom: isMobile ? 28 : 40,
     }}>
-      {/* ── Left: version tag + timeline ─────────────────────────── */}
-      <div style={{ paddingTop: 6, paddingRight: 24, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-        {/* Dot */}
-        <div style={{
-          width: 13, height: 13, borderRadius: '50%',
-          background: release.is_latest ? '#16A34A' : release.is_beta ? '#D97706' : '#94A3B8',
-          border: `2px solid ${release.is_latest ? '#BBF7D0' : release.is_beta ? '#FDE68A' : '#E2E8F0'}`,
-          flexShrink: 0, marginBottom: 10,
-        }} />
-        {/* Version badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          padding: '4px 10px', borderRadius: 6,
-          background: '#F8FAFC', border: '1px solid #E2E8F0',
-          fontSize: 11.5, fontWeight: 700, color: '#0F172A',
-          fontFamily: MONO, letterSpacing: '0.01em',
-          whiteSpace: 'nowrap',
-        }}>
-          <Tag size={10} color="#64748B" />
-          v{release.version}
+      {/* ── Left: version tag + timeline — desktop only ──────────── */}
+      {!isMobile && (
+        <div style={{ paddingTop: 6, paddingRight: 24, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+          {/* Dot */}
+          <div style={{
+            width: 13, height: 13, borderRadius: '50%',
+            background: release.is_latest ? '#16A34A' : release.is_beta ? '#D97706' : '#94A3B8',
+            border: `2px solid ${release.is_latest ? '#BBF7D0' : release.is_beta ? '#FDE68A' : '#E2E8F0'}`,
+            flexShrink: 0, marginBottom: 10,
+          }} />
+          {/* Version badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '4px 10px', borderRadius: 6,
+            background: '#F8FAFC', border: '1px solid #E2E8F0',
+            fontSize: 11.5, fontWeight: 700, color: '#0F172A',
+            fontFamily: MONO, letterSpacing: '0.01em',
+            whiteSpace: 'nowrap',
+          }}>
+            <Tag size={10} color="#64748B" />
+            v{release.version}
+          </div>
+          {/* Date */}
+          <span style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 6, textAlign: 'right', lineHeight: 1.4 }}>
+            {timeAgo(release.created_at)}
+          </span>
+          {/* Platform chip */}
+          <span style={{
+            marginTop: 6, fontSize: 10, color: '#64748B',
+            background: '#F1F5F9', padding: '2px 7px', borderRadius: 99, fontFamily: MONO,
+          }}>
+            {release.platform}
+          </span>
         </div>
-        {/* Date */}
-        <span style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 6, textAlign: 'right', lineHeight: 1.4 }}>
-          {timeAgo(release.created_at)}
-        </span>
-        {/* Platform chip */}
-        <span style={{
-          marginTop: 6, fontSize: 10, color: '#64748B',
-          background: '#F1F5F9', padding: '2px 7px', borderRadius: 99, fontFamily: MONO,
-        }}>
-          {release.platform}
-        </span>
-      </div>
+      )}
 
       {/* ── Right: release content ───────────────────────────────── */}
       <div>
+
+        {/* ── Mobile meta row (version + dot + date + platform) ── */}
+        {isMobile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{
+              width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+              background: release.is_latest ? '#16A34A' : release.is_beta ? '#D97706' : '#94A3B8',
+              border: `2px solid ${release.is_latest ? '#BBF7D0' : release.is_beta ? '#FDE68A' : '#E2E8F0'}`,
+            }} />
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '3px 8px', borderRadius: 6, background: '#F8FAFC', border: '1px solid #E2E8F0',
+              fontSize: 11, fontWeight: 700, color: '#0F172A', fontFamily: MONO,
+            }}>
+              <Tag size={9} color="#64748B" /> v{release.version}
+            </span>
+            <span style={{ fontSize: 10, color: '#94A3B8' }}>{timeAgo(release.created_at)}</span>
+            <span style={{ fontSize: 10, color: '#64748B', background: '#F1F5F9', padding: '2px 7px', borderRadius: 99, fontFamily: MONO }}>
+              {release.platform}
+            </span>
+          </div>
+        )}
+
         {/* Header row */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
                 {release.title || `SNL v${release.version}`}
@@ -253,10 +279,10 @@ function ReleaseCard({
 
           {/* Dev mode action buttons */}
           {devMode && !isStatic && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
               <DevBtn
                 icon={release.is_published ? <EyeOff size={12} /> : <Eye size={12} />}
-                label={release.is_published ? 'Dépublier' : 'Publier'}
+                label={isMobile ? '' : (release.is_published ? 'Dépublier' : 'Publier')}
                 color={release.is_published ? '#DC2626' : '#16A34A'}
                 bg={release.is_published ? '#FEF2F2' : '#F0FDF4'}
                 border={release.is_published ? '#FECACA' : '#BBF7D0'}
@@ -264,7 +290,7 @@ function ReleaseCard({
               />
               <DevBtn
                 icon={<Edit3 size={12} />}
-                label="Modifier"
+                label={isMobile ? '' : 'Modifier'}
                 color="#2563EB"
                 bg="#EFF6FF"
                 border="#BFDBFE"
@@ -272,7 +298,7 @@ function ReleaseCard({
               />
               <DevBtn
                 icon={<Trash2 size={12} />}
-                label="Supprimer"
+                label={isMobile ? '' : 'Supprimer'}
                 color="#DC2626"
                 bg="#FEF2F2"
                 border="#FECACA"
@@ -466,6 +492,13 @@ function ReleaseModal({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const h = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
 
   const set = (k: keyof ReleaseForm, v: any) => setForm(f => ({ ...f, [k]: v }));
 
@@ -550,7 +583,7 @@ function ReleaseModal({
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
           {/* Version + Title */}
-          <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '140px 1fr', gap: 12 }}>
             <div>
               <Label>Version *</Label>
               <input
@@ -734,7 +767,7 @@ function ReleaseModal({
         {/* Footer */}
         <div style={{
           padding: '16px 24px', borderTop: '1px solid #F1F5F9',
-          display: 'flex', justifyContent: 'flex-end', gap: 10,
+          display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap',
         }}>
           <button onClick={onClose} style={{
             padding: '9px 18px', borderRadius: 8,
@@ -852,6 +885,14 @@ export function DownloadsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [apiAvailable, setApiAvailable] = useState(true);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const h = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -928,7 +969,7 @@ export function DownloadsPage() {
     : releases.filter(r => r.is_published);
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: 1040, fontFamily: FONT }}>
+    <div style={{ padding: isMobile ? '16px' : '32px 40px', maxWidth: 1040, fontFamily: FONT }}>
 
       {/* ── Page header ─────────────────────────────────────────── */}
       <div style={{
@@ -936,32 +977,32 @@ export function DownloadsPage() {
         marginBottom: 40, paddingBottom: 28,
         borderBottom: '1px solid #E2E8F0', flexWrap: 'wrap', gap: 16,
       }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <Package size={18} color="#64748B" />
-            <span style={{ fontSize: 13, color: '#94A3B8', fontFamily: MONO }}>
-              Stock No Limit
-            </span>
-            <span style={{ color: '#CBD5E1' }}>/</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Releases</span>
-          </div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.03em' }}>
+        <div style={{ minWidth: 0 }}>
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+              <Package size={18} color="#64748B" />
+              <span style={{ fontSize: 13, color: '#94A3B8', fontFamily: MONO }}>Stock No Limit</span>
+              <span style={{ color: '#CBD5E1' }}>/</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Releases</span>
+            </div>
+          )}
+          <h1 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.03em' }}>
             {releases.filter(r => r.is_published).length} release{releases.filter(r => r.is_published).length > 1 ? 's' : ''}
           </h1>
-          <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>
+          <p style={{ fontSize: 12.5, color: '#64748B', margin: '4px 0 0', lineHeight: 1.5 }}>
             Version actuelle :{' '}
             <span style={{
-              fontFamily: MONO, fontSize: 12.5, fontWeight: 700,
+              fontFamily: MONO, fontSize: 12, fontWeight: 700,
               color: '#16A34A', background: '#DCFCE7',
               padding: '1px 7px', borderRadius: 5,
             }}>
               v{APP_CONFIG.version}
             </span>
-            {' '}· Application Electron · Windows
+            {!isMobile && ' · Application Electron · Windows'}
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           {/* Reload */}
           <button
             onClick={load}
@@ -1096,6 +1137,7 @@ export function DownloadsPage() {
               onEdit={openEdit}
               onDelete={handleDelete}
               onTogglePublish={handleTogglePublish}
+              isMobile={isMobile}
             />
           ))}
         </div>
