@@ -141,7 +141,7 @@ export function MovementHistoryPanel({ onClose }: MovementHistoryPanelProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[calc(100dvh-32px)] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#F1F5F9]">
           <div className="flex items-center gap-3">

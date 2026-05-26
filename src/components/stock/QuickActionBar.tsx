@@ -150,7 +150,10 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
   }, []);
 
   useEffect(() => {
-    if (searchOpen && searchRef.current) searchRef.current.focus();
+    // Ne pas auto-focus sur mobile : déclenche le clavier virtuel et casse le layout
+    if (searchOpen && searchRef.current && !window.matchMedia('(max-width: 767px)').matches) {
+      searchRef.current.focus();
+    }
   }, [searchOpen]);
 
   useEffect(() => {
@@ -543,7 +546,7 @@ export function QuickActionBar({ onNavigate, alertCount, onNewProduct, onNewMove
       {/* ── Search overlay ── */}
       {searchOpen && (
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 96 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: window.matchMedia('(max-width: 767px)').matches ? 'center' : 'flex-start', justifyContent: 'center', padding: window.matchMedia('(max-width: 767px)').matches ? '16px' : '96px 16px 16px' }}
           onClick={() => setSearchOpen(false)}
         >
           <div

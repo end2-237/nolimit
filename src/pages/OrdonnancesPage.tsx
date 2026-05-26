@@ -243,7 +243,6 @@ export function OrdonnancesPage() {
                 placeholder="Scannez ou tapez le code-barre…"
                 className="flex-1 outline-none bg-transparent"
                 style={{ fontSize: 13, color: T1, fontFamily: 'monospace', minWidth: 0 }}
-                autoFocus
               />
             </div>
             <button

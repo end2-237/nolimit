@@ -432,7 +432,6 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
                         placeholder="Raison du refus..."
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
-                        autoFocus
                       />
                       <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', background: '#DC2626' }}
                         onClick={() => handleReject(m.id)}>Refuser</button>

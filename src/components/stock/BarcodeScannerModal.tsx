@@ -363,9 +363,11 @@ export function BarcodeScannerModal({ onClose, onCreateWithSku, onProductAction 
     return () => clearTimeout(id);
   }, [mode]); // démarrage seulement au changement de mode
 
-  // ── Auto-focus zone USB ───────────────────────────────────────────────────
+  // ── Auto-focus zone USB (desktop uniquement — évite le clavier virtuel mobile) ──
   useEffect(() => {
-    if (mode === 'usb') setTimeout(() => inputRef.current?.focus(), 80);
+    if (mode === 'usb' && !window.matchMedia('(max-width: 767px)').matches) {
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
   }, [mode]);
 
   // ── Changer de mode ────────────────────────────────────────────────────────
@@ -394,7 +396,9 @@ export function BarcodeScannerModal({ onClose, onCreateWithSku, onProductAction 
       // Reprendre la boucle
       pausedRef.current = false;
     }
-    if (mode === 'usb') setTimeout(() => inputRef.current?.focus(), 50);
+    if (mode === 'usb' && !window.matchMedia('(max-width: 767px)').matches) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
   };
 
   // ── USB : clavier scanner HID ─────────────────────────────────────────────
@@ -440,7 +444,7 @@ export function BarcodeScannerModal({ onClose, onCreateWithSku, onProductAction 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden max-h-[92vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden max-h-[calc(100dvh-32px)]">
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white shrink-0">

@@ -283,7 +283,7 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
           borderRadius: 16,
           maxWidth: 640,
           width: '100%',
-          maxHeight: '95vh',
+          maxHeight: 'calc(100dvh - 32px)',
           overflowY: 'auto',
           boxShadow: '0 24px 64px rgba(15,23,42,0.18)',
         }}

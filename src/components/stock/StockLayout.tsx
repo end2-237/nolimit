@@ -51,18 +51,24 @@ const SITE_PAGES: PageId[] = [
 export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }: StockLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
   const [siteOpen, setSiteOpen] = useState(() => SITE_PAGES.includes(activePage));
   const { user, logout, hasPermission } = useAuth();
 
+  // ── matchMedia : immune aux resize provoqués par le clavier virtuel ──────────
+  // window.innerWidth peut varier quand le clavier s'ouvre sur Android,
+  // déclenchant un flip isMobile qui affiche brièvement la sidebar desktop.
+  // matchMedia '(max-width: 767px)' ne change PAS lors de l'ouverture du clavier.
   useEffect(() => {
-    const check = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (!mobile) setIsMobileOpen(false);
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => {
+      setIsMobile(e.matches);
+      if (!e.matches) setIsMobileOpen(false); // passe en desktop → ferme le drawer
     };
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   }, []);
 
   const handleNavigate = (page: PageId) => {
@@ -408,7 +414,7 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
   return (
     <div
       style={{
-        display: 'flex', flexDirection: 'column', height: '100vh',
+        display: 'flex', flexDirection: 'column', height: '100dvh',
         background: '#F1F5F9',
         fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
       }}

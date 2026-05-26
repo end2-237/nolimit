@@ -330,7 +330,7 @@ export function OrdonnanceScannerModal({ onClose, onFound }: Props) {
     >
       <div
         className="bg-white rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden"
-        style={{ maxWidth: 420, maxHeight: '90vh' }}
+        style={{ maxWidth: 420, maxHeight: 'calc(100dvh - 32px)' }}
       >
 
         {/* ── Header ── */}

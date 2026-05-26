@@ -209,7 +209,9 @@ export function ImageUploader({
           ) : (
             <div style={{ display: 'flex', gap: 6 }}>
               <input
-                autoFocus
+                ref={(el) => {
+                  if (el && !window.matchMedia('(max-width: 767px)').matches) el.focus();
+                }}
                 type="url"
                 value={urlInput}
                 onChange={e => setUrlInput(e.target.value)}

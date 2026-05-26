@@ -511,7 +511,7 @@ function ReleaseModal({
           background: 'white', borderRadius: 16,
           boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
           width: '100%', maxWidth: 640,
-          maxHeight: '90vh', overflowY: 'auto',
+          maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto',
           fontFamily: FONT,
         }}
       >

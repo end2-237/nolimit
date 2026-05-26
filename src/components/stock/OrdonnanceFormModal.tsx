@@ -148,7 +148,8 @@ export function OrdonnanceFormModal({ onClose, onSaved, initialOrdonnance }: Pro
       return [...prev, { product, quantity: 1 }];
     });
     setProductSearch('');
-    searchRef.current?.focus();
+    // Focus desktop uniquement — évite l'ouverture du clavier virtuel sur mobile
+    if (!window.matchMedia('(max-width: 767px)').matches) searchRef.current?.focus();
   }
 
   function setQty(productId: number, qty: number) {
@@ -274,7 +275,7 @@ export function OrdonnanceFormModal({ onClose, onSaved, initialOrdonnance }: Pro
     >
       <div
         className="relative flex flex-col w-full bg-white rounded-2xl shadow-2xl overflow-hidden"
-        style={{ maxWidth: 900, maxHeight: '96vh' }}
+        style={{ maxWidth: 900, maxHeight: 'calc(100dvh - 32px)' }}
       >
 
         {/* ── Header ──────────────────────────────────────────────────── */}

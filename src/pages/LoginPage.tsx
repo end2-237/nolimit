@@ -317,8 +317,10 @@ export function LoginPage() {
                     value={username}
                     onChange={e => { setUsername(e.target.value); setError(''); }}
                     placeholder="Votre nom d'utilisateur"
-                    autoFocus
                     autoComplete="username"
+                    ref={(el) => {
+                      if (el && !window.matchMedia('(max-width: 767px)').matches) el.focus();
+                    }}
                     style={{
                       width: '100%', height: 46, borderRadius: 9,
                       border: '1.5px solid #E2E8F0',
@@ -350,8 +352,10 @@ export function LoginPage() {
                       value={password}
                       onChange={e => { setPassword(e.target.value); setError(''); }}
                       placeholder="••••••••••"
-                      autoFocus
                       autoComplete="current-password"
+                      ref={(el) => {
+                        if (el && !window.matchMedia('(max-width: 767px)').matches) el.focus();
+                      }}
                       style={{
                         width: '100%', height: 46, borderRadius: 9,
                         border: '1.5px solid #E2E8F0',

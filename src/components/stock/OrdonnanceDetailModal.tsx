@@ -145,7 +145,7 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
     >
       <div
         className="relative flex flex-col w-full bg-white rounded-2xl shadow-2xl overflow-hidden"
-        style={{ maxWidth: 620, maxHeight: '94vh' }}
+        style={{ maxWidth: 620, maxHeight: 'calc(100dvh - 32px)' }}
       >
 
         {/* ── Header ──────────────────────────────────────────────────── */}

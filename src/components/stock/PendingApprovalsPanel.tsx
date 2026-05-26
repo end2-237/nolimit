@@ -225,7 +225,6 @@ export function PendingApprovalsPanel() {
                         placeholder="Raison du refus…"
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
-                        autoFocus
                       />
                       <button
                         className="snl-btn"
