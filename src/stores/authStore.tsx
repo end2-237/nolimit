@@ -13,8 +13,10 @@ const PROFILE_PERMISSIONS: Record<string, PermissionKey[]> = {
   viewer: ['view'],
 };
 
-// Clé de session — on stocke UNIQUEMENT l'ID utilisateur, PAS la dernière page
-const SESSION_KEY = 'snl_user_id';
+// Clé de session — stockée dans localStorage pour persistance 30 jours
+const SESSION_KEY    = 'snl_user_id';
+const SESSION_EXPIRY = 'snl_session_expiry';
+const SESSION_TTL    = 30 * 24 * 60 * 60 * 1000; // 30 jours en ms
 
 interface AuthContextType {
   user: (User & { permissions?: string }) | null;
@@ -35,16 +37,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const restore = async () => {
-      const savedUserId = sessionStorage.getItem(SESSION_KEY);
-      if (savedUserId) {
+      const savedUserId = localStorage.getItem(SESSION_KEY);
+      const expiry      = localStorage.getItem(SESSION_EXPIRY);
+
+      // Session valide si l'ID existe ET que l'expiry n'est pas dépassé
+      if (savedUserId && expiry && Date.now() < parseInt(expiry, 10)) {
         await db.init();
-        const u = db.getUserById(parseInt(savedUserId));
+        const u = db.getUserById(parseInt(savedUserId, 10));
         if (u && u.is_active) {
           setUser(u as any);
+          // Renouveler silencieusement l'expiry à chaque démarrage (sliding window)
+          localStorage.setItem(SESSION_EXPIRY, (Date.now() + SESSION_TTL).toString());
         } else {
-          // Utilisateur supprimé ou désactivé — nettoyer la session
-          sessionStorage.removeItem(SESSION_KEY);
+          // Utilisateur supprimé ou désactivé — nettoyer
+          localStorage.removeItem(SESSION_KEY);
+          localStorage.removeItem(SESSION_EXPIRY);
         }
+      } else {
+        // Session absente ou expirée
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_EXPIRY);
       }
       setIsLoading(false);
     };
@@ -60,7 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await db.authenticate(username, password);
     if (result) {
       setUser(result.user as any);
-      sessionStorage.setItem(SESSION_KEY, result.user.id.toString());
+      localStorage.setItem(SESSION_KEY,    result.user.id.toString());
+      localStorage.setItem(SESSION_EXPIRY, (Date.now() + SESSION_TTL).toString());
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
@@ -71,7 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     // Nettoyer la session entièrement
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_EXPIRY);
     // Réinitialiser l'état — l'app affichera LoginPage
     setUser(null);
     // Pas de navigation forcée ici, App.tsx gère ça via `!user`

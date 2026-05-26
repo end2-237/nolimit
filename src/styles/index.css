@@ -306,6 +306,29 @@ aside ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 }
 
 /* ── Mobile overrides ───────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  /*
+   * Prevent iOS Safari auto-zoom on input focus.
+   * iOS zooms whenever font-size < 16px — forcing 16px avoids it
+   * without disabling user scaling (which would hurt accessibility).
+   */
+  input,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="date"],
+  select,
+  textarea {
+    font-size: 16px !important;
+    /* Prevent any touch-triggered layout resize */
+    touch-action: manipulation;
+  }
+}
+
 @media (max-width: 639px) {
   .snl-page {
     padding: 14px 14px 40px;
