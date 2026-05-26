@@ -62,9 +62,9 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[calc(100dvh-32px)] overflow-y-auto">
-        <div className="sticky top-0 bg-white flex items-center justify-between px-6 py-4 border-b border-gray-100 rounded-t-2xl z-10">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[calc(100dvh-16px)] overflow-y-auto">
+        <div className="sticky top-0 bg-white flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 rounded-t-2xl z-10">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
               <RefreshCw className="w-4 h-4 text-purple-600" />
@@ -99,7 +99,7 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
             </div>
           )
         ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <form onSubmit={handleSubmit} className="px-3 sm:px-6 py-4 space-y-4">
             {error && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -125,30 +125,30 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
 
             <div>
               <Label>Direction du Transfert</Label>
-              <div className="flex items-center gap-3 mt-1">
-                <Select value={fromSite} onValueChange={v => { setFromSite(v); setError(''); }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {siteOptions.map(s => (
-                      <SelectItem key={s.id} value={s.id} disabled={s.id === toSite}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-                  <ArrowRight className="w-5 h-5 text-gray-400" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mt-1">
+                <div className="flex items-center gap-2 sm:gap-3 flex-1">
+                  <Select value={fromSite} onValueChange={v => { setFromSite(v); setError(''); }}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {siteOptions.map(s => (
+                        <SelectItem key={s.id} value={s.id} disabled={s.id === toSite}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <ArrowRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <Select value={toSite} onValueChange={v => { setToSite(v); setError(''); }}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {siteOptions.map(s => (
+                        <SelectItem key={s.id} value={s.id} disabled={s.id === fromSite}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select value={toSite} onValueChange={v => { setToSite(v); setError(''); }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {siteOptions.map(s => (
-                      <SelectItem key={s.id} value={s.id} disabled={s.id === fromSite}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 

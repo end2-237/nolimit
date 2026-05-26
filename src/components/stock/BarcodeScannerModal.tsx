@@ -443,11 +443,11 @@ export function BarcodeScannerModal({ onClose, onCreateWithSku, onProductAction 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden max-h-[calc(100dvh-32px)]">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden max-h-[calc(100dvh-16px)]">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm">
               <Scan className="w-5 h-5 text-white" />
@@ -505,7 +505,7 @@ export function BarcodeScannerModal({ onClose, onCreateWithSku, onProductAction 
           </div>
         )}
 
-        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+        <div className="p-3 sm:p-5 space-y-3 sm:space-y-4 overflow-y-auto flex-1 min-h-0">
 
           {/* ── Onglets ── */}
           <div className="flex gap-1.5 p-1 bg-gray-100 rounded-xl">
@@ -589,7 +589,7 @@ export function BarcodeScannerModal({ onClose, onCreateWithSku, onProductAction 
               )}
 
               {/* Vidéo */}
-              <div className="relative rounded-xl overflow-hidden bg-gray-900 aspect-video">
+              <div className="relative rounded-xl overflow-hidden bg-gray-900" style={{ aspectRatio: '16/9', maxHeight: '40vh' }}>
                 <video ref={videoRef} className={`w-full h-full object-cover ${cameraActive ? '' : 'opacity-0 pointer-events-none absolute'}`} muted playsInline />
 
                 {!cameraActive && !cameraError && (

@@ -216,7 +216,7 @@ export function OrdonnanceDetailModal({ ordonnance: initialOrd, onClose, onUpdat
         </div>
 
         {/* ── Body scrollable ──────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-3 sm:py-5 space-y-3 sm:space-y-5">
 
           {/* Code-barre ordonnance */}
           <div

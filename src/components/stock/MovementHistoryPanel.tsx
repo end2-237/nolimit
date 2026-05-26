@@ -140,37 +140,37 @@ export function MovementHistoryPanel({ onClose }: MovementHistoryPanelProps) {
   });
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[calc(100dvh-32px)] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[calc(100dvh-16px)] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#F1F5F9]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <RefreshCw className="w-5 h-5 text-[#0284C7]" />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[#F1F5F9] flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <RefreshCw className="w-4 h-4 text-[#0284C7]" />
             </div>
-            <div>
-              <h2 className="text-lg font-semibold">Historique des Mouvements</h2>
-              <p className="text-sm text-gray-500">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-semibold">Historique des Mouvements</h2>
+              <p className="text-xs text-gray-500 hidden sm:block">
                 Suivez toutes les entrées, sorties et transferts
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Filters */}
-        <div className="px-6 py-4 border-b border-[#F1F5F9] bg-gray-50">
-          <div className="flex items-center gap-4">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Type:</span>
+        <div className="px-4 sm:px-6 py-3 border-b border-[#F1F5F9] bg-gray-50 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+            <Filter className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-xs sm:text-sm text-gray-600">Type:</span>
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-[140px] h-9">
+                <SelectTrigger className="w-[110px] sm:w-[140px] h-8 sm:h-9 text-xs sm:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -181,10 +181,10 @@ export function MovementHistoryPanel({ onClose }: MovementHistoryPanelProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Site:</span>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-xs sm:text-sm text-gray-600">Site:</span>
               <Select value={filterSite} onValueChange={setFilterSite}>
-                <SelectTrigger className="w-[140px] h-9">
+                <SelectTrigger className="w-[110px] sm:w-[140px] h-8 sm:h-9 text-xs sm:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -199,7 +199,7 @@ export function MovementHistoryPanel({ onClose }: MovementHistoryPanelProps) {
         </div>
 
         {/* Movement List */}
-        <div className="flex-1 overflow-auto px-6 py-4">
+        <div className="flex-1 min-h-0 overflow-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="space-y-3">
             {filteredMovements.map((movement) => {
               const config = typeConfig[movement.type as keyof typeof typeConfig];
@@ -208,11 +208,11 @@ export function MovementHistoryPanel({ onClose }: MovementHistoryPanelProps) {
               return (
                 <div
                   key={movement.id}
-                  className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg border border-[#F1F5F9] hover:bg-gray-100 transition-colors"
+                  className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-[#F1F5F9] hover:bg-gray-100 transition-colors"
                 >
                   {/* Icon */}
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-white border border-[#F1F5F9]`}>
-                    <Icon className={`w-5 h-5 ${config.iconColor}`} />
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white border border-[#F1F5F9] flex-shrink-0`}>
+                    <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${config.iconColor}`} />
                   </div>
 
                   {/* Content */}

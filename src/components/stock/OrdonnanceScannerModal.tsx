@@ -325,45 +325,43 @@ export function OrdonnanceScannerModal({ onClose, onFound }: Props) {
   // sur iOS Safari.
   return createPortal(
     <div
-      className="fixed inset-0 flex items-center justify-center p-4"
+      className="fixed inset-0 flex items-center justify-center p-2 sm:p-4"
       style={{ background: 'rgba(15,23,42,0.70)', backdropFilter: 'blur(4px)', zIndex: 9999 }}
     >
       <div
         className="bg-white rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden"
-        style={{ maxWidth: 420, maxHeight: 'calc(100dvh - 32px)' }}
+        style={{ maxWidth: 420, maxHeight: 'calc(100dvh - 16px)' }}
       >
 
         {/* ── Header ── */}
         <div
-          className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+          className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4 flex-shrink-0"
           style={{
             borderBottom: '1px solid #E2E8F0',
             background: 'linear-gradient(to right, #f0fdf4, #fff)',
           }}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center shadow-sm">
-              <Scan className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#16A34A] flex items-center justify-center shadow-sm flex-shrink-0">
+              <Scan className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-[#0F172A]">
-                Scanner une ordonnance
-              </h2>
-              <p className="text-[10px] text-[#64748B]">
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-[#0F172A]">Scanner une ordonnance</h2>
+              <p className="text-[10px] text-[#64748B] hidden sm:block">
                 Pointez la caméra vers le code-barre de l'ordonnance
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-[#64748B] transition-colors"
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-[#64748B] transition-colors flex-shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* ── Body ── */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4">
 
           {/* Sélecteur caméra (si plusieurs) */}
           {cameras.length > 1 && (
@@ -384,8 +382,8 @@ export function OrdonnanceScannerModal({ onClose, onFound }: Props) {
             </select>
           )}
 
-          {/* Vidéo */}
-          <div className="relative rounded-xl overflow-hidden bg-gray-900 aspect-video">
+          {/* Vidéo — max-height limité en paysage pour éviter de remplir l'écran */}
+          <div className="relative rounded-xl overflow-hidden bg-gray-900" style={{ aspectRatio: '16/9', maxHeight: '40vh' }}>
             <video
               ref={videoRef}
               className={`w-full h-full object-cover ${cameraActive ? '' : 'opacity-0 pointer-events-none absolute'}`}
@@ -515,7 +513,7 @@ export function OrdonnanceScannerModal({ onClose, onFound }: Props) {
 
         {/* ── Footer ── */}
         <div
-          className="px-5 py-4 flex-shrink-0"
+          className="px-4 py-3 sm:px-5 sm:py-4 flex-shrink-0"
           style={{ borderTop: '1px solid #E2E8F0' }}
         >
           <button
