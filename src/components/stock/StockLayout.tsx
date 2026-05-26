@@ -52,7 +52,7 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
   );
   const [siteOpen, setSiteOpen] = useState(() => SITE_PAGES.includes(activePage));
   const { user, logout, hasPermission } = useAuth();
@@ -62,7 +62,7 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
   // déclenchant un flip isMobile qui affiche brièvement la sidebar desktop.
   // matchMedia '(max-width: 767px)' ne change PAS lors de l'ouverture du clavier.
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
+    const mq = window.matchMedia('(max-width: 1023px)');
     const handler = (e: MediaQueryListEvent) => {
       setIsMobile(e.matches);
       if (!e.matches) setIsMobileOpen(false); // passe en desktop → ferme le drawer

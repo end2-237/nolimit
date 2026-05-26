@@ -131,8 +131,9 @@ export function ProductsPage() {
   const [showScanner, setShowScanner] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
 
-  const [winW, setWinW] = useState(window.innerWidth);
-  const isMobile = winW < 640;
+  const [isMobile, setIsMobile] = useState(() =>
+    window.matchMedia('(max-width: 639px)').matches
+  );
 
   const load = useCallback(() => {
     setProducts(db.getStocksGroupedByProduct(allowedSites));
@@ -141,9 +142,10 @@ export function ProductsPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const onResize = () => setWinW(window.innerWidth);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const mq = window.matchMedia('(max-width: 639px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   }, []);
 
   useEffect(() => {
@@ -227,11 +229,11 @@ export function ProductsPage() {
   return (
     <div className="snl-page">
       {/* Header */}
-      <div className="snl-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div>
+      <div className="snl-page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ minWidth: 0 }}>
           <p className="snl-eyebrow">Stock</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 8, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <Package size={17} color={ACCENT} />
             </div>
             <div>
@@ -240,7 +242,7 @@ export function ProductsPage() {
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
           <button onClick={() => setShowScanner(true)} className="snl-btn snl-btn-secondary">
             <Scan size={12} /> Scanner
           </button>
@@ -249,7 +251,7 @@ export function ProductsPage() {
               onClick={() => { setScannedInitialSku(undefined); setEditingProduct(null); setShowProductForm(true); }}
               className="snl-btn snl-btn-primary"
             >
-              <Plus size={12} /> Nouveau Produit
+              <Plus size={12} /> Nouveau
             </button>
           )}
         </div>
@@ -286,7 +288,7 @@ export function ProductsPage() {
         <select
           value={categoryFilter}
           onChange={e => setCategoryFilter(e.target.value)}
-          style={{ height: 34, border: BDR, borderRadius: 6, padding: '0 10px', fontSize: 12.5, background: 'white', color: T1, fontFamily: 'inherit', outline: 'none' }}
+          style={{ height: 34, border: BDR, borderRadius: 6, padding: '0 10px', fontSize: 12.5, background: 'white', color: T1, fontFamily: 'inherit', outline: 'none', flexShrink: 0, maxWidth: '100%' }}
         >
           <option value="all">Toutes catégories</option>
           {APP_CONFIG.categories.map(cat => (
@@ -296,7 +298,7 @@ export function ProductsPage() {
         <select
           value={siteFilter}
           onChange={e => setSiteFilter(e.target.value)}
-          style={{ height: 34, border: BDR, borderRadius: 6, padding: '0 10px', fontSize: 12.5, background: 'white', color: T1, fontFamily: 'inherit', outline: 'none' }}
+          style={{ height: 34, border: BDR, borderRadius: 6, padding: '0 10px', fontSize: 12.5, background: 'white', color: T1, fontFamily: 'inherit', outline: 'none', flexShrink: 0, maxWidth: '100%' }}
         >
           <option value="all">Tous les sites</option>
           {allowedSites.map(sid => {
@@ -304,7 +306,7 @@ export function ProductsPage() {
             return s ? <option key={s.id} value={s.id}>{s.name}</option> : null;
           })}
         </select>
-        <div style={{ display: 'flex', border: BDR, borderRadius: 6, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', border: BDR, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
           <button
             onClick={() => setViewMode('grid')}
             style={{ padding: '0 10px', height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: viewMode === 'grid' ? ACCENT : 'white', color: viewMode === 'grid' ? 'white' : T3, border: 'none', cursor: 'pointer', transition: 'background 0.15s' }}
@@ -498,6 +500,7 @@ export function ProductsPage() {
       ) : (
         /* LIST VIEW */
         <div className="snl-card">
+          <div className="snl-card-scroll">
           <table className="snl-table" style={{ width: '100%', minWidth: 640 }}>
             <thead>
               <tr>
@@ -680,6 +683,7 @@ export function ProductsPage() {
               })}
             </tbody>
           </table>
+          </div>{/* /snl-card-scroll */}
         </div>
       )}
 

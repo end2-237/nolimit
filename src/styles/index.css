@@ -304,3 +304,18 @@ aside ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* ── Mobile overrides ───────────────────────────────────────────── */
+@media (max-width: 639px) {
+  .snl-page {
+    padding: 14px 14px 40px;
+  }
+  .snl-page-title {
+    font-size: 18px;
+  }
+  /* Table scroll containers — prevent horizontal overflow breaking layout */
+  .snl-card-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
