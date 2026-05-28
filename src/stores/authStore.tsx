@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, User } from '../services/database';
 import { Users as ApiUsers, clearAuthToken } from '../services/api';
 import { APP_CONFIG } from '../config/app.config';
+import { isOnline } from '../services/connectivity';
 
 const ALL_PERMISSIONS = ['view', 'create', 'edit', 'delete', 'export', 'manage_users'] as const;
 type PermissionKey = typeof ALL_PERMISSIONS[number];
@@ -69,6 +70,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string) => {
+    // Mode strict : vérifier que le serveur est joignable avant d'authentifier
+    if (!isOnline()) {
+      return { 
+        success: false, 
+        error: "Le serveur n'est pas accessible. Vérifiez votre connexion Internet et réessayez." 
+      };
+    }
+
     const result = await db.authenticate(username, password);
     if (result) {
       setUser(result.user as any);
