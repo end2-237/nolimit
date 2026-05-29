@@ -9,6 +9,16 @@ import { Users, Products, Stocks, Movements, Alerts, Reports, Stats, setAuthToke
 import { persistCache, loadCache, saveAuthCache, loadAuthCache, addToOutbox } from './offlineStorage';
 import { isOnline } from './connectivity';
 
+// ─── Password Hash (simple, used for offline verification) ────────────────────
+function simpleHash(str: string): string {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36) + str.length.toString(36);
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface User {
@@ -275,15 +285,36 @@ class DatabaseService {
       }
     }
 
-    // ── Offline login: restore last session for this username ─────────────────
+    // ── Offline login: verify password against cached users + restore session ──
     try {
-      const cached = await loadAuthCache(username);
-      if (cached) {
-        setAuthToken(cached.token);
-        localStorage.setItem('snl_token', cached.token);
-        return { user: cached.user as User, token: cached.token };
+      // Load all cached users and verify password
+      const cached = await loadCache();
+      const user = cached.users.find(u => u.username === username);
+      
+      if (!user) {
+        console.log('[v0] Offline login: user not found in cache');
+        return null;
       }
-    } catch {}
+
+      // Verify password using simple hash
+      if (!user.password_hash || simpleHash(password) !== user.password_hash) {
+        console.log('[v0] Offline login: password verification failed');
+        return null;
+      }
+
+      // Password is correct - restore cached session
+      const authEntry = await loadAuthCache(username);
+      if (!authEntry?.token) {
+        console.log('[v0] Offline login: no cached session found');
+        return null;
+      }
+
+      setAuthToken(authEntry.token);
+      localStorage.setItem('snl_token', authEntry.token);
+      return { user, token: authEntry.token };
+    } catch (e) {
+      console.log('[v0] Offline login error:', e);
+    }
     return null;
   }
 
