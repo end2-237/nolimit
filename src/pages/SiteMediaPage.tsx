@@ -30,6 +30,7 @@ const SECTIONS = [
   { id: 'hero',     label: 'Hero / Accueil',   sub: null,                        color: '#F1F5F9', text: '#475569' },
   { id: 'almanach', label: 'Almanach',         sub: null,                        color: '#CCFBF1', text: '#134E4A' },
   { id: 'journal',  label: 'Journal / Blog',   sub: null,                        color: '#EDE9FE', text: '#5B21B6' },
+  { id: 'maladies', label: 'Maladies traitées', sub: ['hepatite','vih','hypertension'], color: '#FFE4E6', text: '#9F1239' },
 ];
 
 type SiteMedia = {
