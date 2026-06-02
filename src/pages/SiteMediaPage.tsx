@@ -120,7 +120,7 @@ function AddMediaModal({
     setSaving(true);
     setError('');
     try {
-      await apiCall('POST', '/api/site-media', {
+      await apiCall('POST', '/site-media', {
         section: section.id,
         subsection: section.sub ? form.subsection : null,
         media_type: form.media_type,
@@ -360,7 +360,7 @@ export function SiteMediaPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiCall('GET', `/api/site-media?section=${activeSection.id}`);
+      const data = await apiCall('GET', `/site-media?section=${activeSection.id}`);
       setMedia(data);
     } catch {
       setMedia([]);
@@ -373,12 +373,12 @@ export function SiteMediaPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm('Supprimer ce média ?')) return;
-    await apiCall('DELETE', `/api/site-media/${id}`).catch(() => {});
+    await apiCall('DELETE', `/site-media/${id}`).catch(() => {});
     load();
   };
 
   const handleToggle = async (item: SiteMedia) => {
-    await apiCall('PUT', `/api/site-media/${item.id}`, { ...item, is_published: !item.is_published }).catch(() => {});
+    await apiCall('PUT', `/site-media/${item.id}`, { ...item, is_published: !item.is_published }).catch(() => {});
     load();
   };
 
