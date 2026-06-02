@@ -215,7 +215,7 @@ export function InventoryDashboard() {
               Stock
             </p>
             <h1 style={{ fontSize: 20, fontWeight: 800, color: T1, letterSpacing: '-0.03em', lineHeight: 1.2 }}>
-              Inventaire
+              No Limit <span style={{ color: '#16A34A' }}>Solution Santé Nature</span>
             </h1>
           </div>
 
