@@ -3,7 +3,6 @@ import {
   Image, Video, Plus, Trash2, Eye, EyeOff, Upload,
   RefreshCw, GripVertical, CheckCircle, X, Play,
 } from 'lucide-react';
-import { APP_CONFIG } from '../config/app.config';
 
 /* ── tokens ─────────────────────────────────────────────────── */
 const T1   = '#0F172A';
@@ -11,7 +10,14 @@ const T2   = '#64748B';
 const T3   = '#94A3B8';
 const BDR  = '1px solid #E2E8F0';
 const ACCENT = '#16A34A';
-const API   = APP_CONFIG.apiUrl;
+
+function getApiBase(): string {
+  try {
+    const saved = localStorage.getItem('snl_api_url');
+    if (saved?.startsWith('http') && saved.includes('/api')) return saved.replace(/\/+$/, '');
+  } catch {}
+  return 'https://snl-api.vps.buyticle.com/api';
+}
 
 function getToken() { return localStorage.getItem('snl_token') || ''; }
 
@@ -51,7 +57,7 @@ type AddForm = {
 const EMPTY_FORM: AddForm = { media_type: 'image', url: '', thumbnail_url: '', title: '', description: '', subsection: '' };
 
 async function apiCall(method: string, path: string, body?: any) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -66,7 +72,8 @@ async function apiCall(method: string, path: string, body?: any) {
 async function uploadFile(file: File, folder: string): Promise<string> {
   const ext = file.name.split('.').pop() || 'bin';
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const res = await fetch(`${API}/api/uploads/image?folder=${folder}&filename=${filename}`, {
+  const base = getApiBase().replace(/\/api$/, '');
+  const res = await fetch(`${base}/api/uploads/image?folder=${folder}&filename=${filename}`, {
     method: 'POST',
     headers: {
       'Content-Type': file.type,
