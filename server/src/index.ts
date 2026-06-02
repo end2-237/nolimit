@@ -24,6 +24,7 @@ import siteRouter from './routes/site';
 import uploadsRouter from './routes/uploads';
 import ordonnancesRouter from './routes/ordonnances';
 import releasesRouter from './routes/releases';
+import siteMediaRouter from './routes/siteMedia';
 
 dotenv.config();
 
@@ -83,11 +84,12 @@ app.use('/api/site',      siteRouter);
 app.use('/api/uploads',      uploadsRouter);
 app.use('/api/ordonnances',  ordonnancesRouter);
 app.use('/api/releases',    releasesRouter);
+app.use('/api/site-media', siteMediaRouter);
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 
 async function runMigrations() {
-  const migrations = ['002-add-missing-columns.sql', '003-site-tables.sql', '004-ordonnances.sql', '005-releases.sql'];
+  const migrations = ['002-add-missing-columns.sql', '003-site-tables.sql', '004-ordonnances.sql', '005-releases.sql', '006-site-media.sql'];
   for (const file of migrations) {
     try {
       const sql = readFileSync(join(__dirname, 'migrations', file), 'utf-8');

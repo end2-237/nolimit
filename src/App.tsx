@@ -14,6 +14,7 @@ import { SiteReservationsPage } from './pages/SiteReservationsPage';
 import { SiteCommandesPage } from './pages/SiteCommandesPage';
 import { SiteNewsletterPage } from './pages/SiteNewsletterPage';
 import { SiteMessagesPage } from './pages/SiteMessagesPage';
+import { SiteMediaPage } from './pages/SiteMediaPage';
 import { OrdonnancesPage } from './pages/OrdonnancesPage';
 import { DownloadsPage } from './pages/DownloadsPage';
 import { SplashScreen } from './components/SplashScreen';
@@ -315,6 +316,7 @@ function AppInner() {
       case 'site-commandes':    return <SiteCommandesPage />;
       case 'site-newsletter':   return <SiteNewsletterPage />;
       case 'site-messages':     return <SiteMessagesPage />;
+      case 'site-media':        return <SiteMediaPage />;
       default: return <InventoryDashboard />;
     }
   };
