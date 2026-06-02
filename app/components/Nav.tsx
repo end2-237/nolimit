@@ -7,6 +7,7 @@ import { Arrow } from './Reveal';
 const NAV_ITEMS = [
   { id: 'philosophie', label: 'Manifeste' },
   { id: 'soins', label: 'Soins' },
+  { id: 'maladies', label: 'Maladies traitées' },
   { id: 'centres', label: 'Nos centres' },
   { id: 'galerie', label: 'Galerie' },
   { id: 'boutique', label: 'Boutique' },
