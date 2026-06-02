@@ -1901,6 +1901,79 @@ function AlmanachFooter() {
 }
 
 /* ─────────────────────────────────────────────
+   GALERIE ALMANACH — médias dynamiques
+───────────────────────────────────────────── */
+type AlmanachMedia = {
+  id: number; media_type: 'image' | 'video'; url: string;
+  thumbnail_url: string | null; title: string | null;
+};
+
+function GalerieAlmanach() {
+  const [items, setItems] = useState<AlmanachMedia[]>([]);
+  const [lightbox, setLightbox] = useState<AlmanachMedia | null>(null);
+
+  useEffect(() => {
+    fetch('/api/site-media?section=almanach')
+      .then(r => r.ok ? r.json() : [])
+      .then(setItems)
+      .catch(() => {});
+  }, []);
+
+  if (items.length === 0) return null;
+
+  return (
+    <section style={{ background: T.cream, padding: 'clamp(64px,10vw,120px) 0', borderTop: '1px solid rgba(26,26,26,0.07)' }}>
+      <div className="container">
+        <Reveal>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'clamp(32px,4vw,56px)' }}>
+            <div style={{ width: 32, height: 1, background: T.sageMid }} />
+            <span style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', color: T.sageMid, textTransform: 'uppercase' }}>
+              Galerie · {EDITION.mois}
+            </span>
+          </div>
+        </Reveal>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }} className="almanach-media-grid">
+          {items.map((item, i) => {
+            const thumb = item.thumbnail_url || (item.media_type === 'image' ? item.url : null);
+            return (
+              <Reveal key={item.id} delay={i * 50}>
+                <div
+                  style={{ aspectRatio: i % 4 === 0 ? '3/4' : '4/3', borderRadius: 8, overflow: 'hidden', cursor: 'pointer', position: 'relative', background: '#1A1A1A' }}
+                  onClick={() => setLightbox(item)}
+                >
+                  {thumb && <img src={thumb} alt={item.title || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+                  {item.media_type === 'video' && (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
+                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="14" height="16" viewBox="0 0 14 16" fill="none"><path d="M1 1l12 7-12 7V1z" fill={T.ink} /></svg>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Reveal>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          {lightbox.media_type === 'image'
+            ? <img src={lightbox.url} alt={lightbox.title || ''} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} onClick={e => e.stopPropagation()} />
+            : <video src={lightbox.url} controls autoPlay style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8 }} onClick={e => e.stopPropagation()} />
+          }
+          <button onClick={() => setLightbox(null)} style={{ position: 'absolute', top: 20, right: 20, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', cursor: 'pointer', fontSize: 18 }}>✕</button>
+        </div>
+      )}
+
+      <style>{`@media (max-width: 640px) { .almanach-media-grid { grid-template-columns: repeat(2, 1fr) !important; } }`}</style>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────
    MAIN EXPORT
 ───────────────────────────────────────────── */
 export function AlmanachClient() {
@@ -1916,6 +1989,7 @@ export function AlmanachClient() {
         <MurCommunaute />
         <AgendaLibre />
         <QuestionDuMois />
+        <GalerieAlmanach />
         <ArchivesAlmanach />
         <PontsSociaux />
       </main>
