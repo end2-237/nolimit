@@ -7,6 +7,7 @@ import { Hero } from './Hero';
 import { Manifeste } from './Manifeste';
 import { Services } from './Services';
 import { Equipe, Lieu, Centres, Galerie, Journal } from './StaticSections';
+import { Maladies } from './Maladies';
 import { Boutique } from './Boutique';
 import { Temoignages } from './Temoignages';
 import { FAQ } from './FAQ';
@@ -57,6 +58,7 @@ export function ClientApp() {
       <Hero onBook={() => openBooking()} />
       <Manifeste />
       <Services onBook={openBooking} />
+      <Maladies />
       <Equipe />
       <Lieu />
       <Centres />
