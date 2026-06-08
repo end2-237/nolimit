@@ -54,9 +54,12 @@ export function getPublicUrl(path: string, bucket = SUPABASE_BUCKET): string {
 /* ── Upload (proxied via SNL backend to avoid CORS) ───────────── */
 
 export interface UploadOptions {
-  bucket?:   string;
-  folder?:   string;   // sous-dossier dans le bucket, ex: "products"
-  onProgress?: (pct: number) => void;
+  bucket?:      string;
+  folder?:      string;
+  onProgress?:  (pct: number) => void;
+  onAttempt?:   (attempt: number, max: number) => void;
+  signal?:      AbortSignal;
+  maxRetries?:  number;
 }
 
 function getApiBase(): string {
@@ -67,21 +70,61 @@ function getApiBase(): string {
   return 'https://snl-api.vps.buyticle.com/api';
 }
 
+function uploadXHR(
+  endpoint: string,
+  file: File,
+  headers: Record<string, string>,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    if (signal) {
+      if (signal.aborted) { reject(new DOMException('Annulé', 'AbortError')); return; }
+      signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Annulé', 'AbortError')); });
+    }
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 95));
+    };
+
+    xhr.onload = () => {
+      onProgress?.(100);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data.url as string);
+        } catch {
+          reject(new Error('Réponse invalide du serveur'));
+        }
+      } else {
+        let msg = xhr.statusText;
+        try { const j = JSON.parse(xhr.responseText); msg = j.error || j.message || msg; } catch {}
+        reject(new Error(`Upload échoué (HTTP ${xhr.status}): ${msg}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Erreur réseau — vérifiez votre connexion'));
+    xhr.ontimeout = () => reject(new Error('Délai dépassé — réseau trop lent'));
+    xhr.timeout = 120_000; // 2 min max par tentative
+
+    xhr.open('POST', endpoint);
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    xhr.send(file);
+  });
+}
+
 export async function uploadFile(
   file: File,
   filename: string,
   opts: UploadOptions = {},
 ): Promise<string> {
-  const bucket = opts.bucket ?? SUPABASE_BUCKET;
-  const folder = opts.folder ?? 'products';
+  const bucket     = opts.bucket     ?? SUPABASE_BUCKET;
+  const folder     = opts.folder     ?? 'products';
+  const maxRetries = opts.maxRetries ?? 4;
 
-  opts.onProgress?.(10);
-
-  const params = new URLSearchParams({
-    bucket,
-    folder,
-    filename,
-  });
+  const params   = new URLSearchParams({ bucket, folder, filename });
   const endpoint = `${getApiBase()}/uploads/image?${params}`;
 
   const token = (window as any).__snl_auth_token__ as string | undefined;
@@ -90,24 +133,32 @@ export async function uploadFile(
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(endpoint, { method: 'POST', headers, body: file });
+  let lastError: Error = new Error('Erreur inconnue');
 
-  opts.onProgress?.(90);
-
-  if (!res.ok) {
-    let body = res.statusText;
-    try {
-      const json = await res.json();
-      body = json.error || json.message || JSON.stringify(json);
-    } catch {
-      body = await res.text().catch(() => res.statusText);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Backoff : 0s, 2s, 5s, 10s
+    if (attempt > 1) {
+      const delay = [0, 2000, 5000, 10000][attempt - 1] ?? 10000;
+      await new Promise(r => setTimeout(r, delay));
     }
-    throw new Error(`Upload échoué (HTTP ${res.status}): ${body}`);
+
+    opts.onAttempt?.(attempt, maxRetries);
+    opts.onProgress?.(0);
+
+    try {
+      const url = await uploadXHR(endpoint, file, headers, opts.onProgress, opts.signal);
+      return url;
+    } catch (e: any) {
+      // Ne pas réessayer si annulé volontairement
+      if (e?.name === 'AbortError') throw e;
+      lastError = e;
+      // Ne pas réessayer si erreur serveur définitive (4xx sauf 408/429)
+      const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
+      if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+    }
   }
 
-  const data = await res.json();
-  opts.onProgress?.(100);
-  return data.url as string;
+  throw lastError;
 }
 
 /* ── Upload image produit ──────────────────────────────────────── */

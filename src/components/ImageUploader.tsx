@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useCallback } from 'react';
-import { Upload, X, Image as ImageIcon, Loader2, AlertCircle, CheckCircle, Link } from 'lucide-react';
+import { Upload, X, Loader2, AlertCircle, CheckCircle, Link, RefreshCw } from 'lucide-react';
 import { uploadFile, isSupabaseConfigured, SUPABASE_BUCKET } from '../services/supabaseStorage';
 
 /* ── tokens ──────────────────────────────────────────────────── */
@@ -44,27 +44,43 @@ export function ImageUploader({
   const [dragging,  setDragging]  = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress,  setProgress]  = useState(0);
+  const [attempt,   setAttempt]   = useState(0);
+  const [maxAtt,    setMaxAtt]    = useState(4);
   const [error,     setError]     = useState('');
   const [urlInput,  setUrlInput]  = useState('');
   const [showUrl,   setShowUrl]   = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef   = useRef<HTMLInputElement>(null);
+  const abortRef   = useRef<AbortController | null>(null);
 
   const configured = isSupabaseConfigured();
 
+  const cancelUpload = () => {
+    abortRef.current?.abort();
+    setUploading(false);
+    setProgress(0);
+    setAttempt(0);
+    setError('Upload annulé');
+  };
+
   /* ── upload ─────────────────────────────────────────────────── */
   const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setError('Format non supporté — utilisez JPEG, PNG, WebP ou GIF');
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      setError('Format non supporté — utilisez JPEG, PNG, WebP, GIF ou MP4/WebM');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Fichier trop lourd (max 5 Mo)');
+    const maxMb = file.type.startsWith('video/') ? 100 : 10;
+    if (file.size > maxMb * 1024 * 1024) {
+      setError(`Fichier trop lourd (max ${maxMb} Mo)`);
       return;
     }
 
     setError('');
     setUploading(true);
     setProgress(0);
+    setAttempt(0);
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
 
     try {
       const ext      = (file.name.split('.').pop() || 'jpg').toLowerCase();
@@ -75,13 +91,18 @@ export function ImageUploader({
         folder,
         bucket: SUPABASE_BUCKET,
         onProgress: setProgress,
+        onAttempt: (att, max) => { setAttempt(att); setMaxAtt(max); },
+        signal: ctrl.signal,
       });
       onChange(publicUrl);
     } catch (e: any) {
-      setError(e?.message || 'Erreur lors de l\'upload');
+      if (e?.name !== 'AbortError') {
+        setError(e?.message || 'Erreur lors de l\'upload');
+      }
     } finally {
       setUploading(false);
       setProgress(0);
+      abortRef.current = null;
     }
   }, [filePrefix, folder, onChange]);
 
@@ -143,7 +164,7 @@ export function ImageUploader({
         </div>
 
         {/* Hidden file input */}
-        <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }}
+        <input ref={inputRef} type="file" accept="image/*,video/*" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
 
         {error && (
@@ -181,11 +202,19 @@ export function ImageUploader({
         {uploading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <Loader2 size={28} color={ACCENT} style={{ animation: 'spin .8s linear infinite' }} />
-            <p style={{ fontSize: 12, fontWeight: 600, color: ACCENT }}>Upload en cours… {progress}%</p>
-            {/* Progress bar */}
-            <div style={{ width: '100%', height: 3, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${progress}%`, background: ACCENT, borderRadius: 99, transition: 'width 0.25s ease' }} />
+            <p style={{ fontSize: 12, fontWeight: 600, color: ACCENT }}>
+              {attempt > 1
+                ? <><RefreshCw size={11} style={{ display: 'inline', marginRight: 4 }} />Tentative {attempt}/{maxAtt} — {progress}%</>
+                : <>Upload en cours… {progress}%</>
+              }
+            </p>
+            <div style={{ width: '100%', height: 4, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progress}%`, background: attempt > 1 ? '#F59E0B' : ACCENT, borderRadius: 99, transition: 'width 0.15s ease' }} />
             </div>
+            <button type="button" onClick={cancelUpload}
+              style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
+              Annuler
+            </button>
           </div>
         ) : configured ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
@@ -249,7 +278,7 @@ export function ImageUploader({
       )}
 
       {/* Hidden input */}
-      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }}
+      <input ref={inputRef} type="file" accept="image/*,video/*" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>

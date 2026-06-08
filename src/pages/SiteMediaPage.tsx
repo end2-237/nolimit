@@ -79,21 +79,62 @@ async function apiCall(method: string, path: string, body?: any) {
   return res.json();
 }
 
-async function uploadFile(file: File, folder: string): Promise<string> {
-  const ext = file.name.split('.').pop() || 'bin';
+async function uploadFileWithRetry(
+  file: File,
+  folder: string,
+  onProgress?: (pct: number) => void,
+  onAttempt?: (att: number, max: number) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const ext      = file.name.split('.').pop() || 'bin';
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const base = getApiBase().replace(/\/api$/, '');
-  const res = await fetch(`${base}/api/uploads/image?folder=${folder}&filename=${filename}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': file.type,
-      Authorization: `Bearer ${getToken()}`,
-    },
-    body: file,
-  });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Upload échoué'); }
-  const data = await res.json();
-  return data.url;
+  const base     = getApiBase().replace(/\/api$/, '');
+  const endpoint = `${base}/api/uploads/image?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`;
+  const token    = getToken();
+  const headers: Record<string, string> = { 'Content-Type': file.type };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const MAX = 4;
+  let lastErr: Error = new Error('Erreur inconnue');
+
+  for (let attempt = 1; attempt <= MAX; attempt++) {
+    if (attempt > 1) await new Promise(r => setTimeout(r, [0, 2000, 5000, 10000][attempt - 1] ?? 10000));
+    onAttempt?.(attempt, MAX);
+    onProgress?.(0);
+    try {
+      const url = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        if (signal) {
+          if (signal.aborted) { reject(new DOMException('Annulé', 'AbortError')); return; }
+          signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Annulé', 'AbortError')); });
+        }
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 95)); };
+        xhr.onload = () => {
+          onProgress?.(100);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { resolve((JSON.parse(xhr.responseText)).url); } catch { reject(new Error('Réponse invalide')); }
+          } else {
+            let msg = xhr.statusText;
+            try { const j = JSON.parse(xhr.responseText); msg = j.error || j.message || msg; } catch {}
+            reject(new Error(`Upload échoué (HTTP ${xhr.status}): ${msg}`));
+          }
+        };
+        xhr.onerror  = () => reject(new Error('Erreur réseau'));
+        xhr.ontimeout = () => reject(new Error('Délai dépassé'));
+        xhr.timeout  = 120_000;
+        xhr.open('POST', endpoint);
+        Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        xhr.send(file);
+      });
+      return url;
+    } catch (e: any) {
+      if (e?.name === 'AbortError') throw e;
+      lastErr = e;
+      const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
+      if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+    }
+  }
+  throw lastErr;
 }
 
 /* ── AddMediaModal ──────────────────────────────────────────── */
@@ -106,21 +147,39 @@ function AddMediaModal({
 }) {
   const [form, setForm] = useState<AddForm>({ ...EMPTY_FORM, subsection: section.sub?.[0] || '' });
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadAtt, setUploadAtt] = useState(0);
+  const [uploadMax, setUploadMax] = useState(4);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef  = useRef<HTMLInputElement>(null);
   const thumbRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const cancelUpload = () => { abortRef.current?.abort(); setUploading(false); setUploadPct(0); setUploadAtt(0); };
 
   const handleFileUpload = async (file: File, field: 'url' | 'thumbnail_url') => {
     setUploading(true);
+    setUploadPct(0);
+    setUploadAtt(0);
     setError('');
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     try {
-      const url = await uploadFile(file, `site-media/${section.id}`);
+      const url = await uploadFileWithRetry(
+        file,
+        `site-media/${section.id}`,
+        setUploadPct,
+        (att, max) => { setUploadAtt(att); setUploadMax(max); },
+        ctrl.signal,
+      );
       setForm(f => ({ ...f, [field]: url }));
     } catch (e: any) {
-      setError(e.message);
+      if (e?.name !== 'AbortError') setError(e.message);
     } finally {
       setUploading(false);
+      setUploadPct(0);
+      abortRef.current = null;
     }
   };
 
@@ -266,7 +325,22 @@ function AddMediaModal({
           </div>
 
           {error && <p style={{ fontSize: 12, color: '#DC2626', margin: 0 }}>{error}</p>}
-          {uploading && <p style={{ fontSize: 12, color: T3, margin: 0 }}>Envoi en cours…</p>}
+          {uploading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ fontSize: 12, color: ACCENT, margin: 0, fontWeight: 600 }}>
+                  {uploadAtt > 1 ? `Tentative ${uploadAtt}/${uploadMax} — ${uploadPct}%` : `Envoi en cours… ${uploadPct}%`}
+                </p>
+                <button type="button" onClick={cancelUpload}
+                  style={{ fontSize: 11, color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                  Annuler
+                </button>
+              </div>
+              <div style={{ height: 3, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${uploadPct}%`, background: uploadAtt > 1 ? '#F59E0B' : ACCENT, borderRadius: 99, transition: 'width 0.15s ease' }} />
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
             <button onClick={handleSave} disabled={saving || uploading} style={{
