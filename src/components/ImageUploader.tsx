@@ -23,6 +23,16 @@ export interface ImageUploaderProps {
   label?: string;
 }
 
+function proxyUrl(url: string): string {
+  if (!url || url.startsWith('data:') || url.startsWith('/')) return url;
+  try {
+    const base = localStorage.getItem('snl_api_url')?.replace(/\/+$/, '') || 'https://snl-api.vps.buyticle.com/api';
+    return `${base}/uploads/proxy?url=${encodeURIComponent(url)}`;
+  } catch {
+    return url;
+  }
+}
+
 /* ── composant ───────────────────────────────────────────────── */
 export function ImageUploader({
   value, onChange,
@@ -107,7 +117,7 @@ export function ImageUploader({
         }}>
           {/* Preview */}
           <div style={{ width: 72, height: 72, borderRadius: 8, overflow: 'hidden', flexShrink: 0, border: BDR, background: 'white' }}>
-            <img src={value} alt="Aperçu" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            <img src={proxyUrl(value)} alt="Aperçu" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               onError={e => { (e.currentTarget as HTMLImageElement).src = ''; (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
           </div>
 

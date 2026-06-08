@@ -1,4 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+
+function proxyImg(url: string | undefined): string | undefined {
+  if (!url || url.startsWith('data:') || url.startsWith('/')) return url;
+  try {
+    const base = localStorage.getItem('snl_api_url')?.replace(/\/+$/, '') || 'https://snl-api.vps.buyticle.com/api';
+    return `${base}/uploads/proxy?url=${encodeURIComponent(url)}`;
+  } catch { return url; }
+}
 import {
   Search, Plus, Filter, Grid3X3, List, Package,
   Edit2, Trash2, ArrowUpRight, ArrowDownLeft, RefreshCw,
@@ -357,7 +365,7 @@ export function ProductsPage() {
                 >
                   {(product as any).image_url ? (
                     <img
-                      src={(product as any).image_url}
+                      src={proxyImg((product as any).image_url)}
                       alt={product.name}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
@@ -536,7 +544,7 @@ export function ProductsPage() {
                           }}
                         >
                           {(product as any).image_url ? (
-                            <img src={(product as any).image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img src={proxyImg((product as any).image_url)} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           ) : (
                             <Package size={18} color="#CBD5E1" />
                           )}

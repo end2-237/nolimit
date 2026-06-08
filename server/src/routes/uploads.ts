@@ -7,6 +7,33 @@ const STORAGE_URL = (process.env.STORAGE_URL || 'https://storage.vps.buyticle.co
 const STORAGE_KEY = process.env.STORAGE_KEY || '';
 const BUCKET      = process.env.STORAGE_BUCKET || 'nolimit_bucket';
 
+// GET /api/uploads/proxy?url=... — proxy image depuis le storage pour éviter le CORS navigateur
+router.get('/proxy', async (req, res) => {
+  const url = req.query.url as string;
+  if (!url) return res.status(400).json({ error: 'url requis' });
+
+  try { new URL(url); } catch { return res.status(400).json({ error: 'url invalide' }); }
+
+  try {
+    const headers: Record<string, string> = { 'User-Agent': 'snl-proxy/1.0' };
+    if (STORAGE_KEY && url.includes(STORAGE_URL)) {
+      headers['apikey'] = STORAGE_KEY;
+      headers['Authorization'] = `Bearer ${STORAGE_KEY}`;
+    }
+    const upstream = await fetch(url, { headers });
+    if (!upstream.ok) return res.status(502).json({ error: `upstream ${upstream.status}` });
+
+    const ct = upstream.headers.get('content-type') || 'image/jpeg';
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.set('Content-Type', ct);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('Access-Control-Allow-Origin', '*');
+    res.send(buf);
+  } catch (e: any) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
 // POST /api/uploads/image?folder=products&filename=sku-123.jpg
 // Body: raw binary (Content-Type = image/*)
 router.post(

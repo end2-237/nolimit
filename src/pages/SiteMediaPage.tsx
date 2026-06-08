@@ -21,6 +21,14 @@ function getApiBase(): string {
 
 function getToken() { return localStorage.getItem('snl_token') || ''; }
 
+function proxyStorageUrl(url: string): string {
+  if (!url || url.startsWith('data:') || url.startsWith('/')) return url;
+  try {
+    const base = localStorage.getItem('snl_api_url')?.replace(/\/+$/, '') || 'https://snl-api.vps.buyticle.com/api';
+    return `${base}/uploads/proxy?url=${encodeURIComponent(url)}`;
+  } catch { return url; }
+}
+
 /* ── sections ───────────────────────────────────────────────── */
 const SECTIONS_BASE = [
   { id: 'galerie',  label: 'Galerie',         sub: null as string[] | null, color: '#DCFCE7', text: '#166534' },
@@ -217,7 +225,7 @@ function AddMediaModal({
               />
             </div>
             {form.url && form.media_type === 'image' && (
-              <img src={form.url} alt="" style={{ marginTop: 8, height: 60, borderRadius: 6, objectFit: 'cover', border: BDR }} />
+              <img src={proxyStorageUrl(form.url)} alt="" style={{ marginTop: 8, height: 60, borderRadius: 6, objectFit: 'cover', border: BDR }} />
             )}
           </div>
 
@@ -293,7 +301,7 @@ function MediaCard({ item, onDelete, onToggle }: { item: SiteMedia; onDelete: ()
       {/* Preview */}
       <div style={{ height: 100, background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
         {thumb
-          ? <img src={thumb} alt={item.title || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <img src={proxyStorageUrl(thumb)} alt={item.title || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <Video size={28} color="#CBD5E1" />
         }
         {item.media_type === 'video' && (
