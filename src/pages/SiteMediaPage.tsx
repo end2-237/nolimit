@@ -97,42 +97,50 @@ async function uploadFileWithRetry(
   const MAX = 4;
   let lastErr: Error = new Error('Erreur inconnue');
 
-  for (let attempt = 1; attempt <= MAX; attempt++) {
-    if (attempt > 1) await new Promise(r => setTimeout(r, [0, 2000, 5000, 10000][attempt - 1] ?? 10000));
-    onAttempt?.(attempt, MAX);
-    onProgress?.(0);
-    try {
-      const url = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        if (signal) {
-          if (signal.aborted) { reject(new DOMException('Annulé', 'AbortError')); return; }
-          signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Annulé', 'AbortError')); });
-        }
-        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 95)); };
-        xhr.onload = () => {
-          onProgress?.(100);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try { resolve((JSON.parse(xhr.responseText)).url); } catch { reject(new Error('Réponse invalide')); }
-          } else {
-            let msg = xhr.statusText;
-            try { const j = JSON.parse(xhr.responseText); msg = j.error || j.message || msg; } catch {}
-            reject(new Error(`Upload échoué (HTTP ${xhr.status}): ${msg}`));
+  // Geler la détection offline pendant l'upload
+  let conn: { notifyUploadStart: () => void; notifyUploadEnd: () => void } | null = null;
+  try { conn = await import('../services/connectivity') as any; conn!.notifyUploadStart(); } catch {}
+
+  try {
+    for (let attempt = 1; attempt <= MAX; attempt++) {
+      if (attempt > 1) await new Promise(r => setTimeout(r, [0, 2000, 5000, 10000][attempt - 1] ?? 10000));
+      onAttempt?.(attempt, MAX);
+      onProgress?.(0);
+      try {
+        const url = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          if (signal) {
+            if (signal.aborted) { reject(new DOMException('Annulé', 'AbortError')); return; }
+            signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Annulé', 'AbortError')); });
           }
-        };
-        xhr.onerror  = () => reject(new Error('Erreur réseau'));
-        xhr.ontimeout = () => reject(new Error('Délai dépassé'));
-        xhr.timeout  = 120_000;
-        xhr.open('POST', endpoint);
-        Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
-        xhr.send(file);
-      });
-      return url;
-    } catch (e: any) {
-      if (e?.name === 'AbortError') throw e;
-      lastErr = e;
-      const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
-      if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+          xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 95)); };
+          xhr.onload = () => {
+            onProgress?.(100);
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try { resolve((JSON.parse(xhr.responseText)).url); } catch { reject(new Error('Réponse invalide')); }
+            } else {
+              let msg = xhr.statusText;
+              try { const j = JSON.parse(xhr.responseText); msg = j.error || j.message || msg; } catch {}
+              reject(new Error(`Upload échoué (HTTP ${xhr.status}): ${msg}`));
+            }
+          };
+          xhr.onerror  = () => reject(new Error('Erreur réseau'));
+          xhr.ontimeout = () => reject(new Error('Délai dépassé'));
+          xhr.timeout  = 120_000;
+          xhr.open('POST', endpoint);
+          Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+          xhr.send(file);
+        });
+        return url;
+      } catch (e: any) {
+        if (e?.name === 'AbortError') throw e;
+        lastErr = e;
+        const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
+        if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+      }
     }
+  } finally {
+    conn?.notifyUploadEnd();
   }
   throw lastErr;
 }

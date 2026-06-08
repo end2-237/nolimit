@@ -133,29 +133,40 @@ export async function uploadFile(
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  // Geler la détection offline pendant l'upload (bande passante saturée ≠ panne réseau)
+  let connectivity: { notifyUploadStart: () => void; notifyUploadEnd: () => void } | null = null;
+  try {
+    connectivity = await import('./connectivity');
+    connectivity!.notifyUploadStart();
+  } catch {}
+
   let lastError: Error = new Error('Erreur inconnue');
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // Backoff : 0s, 2s, 5s, 10s
-    if (attempt > 1) {
-      const delay = [0, 2000, 5000, 10000][attempt - 1] ?? 10000;
-      await new Promise(r => setTimeout(r, delay));
-    }
+  try {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Backoff : 0s, 2s, 5s, 10s
+      if (attempt > 1) {
+        const delay = [0, 2000, 5000, 10000][attempt - 1] ?? 10000;
+        await new Promise(r => setTimeout(r, delay));
+      }
 
-    opts.onAttempt?.(attempt, maxRetries);
-    opts.onProgress?.(0);
+      opts.onAttempt?.(attempt, maxRetries);
+      opts.onProgress?.(0);
 
-    try {
-      const url = await uploadXHR(endpoint, file, headers, opts.onProgress, opts.signal);
-      return url;
-    } catch (e: any) {
-      // Ne pas réessayer si annulé volontairement
-      if (e?.name === 'AbortError') throw e;
-      lastError = e;
-      // Ne pas réessayer si erreur serveur définitive (4xx sauf 408/429)
-      const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
-      if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+      try {
+        const url = await uploadXHR(endpoint, file, headers, opts.onProgress, opts.signal);
+        return url;
+      } catch (e: any) {
+        // Ne pas réessayer si annulé volontairement
+        if (e?.name === 'AbortError') throw e;
+        lastError = e;
+        // Ne pas réessayer si erreur serveur définitive (4xx sauf 408/429)
+        const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
+        if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+      }
     }
+  } finally {
+    connectivity?.notifyUploadEnd();
   }
 
   throw lastError;

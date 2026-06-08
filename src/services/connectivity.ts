@@ -21,6 +21,11 @@ let _online          = false;
 let _started         = false;
 let _failCount       = 0;
 let _intervalHandle: ReturnType<typeof setInterval> | null = null;
+let _activeUploads   = 0;
+
+/** Appeler avant/après chaque upload pour geler la détection offline pendant le transfert */
+export function notifyUploadStart() { _activeUploads++; }
+export function notifyUploadEnd()   { _activeUploads = Math.max(0, _activeUploads - 1); }
 
 export function isOnline(): boolean {
   return _online;
@@ -61,8 +66,8 @@ async function check() {
     setOnline(true);
   } else {
     _failCount++;
-    // N'aller offline qu'après FAILURES_BEFORE_OFFLINE échecs consécutifs
-    if (_failCount >= FAILURES_BEFORE_OFFLINE) {
+    // Ne pas passer offline si un upload est en cours (bande passante saturée ≠ panne réseau)
+    if (_failCount >= FAILURES_BEFORE_OFFLINE && _activeUploads === 0) {
       setOnline(false);
     }
   }
