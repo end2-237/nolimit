@@ -211,34 +211,79 @@ class DatabaseService {
       return;
     }
 
+    // Snapshot de l'ancien cache pour pouvoir le restaurer si le fetch échoue
+    const previousCache = this.cache.loaded ? { ...this.cache } : null;
+
     // ── Online: fetch from API then persist to IndexedDB ─────────────────────
     if (isOnline()) {
       try {
-        const [products, stocks, users, movements, alerts, reports] = await Promise.all([
-          Products.getAll().catch(() => [] as any[]),
-          Stocks.getAll().catch(() => [] as any[]),
-          Users.getAll().catch(() => [] as any[]),
-          Movements.getAll({ limit: 500 }).catch(() => [] as any[]),
-          Alerts.getAll().catch(() => [] as any[]),
-          Reports.getAll().catch(() => [] as any[]),
+        const results = await Promise.all([
+          Products.getAll().catch(() => null),
+          Stocks.getAll().catch(() => null),
+          Users.getAll().catch(() => null),
+          Movements.getAll({ limit: 500 }).catch(() => null),
+          Alerts.getAll().catch(() => null),
+          Reports.getAll().catch(() => null),
         ]);
-        this.cache = { products, stocks, users, movements, alerts, reports, loaded: true };
+
+        const [products, stocks, users, movements, alerts, reports] = results;
+
+        // Si les produits reviennent vides alors qu'on en avait, c'est sûrement
+        // une erreur réseau passagère — on garde l'ancien cache
+        const hadProducts = previousCache && previousCache.products.length > 0;
+        const gotEmptyProducts = !products || products.length === 0;
+        if (hadProducts && gotEmptyProducts) {
+          // Garder le cache existant, juste marquer loaded
+          this.cache = { ...previousCache!, loaded: true };
+          return;
+        }
+
+        // Fusion : si un endpoint échoue (null), on garde l'ancienne valeur
+        const merged = {
+          products:  products  ?? previousCache?.products  ?? [],
+          stocks:    stocks    ?? previousCache?.stocks    ?? [],
+          users:     users     ?? previousCache?.users     ?? [],
+          movements: movements ?? previousCache?.movements ?? [],
+          alerts:    alerts    ?? previousCache?.alerts    ?? [],
+          reports:   reports   ?? previousCache?.reports   ?? [],
+          loaded:    true,
+        };
+
+        this.cache = merged;
         this.ensureAllBarcodesAssigned();
-        // Persist to IndexedDB for offline use
-        persistCache({ products, stocks, users, movements, alerts }).catch(() => {});
+
+        // Persist uniquement si on a reçu des données réelles
+        if (merged.products.length > 0) {
+          persistCache({
+            products:  merged.products,
+            stocks:    merged.stocks,
+            users:     merged.users,
+            movements: merged.movements,
+            alerts:    merged.alerts,
+          }).catch(() => {});
+        }
         return;
       } catch {
-        // API failed even though we thought we were online — fall through to cache
+        // API totalement inaccessible — tomber dans le cache IndexedDB
       }
     }
 
-    // ── Offline: load from IndexedDB ─────────────────────────────────────────
+    // ── Offline ou API morte: charger depuis IndexedDB ────────────────────────
     try {
       const cached = await loadCache();
-      this.cache = { ...cached, reports: [], loaded: true };
+      // Préférer les données IndexedDB seulement si elles sont plus riches
+      const useIndexed = !previousCache || cached.products.length >= previousCache.products.length;
+      this.cache = useIndexed
+        ? { ...cached, reports: [], loaded: true }
+        : { ...previousCache!, loaded: true };
       this.ensureAllBarcodesAssigned();
     } catch {
-      this.cache.loaded = true;
+      // Garder le cache mémoire si IndexedDB plante aussi
+      if (previousCache) {
+        this.cache = { ...previousCache, loaded: true };
+      } else {
+        this.cache.loaded = true;
+      }
     }
   }
 

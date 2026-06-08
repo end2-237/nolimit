@@ -88,6 +88,20 @@ async function clearStore(store: StoreName): Promise<void> {
 
 // ─── Cache snapshot (called after each successful API fetch) ──────────────────
 
+// Écriture atomique par store : on ne clear qu'après avoir reçu les nouvelles données
+async function replaceStore(store: StoreName, items: any[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(store, 'readwrite');
+    const s = t.objectStore(store);
+    s.clear();
+    for (const item of items) s.put(item);
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error);
+  });
+}
+
 export async function persistCache(data: {
   products?: any[];
   stocks?: any[];
@@ -97,11 +111,12 @@ export async function persistCache(data: {
 }): Promise<void> {
   try {
     const ops: Promise<void>[] = [];
-    if (data.products)  ops.push(clearStore('products').then(() => putAll('products', data.products!)));
-    if (data.stocks)    ops.push(clearStore('stocks').then(() => putAll('stocks', data.stocks!)));
-    if (data.users)     ops.push(clearStore('users').then(() => putAll('users', data.users!)));
-    if (data.movements) ops.push(clearStore('movements').then(() => putAll('movements', data.movements!)));
-    if (data.alerts)    ops.push(clearStore('alerts').then(() => putAll('alerts', data.alerts!)));
+    // Utilise replaceStore (atomique) pour éviter qu'un crash entre clear et putAll vide le store
+    if (data.products  && data.products.length  > 0) ops.push(replaceStore('products',  data.products));
+    if (data.stocks    && data.stocks.length    > 0) ops.push(replaceStore('stocks',    data.stocks));
+    if (data.users     && data.users.length     > 0) ops.push(replaceStore('users',     data.users));
+    if (data.movements && data.movements.length > 0) ops.push(replaceStore('movements', data.movements));
+    if (data.alerts    && data.alerts.length    > 0) ops.push(replaceStore('alerts',    data.alerts));
     await Promise.all(ops);
     localStorage.setItem('snl_last_sync', new Date().toISOString());
   } catch (e) {

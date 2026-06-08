@@ -150,6 +150,12 @@ export function ProductsPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
+    const events = ['snl:stock-updated', 'snl:product-updated', 'snl:sync-done'];
+    events.forEach(e => window.addEventListener(e, load));
+    return () => events.forEach(e => window.removeEventListener(e, load));
+  }, [load]);
+
+  useEffect(() => {
     const mq = window.matchMedia('(max-width: 639px)');
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener('change', handler);
