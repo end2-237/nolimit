@@ -31,6 +31,7 @@ const SECTIONS_BASE = [
   { id: 'almanach', label: 'Almanach',         sub: null, color: '#CCFBF1', text: '#134E4A' },
   { id: 'journal',  label: 'Journal / Blog',   sub: null, color: '#EDE9FE', text: '#5B21B6' },
   { id: 'maladies', label: 'Maladies traitées', sub: [] as string[], color: '#FFE4E6', text: '#9F1239' },
+  { id: 'boutique', label: 'Boutique / Herboristerie', sub: null, color: '#FEF9C3', text: '#854D0E' },
 ];
 
 type SiteMedia = {
