@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Settings, Database, RefreshCw, AlertTriangle, CheckCircle,
   Download, Upload, Building2, Plus, Trash2, Edit2, X, Save,
   Calendar, Bell, Shield, Clock, HardDrive, ChevronDown, ChevronRight,
-  TestTube,
+  TestTube, Wand2, FileWarning,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -693,6 +693,198 @@ function SupabaseStoragePanel() {
   );
 }
 
+// ─── JSON Cleaner Panel ───────────────────────────────────────────────────────
+
+function JSONCleanerPanel() {
+  const [file, setFile]         = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [status, setStatus]     = useState<'idle' | 'cleaning' | 'done' | 'error'>('idle');
+  const [stats, setStats]       = useState<{ products: number; base64Removed: number; totalSize: number; cleanSize: number } | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const processFile = (f: File) => {
+    setFile(f);
+    setStatus('cleaning');
+    setStats(null);
+    setErrorMsg('');
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = ev.target?.result as string;
+        const totalSize = new Blob([raw]).size;
+
+        let data: any;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          // Tentative de réparation JSON tronqué : on essaie de fermer les structures
+          try {
+            // Couper au dernier objet produit complet (chercher la dernière },)
+            const lastComma = raw.lastIndexOf('},');
+            if (lastComma > 0) {
+              const fixed = raw.slice(0, lastComma + 1) + ']}';
+              data = JSON.parse(fixed);
+            } else {
+              throw new Error('JSON irréparable');
+            }
+          } catch {
+            throw new Error('JSON invalide ou trop corrompu pour être réparé automatiquement.');
+          }
+        }
+
+        // Vérifier que c'est bien un export SNL
+        if (!data || typeof data !== 'object') throw new Error('Format non reconnu.');
+        if (!Array.isArray(data.products)) {
+          // Peut-être bare array de produits
+          if (Array.isArray(data)) {
+            data = { _exported_at: new Date().toISOString(), products: data, stocks: [], movements: [], users: [], reports: [], alerts: [] };
+          } else {
+            throw new Error('Aucun tableau "products" trouvé dans le fichier.');
+          }
+        }
+
+        // Nettoyer les images base64 des produits
+        let base64Removed = 0;
+        const cleanProducts = data.products.map((p: any) => {
+          if (p && typeof p.image_url === 'string' && p.image_url.startsWith('data:')) {
+            base64Removed++;
+            return { ...p, image_url: null };
+          }
+          return p;
+        });
+
+        // Reconstruire l'objet propre
+        const cleaned = {
+          _exported_at: data._exported_at || new Date().toISOString(),
+          _cleaned_at: new Date().toISOString(),
+          products:  cleanProducts,
+          stocks:    Array.isArray(data.stocks)    ? data.stocks    : [],
+          movements: Array.isArray(data.movements) ? data.movements : [],
+          users:     Array.isArray(data.users)     ? data.users     : [],
+          reports:   Array.isArray(data.reports)   ? data.reports   : [],
+          alerts:    Array.isArray(data.alerts)    ? data.alerts    : [],
+          ...(data._custom_sites ? { _custom_sites: data._custom_sites } : {}),
+        };
+
+        const cleanJson = JSON.stringify(cleaned, null, 2);
+        const cleanSize = new Blob([cleanJson]).size;
+
+        setStats({ products: cleanProducts.length, base64Removed, totalSize, cleanSize });
+        setStatus('done');
+
+        // Téléchargement automatique
+        const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const blob = new Blob([cleanJson], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `snl_cleaned_${ts}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e: any) {
+        setErrorMsg(e.message || 'Erreur inconnue.');
+        setStatus('error');
+      }
+    };
+    reader.readAsText(f);
+  };
+
+  const reset = () => { setFile(null); setStatus('idle'); setStats(null); setErrorMsg(''); };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+            <Wand2 className="w-4 h-4 text-amber-600" />
+          </div>
+          <div>
+            <CardTitle className="text-sm">Nettoyage de fichier JSON</CardTitle>
+            <CardDescription className="text-xs">
+              Répare un export corrompu ou trop lourd — supprime les images base64, referme les structures tronquées
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+
+        {status === 'idle' && (
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f?.name.endsWith('.json')) processFile(f); }}
+            onClick={() => inputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+              dragging ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:border-amber-300 hover:bg-amber-50/30'
+            }`}
+          >
+            <FileWarning className="w-7 h-7 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm font-medium text-gray-700">Déposer le fichier JSON à nettoyer</p>
+            <p className="text-xs text-gray-400 mt-1">Export SNL — même corrompu ou trop volumineux</p>
+            <input ref={inputRef} type="file" accept=".json" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }} />
+          </div>
+        )}
+
+        {status === 'cleaning' && (
+          <div className="flex items-center gap-3 py-4 justify-center">
+            <RefreshCw className="w-5 h-5 text-amber-500 animate-spin" />
+            <span className="text-sm text-gray-600">Nettoyage en cours…</span>
+          </div>
+        )}
+
+        {status === 'done' && stats && (
+          <div className="space-y-3">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-green-700 font-semibold text-sm">
+                <CheckCircle className="w-4 h-4" /> Fichier nettoyé et téléchargé
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {[
+                  { label: 'Produits', value: stats.products.toString() },
+                  { label: 'Images base64 supprimées', value: stats.base64Removed.toString() },
+                  { label: 'Taille originale', value: `${(stats.totalSize / 1024).toFixed(1)} KB` },
+                  { label: 'Taille nettoyée', value: `${(stats.cleanSize / 1024).toFixed(1)} KB` },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-white rounded-lg p-2.5 border border-green-100">
+                    <div className="text-xs text-gray-400">{label}</div>
+                    <div className="text-sm font-semibold text-gray-800">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 text-center">
+              Le fichier <span className="font-mono text-gray-600">snl_cleaned_*.json</span> est prêt à être importé via "Importer une BD"
+            </p>
+            <button onClick={reset}
+              className="w-full py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              Nettoyer un autre fichier
+            </button>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="space-y-3">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2 text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+            <button onClick={reset}
+              className="w-full py-2.5 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              Réessayer
+            </button>
+          </div>
+        )}
+
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Settings Page ───────────────────────────────────────────────────────
 
 export function SettingsPage() {
@@ -832,7 +1024,12 @@ export function SettingsPage() {
           </>
         )}
 
-        {activeTab === 'database' && isSuperAdmin && <DBExportImport />}
+        {activeTab === 'database' && isSuperAdmin && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <DBExportImport />
+            <JSONCleanerPanel />
+          </div>
+        )}
         {activeTab === 'sites' && isSuperAdmin && <SitesManager />}
         {activeTab === 'cloud' && isSuperAdmin && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
