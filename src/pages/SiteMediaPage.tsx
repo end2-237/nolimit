@@ -22,15 +22,15 @@ function getApiBase(): string {
 function getToken() { return localStorage.getItem('snl_token') || ''; }
 
 /* ── sections ───────────────────────────────────────────────── */
-const SECTIONS = [
-  { id: 'galerie',  label: 'Galerie',         sub: null,                        color: '#DCFCE7', text: '#166534' },
-  { id: 'centres',  label: 'Centres',          sub: ['douala','yaounde','bafoussam'], color: '#DBEAFE', text: '#1E40AF' },
-  { id: 'equipe',   label: 'Équipe',           sub: null,                        color: '#FEF3C7', text: '#92400E' },
-  { id: 'lieu',     label: 'Nos lieux',        sub: null,                        color: '#FCE7F3', text: '#831843' },
-  { id: 'hero',     label: 'Hero / Accueil',   sub: null,                        color: '#F1F5F9', text: '#475569' },
-  { id: 'almanach', label: 'Almanach',         sub: null,                        color: '#CCFBF1', text: '#134E4A' },
-  { id: 'journal',  label: 'Journal / Blog',   sub: null,                        color: '#EDE9FE', text: '#5B21B6' },
-  { id: 'maladies', label: 'Maladies traitées', sub: ['hepatite','vih','hypertension'], color: '#FFE4E6', text: '#9F1239' },
+const SECTIONS_BASE = [
+  { id: 'galerie',  label: 'Galerie',         sub: null as string[] | null, color: '#DCFCE7', text: '#166534' },
+  { id: 'centres',  label: 'Centres',          sub: ['douala','yaounde','bafoussam'] as string[], color: '#DBEAFE', text: '#1E40AF' },
+  { id: 'equipe',   label: 'Équipe',           sub: null, color: '#FEF3C7', text: '#92400E' },
+  { id: 'lieu',     label: 'Nos lieux',        sub: null, color: '#FCE7F3', text: '#831843' },
+  { id: 'hero',     label: 'Hero / Accueil',   sub: null, color: '#F1F5F9', text: '#475569' },
+  { id: 'almanach', label: 'Almanach',         sub: null, color: '#CCFBF1', text: '#134E4A' },
+  { id: 'journal',  label: 'Journal / Blog',   sub: null, color: '#EDE9FE', text: '#5B21B6' },
+  { id: 'maladies', label: 'Maladies traitées', sub: [] as string[], color: '#FFE4E6', text: '#9F1239' },
 ];
 
 type SiteMedia = {
@@ -91,7 +91,7 @@ async function uploadFile(file: File, folder: string): Promise<string> {
 function AddMediaModal({
   section, onClose, onSaved,
 }: {
-  section: typeof SECTIONS[0];
+  section: typeof SECTIONS_BASE[0];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -344,8 +344,17 @@ function MediaCard({ item, onDelete, onToggle }: { item: SiteMedia; onDelete: ()
 
 /* ── SiteMediaPage ──────────────────────────────────────────── */
 export function SiteMediaPage() {
-  const [activeSection, setActiveSection] = useState(SECTIONS[0]);
+  const [sections, setSections] = useState(SECTIONS_BASE);
+  const [activeSection, setActiveSection] = useState(SECTIONS_BASE[0]);
   const [media, setMedia] = useState<SiteMedia[]>([]);
+
+  // Charger les maladies dynamiquement pour la section maladies
+  useEffect(() => {
+    apiCall('GET', '/maladies').then((maladies: { slug: string }[]) => {
+      const slugs = maladies.map((m: { slug: string }) => m.slug);
+      setSections(SECTIONS_BASE.map(s => s.id === 'maladies' ? { ...s, sub: slugs } : s));
+    }).catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [winW, setWinW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
@@ -415,7 +424,7 @@ export function SiteMediaPage() {
 
         {/* Section tabs */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {SECTIONS.map(s => (
+          {sections.map(s => (
             <button key={s.id} onClick={() => setActiveSection(s)} style={{
               height: 30, padding: '0 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
               background: activeSection.id === s.id ? s.color : '#F8FAFC',

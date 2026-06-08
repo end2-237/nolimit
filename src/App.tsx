@@ -15,6 +15,7 @@ import { SiteCommandesPage } from './pages/SiteCommandesPage';
 import { SiteNewsletterPage } from './pages/SiteNewsletterPage';
 import { SiteMessagesPage } from './pages/SiteMessagesPage';
 import { SiteMediaPage } from './pages/SiteMediaPage';
+import { MaladiesPage } from './pages/MaladiesPage';
 import { OrdonnancesPage } from './pages/OrdonnancesPage';
 import { DownloadsPage } from './pages/DownloadsPage';
 import { SplashScreen } from './components/SplashScreen';
@@ -317,6 +318,7 @@ function AppInner() {
       case 'site-newsletter':   return <SiteNewsletterPage />;
       case 'site-messages':     return <SiteMessagesPage />;
       case 'site-media':        return <SiteMediaPage />;
+      case 'site-maladies':     return <MaladiesPage />;
       default: return <InventoryDashboard />;
     }
   };

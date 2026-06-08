@@ -3,7 +3,7 @@ import {
   Package, ArrowLeftRight, Bell, FileText, Settings, LayoutDashboard,
   ShoppingBag, ChevronRight, LogOut, Users, Menu, X, Globe,
   BarChart3, CalendarCheck, ShoppingCart, Mail, MessageSquare,
-  ChevronDown, Shield, PanelLeftClose, PanelLeftOpen, ClipboardList, Download, Image,
+  ChevronDown, Shield, PanelLeftClose, PanelLeftOpen, ClipboardList, Download, Image, Heart,
 } from 'lucide-react';
 import { APP_CONFIG } from '../../config/app.config';
 import {
@@ -18,7 +18,7 @@ export type PageId =
   | 'dashboard' | 'products' | 'movements' | 'alerts' | 'reports'
   | 'settings' | 'users' | 'ordonnances' | 'downloads'
   | 'site' | 'site-dashboard' | 'site-reservations' | 'site-commandes'
-  | 'site-newsletter' | 'site-messages' | 'site-media';
+  | 'site-newsletter' | 'site-messages' | 'site-media' | 'site-maladies';
 
 interface StockLayoutProps {
   children: React.ReactNode;
@@ -45,7 +45,7 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
 
 const SITE_PAGES: PageId[] = [
   'site-dashboard', 'site-reservations', 'site-commandes',
-  'site-newsletter', 'site-messages', 'site', 'site-media',
+  'site-newsletter', 'site-messages', 'site', 'site-media', 'site-maladies',
 ];
 
 export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }: StockLayoutProps) {
@@ -97,6 +97,7 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
       { id: 'site-messages',     label: 'Messages',         icon: MessageSquare },
       { id: 'site',              label: 'Produits publiés', icon: Globe },
       { id: 'site-media',        label: 'Images & Vidéos',  icon: Image },
+      { id: 'site-maladies',     label: 'Maladies',         icon: Heart },
     ] : [];
 
   const roleInfo = user ? ROLE_LABELS[user.role] : null;

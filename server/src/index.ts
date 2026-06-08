@@ -25,6 +25,7 @@ import uploadsRouter from './routes/uploads';
 import ordonnancesRouter from './routes/ordonnances';
 import releasesRouter from './routes/releases';
 import siteMediaRouter from './routes/siteMedia';
+import maladiesRouter from './routes/maladies';
 
 dotenv.config();
 
@@ -85,6 +86,7 @@ app.use('/api/uploads',      uploadsRouter);
 app.use('/api/ordonnances',  ordonnancesRouter);
 app.use('/api/releases',    releasesRouter);
 app.use('/api/site-media', siteMediaRouter);
+app.use('/api/maladies',   maladiesRouter);
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 
