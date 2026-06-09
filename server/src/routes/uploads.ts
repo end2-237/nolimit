@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, raw } from 'express';
 import { authMiddleware, AuthRequest } from '../auth';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -56,6 +56,9 @@ router.get('/proxy', async (req, res) => {
 router.post(
   '/chunk',
   authMiddleware,
+  // Lecture fiable du corps binaire (tous types MIME), max 4 Mo par morceau.
+  // Indispensable : sans ça, express.json() global avalerait/ignorerait le flux.
+  raw({ type: () => true, limit: '4mb' }),
   async (req: AuthRequest, res) => {
     if (!STORAGE_KEY) return res.status(500).json({ error: 'STORAGE_KEY non configuré' });
 
@@ -68,17 +71,13 @@ router.post(
 
     if (!uploadId) return res.status(400).json({ error: 'x-upload-id requis' });
 
+    // Le corps binaire est fourni par express.raw()
+    const chunkBuf: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (chunkBuf.length === 0) return res.status(400).json({ error: 'morceau vide' });
+
     // Dossier temporaire pour cet uploadId
     const uploadDir = join(TMP_DIR, uploadId);
     if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
-
-    // Lire le corps du morceau
-    const chunkBuf: Buffer = await new Promise((resolve, reject) => {
-      const parts: Buffer[] = [];
-      req.on('data', (d: Buffer) => parts.push(d));
-      req.on('end', () => resolve(Buffer.concat(parts)));
-      req.on('error', reject);
-    });
 
     // Écrire le morceau dans un fichier temporaire
     const chunkPath = join(uploadDir, `chunk_${String(chunkIndex).padStart(6, '0')}`);

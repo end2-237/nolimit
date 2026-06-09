@@ -79,7 +79,7 @@ async function apiCall(method: string, path: string, body?: any) {
   return res.json();
 }
 
-const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB
+const CHUNK_SIZE = 512 * 1024; // 512 Ko — sous la limite nginx par défaut (1 Mo) pour éviter les 413
 const CHUNK_DELAYS = [0, 3000, 8000, 15000, 30000]; // ms between retries per chunk
 
 function sendChunk(
