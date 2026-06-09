@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { authMiddleware, AuthRequest } from '../auth';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { createWriteStream, createReadStream, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'fs';
 
 const router = Router();
 
@@ -7,13 +10,15 @@ const STORAGE_URL = (process.env.STORAGE_URL || 'https://storage.vps.buyticle.co
 const STORAGE_KEY = process.env.STORAGE_KEY || '';
 const BUCKET      = process.env.STORAGE_BUCKET || 'nolimit_bucket';
 
-// GET /api/uploads/proxy?url=... — proxy image depuis le storage pour éviter le CORS navigateur
+// Répertoire temporaire pour l'assemblage des morceaux
+const TMP_DIR = join(tmpdir(), 'snl-uploads');
+if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
+
+// GET /api/uploads/proxy?url=...
 router.get('/proxy', async (req, res) => {
   const url = req.query.url as string;
   if (!url) return res.status(400).json({ error: 'url requis' });
-
   try { new URL(url); } catch { return res.status(400).json({ error: 'url invalide' }); }
-
   try {
     const headers: Record<string, string> = { 'User-Agent': 'snl-proxy/1.0' };
     if (STORAGE_KEY && url.includes(STORAGE_URL)) {
@@ -22,8 +27,7 @@ router.get('/proxy', async (req, res) => {
     }
     const upstream = await fetch(url, { headers });
     if (!upstream.ok) return res.status(502).json({ error: `upstream ${upstream.status}` });
-
-    const ct = upstream.headers.get('content-type') || 'image/jpeg';
+    const ct  = upstream.headers.get('content-type') || 'image/jpeg';
     const buf = Buffer.from(await upstream.arrayBuffer());
     res.set('Content-Type', ct);
     res.set('Cache-Control', 'public, max-age=86400');
@@ -34,34 +38,121 @@ router.get('/proxy', async (req, res) => {
   }
 });
 
-// POST /api/uploads/image?folder=products&filename=sku-123.jpg
-// Body: raw binary (Content-Type = image/*)
+// ─── Upload par morceaux (chunked) ───────────────────────────────────────────
+//
+// POST /api/uploads/chunk
+//   Headers:
+//     x-upload-id      : identifiant unique de l'upload (généré côté client)
+//     x-chunk-index    : index du morceau (0-based)
+//     x-total-chunks   : nombre total de morceaux
+//     x-filename       : nom final du fichier
+//     x-folder         : dossier cible dans le bucket
+//     x-content-type   : type MIME du fichier complet
+//   Body: binary du morceau
+//
+//   Réponse intermédiaire : { received: chunkIndex }
+//   Réponse finale        : { url: "https://..." }
+//
+router.post(
+  '/chunk',
+  authMiddleware,
+  async (req: AuthRequest, res) => {
+    if (!STORAGE_KEY) return res.status(500).json({ error: 'STORAGE_KEY non configuré' });
+
+    const uploadId    = (req.headers['x-upload-id']     as string || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    const chunkIndex  = parseInt(req.headers['x-chunk-index']   as string || '0', 10);
+    const totalChunks = parseInt(req.headers['x-total-chunks']  as string || '1', 10);
+    const filename    = (req.headers['x-filename']   as string || 'file').replace(/[^a-zA-Z0-9._\-]/g, '_');
+    const folder      = (req.headers['x-folder']     as string || 'media').replace(/^\/|\/$/g, '');
+    const contentType = (req.headers['x-content-type'] as string || 'application/octet-stream');
+
+    if (!uploadId) return res.status(400).json({ error: 'x-upload-id requis' });
+
+    // Dossier temporaire pour cet uploadId
+    const uploadDir = join(TMP_DIR, uploadId);
+    if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
+
+    // Lire le corps du morceau
+    const chunkBuf: Buffer = await new Promise((resolve, reject) => {
+      const parts: Buffer[] = [];
+      req.on('data', (d: Buffer) => parts.push(d));
+      req.on('end', () => resolve(Buffer.concat(parts)));
+      req.on('error', reject);
+    });
+
+    // Écrire le morceau dans un fichier temporaire
+    const chunkPath = join(uploadDir, `chunk_${String(chunkIndex).padStart(6, '0')}`);
+    writeFileSync(chunkPath, chunkBuf);
+
+    // Vérifier combien de morceaux on a reçu
+    const received = Array.from({ length: totalChunks }, (_, i) =>
+      existsSync(join(uploadDir, `chunk_${String(i).padStart(6, '0')}`))
+    ).filter(Boolean).length;
+
+    // Pas encore tous les morceaux → confirmer la réception
+    if (received < totalChunks) {
+      return res.json({ received: chunkIndex, total: totalChunks, done: false });
+    }
+
+    // Tous les morceaux reçus → assembler et envoyer au storage
+    try {
+      const bucket   = BUCKET;
+      const path     = folder ? `${folder}/${filename}` : filename;
+      const endpoint = `${STORAGE_URL}/storage/v1/object/${bucket}/${path}`;
+
+      // Assembler en mémoire (fichiers <= ~100 Mo en pratique)
+      const assembled = Buffer.concat(
+        Array.from({ length: totalChunks }, (_, i) => {
+          const p = join(uploadDir, `chunk_${String(i).padStart(6, '0')}`);
+          return require('fs').readFileSync(p) as Buffer;
+        })
+      );
+
+      const headers: Record<string, string> = {
+        apikey:         STORAGE_KEY,
+        Authorization:  `Bearer ${STORAGE_KEY}`,
+        'Content-Type': contentType,
+        'x-upsert':     'true',
+        'Cache-Control': '3600',
+      };
+
+      const sRes = await fetch(endpoint, { method: 'PUT', headers, body: assembled });
+
+      if (!sRes.ok) {
+        let msg = sRes.statusText;
+        try { const j = await sRes.json(); msg = j.message || j.error || msg; } catch {}
+        return res.status(sRes.status).json({ error: `Storage: ${msg}` });
+      }
+
+      const publicUrl = `${STORAGE_URL}/storage/v1/object/public/${bucket}/${path}`;
+
+      // Nettoyer les fichiers temporaires
+      try { rmSync(uploadDir, { recursive: true, force: true }); } catch {}
+
+      return res.json({ done: true, url: publicUrl });
+    } catch (e: any) {
+      console.error('[Upload chunk/finalize]', e.message);
+      return res.status(502).json({ error: e.message || 'Erreur storage' });
+    }
+  }
+);
+
+// POST /api/uploads/image — gardé pour rétrocompatibilité (images petites)
 router.post(
   '/image',
   authMiddleware,
-  // express.raw doit être AVANT le middleware global json — on le redéfinit ici
-  (req, res, next) => {
-    // Si le body est déjà un Buffer (express.raw global éventuel), passer directement
-    if (Buffer.isBuffer(req.body)) return next();
-    let chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => { req.body = Buffer.concat(chunks); next(); });
-    req.on('error', next);
-  },
   async (req: AuthRequest, res) => {
-    if (!STORAGE_KEY) {
-      return res.status(500).json({ error: 'STORAGE_KEY non configuré sur le serveur' });
-    }
+    if (!STORAGE_KEY) return res.status(500).json({ error: 'STORAGE_KEY non configuré sur le serveur' });
 
     const folder   = (req.query.folder   as string || 'products').replace(/^\/|\/$/g, '');
     const filename = (req.query.filename as string || '').replace(/[^a-zA-Z0-9._\-]/g, '_');
     const bucket   = (req.query.bucket   as string || BUCKET);
-
     if (!filename) return res.status(400).json({ error: 'filename requis' });
 
     const path     = folder ? `${folder}/${filename}` : filename;
     const endpoint = `${STORAGE_URL}/storage/v1/object/${bucket}/${path}`;
     const ct       = (req.headers['content-type'] || 'application/octet-stream').split(';')[0];
+    const len      = req.headers['content-length'];
 
     const headers: Record<string, string> = {
       apikey:          STORAGE_KEY,
@@ -70,20 +161,19 @@ router.post(
       'x-upsert':      'true',
       'Cache-Control': '3600',
     };
+    if (len) headers['Content-Length'] = String(len);
 
     try {
-      let sRes = await fetch(endpoint, { method: 'POST', headers, body: req.body });
-
-      if (!sRes.ok && sRes.status !== 409) {
-        sRes = await fetch(endpoint, { method: 'PUT', headers, body: req.body });
-      }
-
+      const sRes = await fetch(endpoint, {
+        method: 'PUT', headers, body: req as any,
+        // @ts-expect-error duplex non encore dans les types fetch de Node
+        duplex: 'half',
+      });
       if (!sRes.ok) {
         let msg = sRes.statusText;
         try { const j = await sRes.json(); msg = j.message || j.error || msg; } catch {}
         return res.status(sRes.status).json({ error: `Storage: ${msg}` });
       }
-
       const publicUrl = `${STORAGE_URL}/storage/v1/object/public/${bucket}/${path}`;
       res.json({ url: publicUrl });
     } catch (e: any) {

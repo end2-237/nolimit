@@ -79,6 +79,48 @@ async function apiCall(method: string, path: string, body?: any) {
   return res.json();
 }
 
+const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB
+const CHUNK_DELAYS = [0, 3000, 8000, 15000, 30000]; // ms between retries per chunk
+
+function sendChunk(
+  base: string, token: string | null,
+  uploadId: string, chunkIndex: number, totalChunks: number,
+  filename: string, folder: string, contentType: string,
+  chunkData: Blob,
+  onChunkProgress: (loaded: number) => void,
+  signal?: AbortSignal,
+): Promise<{ done: boolean; url?: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    if (signal) {
+      if (signal.aborted) { reject(new DOMException('Annulé', 'AbortError')); return; }
+      signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Annulé', 'AbortError')); });
+    }
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onChunkProgress(e.loaded); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); } catch { reject(new Error('Réponse invalide')); }
+      } else {
+        let msg = xhr.statusText;
+        try { const j = JSON.parse(xhr.responseText); msg = j.error || j.message || msg; } catch {}
+        reject(new Error(`Upload échoué (HTTP ${xhr.status}): ${msg}`));
+      }
+    };
+    xhr.onerror   = () => reject(new Error('Erreur réseau'));
+    xhr.ontimeout = () => reject(new Error('Délai dépassé'));
+    xhr.timeout   = 180_000;
+    xhr.open('POST', `${base}/api/uploads/chunk`);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('x-upload-id',    uploadId);
+    xhr.setRequestHeader('x-chunk-index',  String(chunkIndex));
+    xhr.setRequestHeader('x-total-chunks', String(totalChunks));
+    xhr.setRequestHeader('x-filename',     filename);
+    xhr.setRequestHeader('x-folder',       folder);
+    xhr.setRequestHeader('x-content-type', contentType);
+    xhr.send(chunkData);
+  });
+}
+
 async function uploadFileWithRetry(
   file: File,
   folder: string,
@@ -89,60 +131,59 @@ async function uploadFileWithRetry(
   const ext      = file.name.split('.').pop() || 'bin';
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const base     = getApiBase().replace(/\/api$/, '');
-  const endpoint = `${base}/api/uploads/image?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`;
   const token    = getToken();
-  const headers: Record<string, string> = { 'Content-Type': file.type };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  const MAX = 4;
-  let lastErr: Error = new Error('Erreur inconnue');
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  let bytesConfirmed = 0; // bytes from fully completed chunks
 
-  // Geler la détection offline pendant l'upload
   let conn: { notifyUploadStart: () => void; notifyUploadEnd: () => void } | null = null;
   try { conn = await import('../services/connectivity') as any; conn!.notifyUploadStart(); } catch {}
 
+  const reportProgress = (bytesInFlight: number) => {
+    const total = file.size || 1;
+    const pct = Math.min(99, Math.round(((bytesConfirmed + bytesInFlight) / total) * 100));
+    onProgress?.(pct);
+  };
+
   try {
-    for (let attempt = 1; attempt <= MAX; attempt++) {
-      if (attempt > 1) await new Promise(r => setTimeout(r, [0, 2000, 5000, 10000][attempt - 1] ?? 10000));
-      onAttempt?.(attempt, MAX);
-      onProgress?.(0);
-      try {
-        const url = await new Promise<string>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          if (signal) {
-            if (signal.aborted) { reject(new DOMException('Annulé', 'AbortError')); return; }
-            signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Annulé', 'AbortError')); });
-          }
-          xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 95)); };
-          xhr.onload = () => {
+    for (let ci = 0; ci < totalChunks; ci++) {
+      const chunkStart = ci * CHUNK_SIZE;
+      const chunkData  = file.slice(chunkStart, chunkStart + CHUNK_SIZE);
+      const MAX_RETRIES = CHUNK_DELAYS.length;
+      let lastErr: Error = new Error('Erreur inconnue');
+
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        if (attempt > 0) await new Promise(r => setTimeout(r, CHUNK_DELAYS[attempt]));
+        onAttempt?.(ci * MAX_RETRIES + attempt + 1, totalChunks * MAX_RETRIES);
+        try {
+          const result = await sendChunk(
+            base, token, uploadId, ci, totalChunks,
+            filename, folder, file.type,
+            chunkData,
+            (loaded) => reportProgress(loaded),
+            signal,
+          );
+          bytesConfirmed += chunkData.size;
+          reportProgress(0);
+          if (result.done && result.url) {
             onProgress?.(100);
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try { resolve((JSON.parse(xhr.responseText)).url); } catch { reject(new Error('Réponse invalide')); }
-            } else {
-              let msg = xhr.statusText;
-              try { const j = JSON.parse(xhr.responseText); msg = j.error || j.message || msg; } catch {}
-              reject(new Error(`Upload échoué (HTTP ${xhr.status}): ${msg}`));
-            }
-          };
-          xhr.onerror  = () => reject(new Error('Erreur réseau'));
-          xhr.ontimeout = () => reject(new Error('Délai dépassé'));
-          xhr.timeout  = 120_000;
-          xhr.open('POST', endpoint);
-          Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
-          xhr.send(file);
-        });
-        return url;
-      } catch (e: any) {
-        if (e?.name === 'AbortError') throw e;
-        lastErr = e;
-        const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
-        if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+            return result.url;
+          }
+          break; // chunk succeeded, move to next
+        } catch (e: any) {
+          if (e?.name === 'AbortError') throw e;
+          lastErr = e;
+          const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
+          if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+          if (attempt === MAX_RETRIES - 1) throw lastErr;
+        }
       }
     }
   } finally {
     conn?.notifyUploadEnd();
   }
-  throw lastErr;
+  throw new Error('Upload incomplet');
 }
 
 /* ── AddMediaModal ──────────────────────────────────────────── */
