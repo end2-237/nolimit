@@ -147,9 +147,10 @@ async function uploadFileWithRetry(
 
 /* ── AddMediaModal ──────────────────────────────────────────── */
 function AddMediaModal({
-  section, onClose, onSaved,
+  section, subsLoading, onClose, onSaved,
 }: {
   section: typeof SECTIONS_BASE[0];
+  subsLoading: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -236,7 +237,17 @@ function AddMediaModal({
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T3 }}><X size={18} /></button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Attente des données de configuration de la section (ex : slugs maladies) */}
+        {subsLoading && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 8, background: '#F5F3FF', marginBottom: 14 }}>
+            <RefreshCw size={14} color="#7C3AED" className="spin" />
+            <span style={{ fontSize: 12, color: '#6D28D9', fontWeight: 600 }}>
+              Chargement des données de la section depuis la base de données…
+            </span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, opacity: subsLoading ? 0.45 : 1, pointerEvents: subsLoading ? 'none' : 'auto' }}>
           {/* Type */}
           <div>
             <label style={{ fontSize: 11.5, fontWeight: 600, color: T2, display: 'block', marginBottom: 5 }}>Type</label>
@@ -439,16 +450,22 @@ export function SiteMediaPage() {
   const [activeSection, setActiveSection] = useState(SECTIONS_BASE[0]);
   const [media, setMedia] = useState<SiteMedia[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  // Sections dont les sous-données (slugs, etc.) sont encore en cours de chargement depuis la DB
+  const [subsLoading, setSubsLoading] = useState<Set<string>>(new Set(['maladies']));
 
   // Charger les maladies dynamiquement pour la section maladies
   useEffect(() => {
     apiCall('GET', '/maladies').then((maladies: { slug: string }[]) => {
       const slugs = maladies.map((m: { slug: string }) => m.slug);
-      setSections(SECTIONS_BASE.map(s => s.id === 'maladies' ? { ...s, sub: slugs } : s));
-    }).catch(() => {});
+      setSections(prev => prev.map(s => s.id === 'maladies' ? { ...s, sub: slugs } : s));
+    }).catch(() => {}).finally(() => {
+      setSubsLoading(prev => { const n = new Set(prev); n.delete('maladies'); return n; });
+    });
   }, []);
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+
+  const activeSectionSubsLoading = subsLoading.has(activeSection.id);
   const [winW, setWinW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
 
   useEffect(() => {
@@ -505,34 +522,43 @@ export function SiteMediaPage() {
             <button onClick={load} style={{ width: 32, height: 32, borderRadius: 7, border: BDR, background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T3 }} title="Rafraîchir">
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
             </button>
-            <button onClick={() => setShowAdd(true)} style={{
+            <button onClick={() => !activeSectionSubsLoading && setShowAdd(true)} style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 7,
-              border: 'none', background: '#7C3AED', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              border: 'none', background: activeSectionSubsLoading ? '#C4B5FD' : '#7C3AED',
+              color: 'white', fontSize: 12, fontWeight: 700,
+              cursor: activeSectionSubsLoading ? 'not-allowed' : 'pointer',
               fontFamily: "'Plus Jakarta Sans', sans-serif",
-            }}>
-              <Plus size={12} /> Ajouter
+              opacity: activeSectionSubsLoading ? 0.7 : 1,
+            }} title={activeSectionSubsLoading ? 'Chargement des données de la section…' : undefined}>
+              {activeSectionSubsLoading
+                ? <><RefreshCw size={12} className="spin" /> Chargement…</>
+                : <><Plus size={12} /> Ajouter</>}
             </button>
           </div>
         </div>
 
         {/* Section tabs — toujours visibles */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {sections.map(s => (
-            <button key={s.id} onClick={() => setActiveSection(s)} style={{
-              height: 30, padding: '0 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
-              background: activeSection.id === s.id ? s.color : '#F8FAFC',
-              color: activeSection.id === s.id ? s.text : T2,
-              border: activeSection.id === s.id ? `1px solid ${s.color}` : BDR,
-              transition: 'all .15s',
-            }}>
-              {s.label}
-              {media.filter(m => m.section === s.id).length > 0 && (
-                <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.7 }}>
-                  ({media.filter(m => m.section === s.id).length})
-                </span>
-              )}
-            </button>
-          ))}
+          {sections.map(s => {
+            const subLoading = subsLoading.has(s.id);
+            const count = media.filter(m => m.section === s.id).length;
+            return (
+              <button key={s.id} onClick={() => setActiveSection(s)} style={{
+                height: 30, padding: '0 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                background: activeSection.id === s.id ? s.color : '#F8FAFC',
+                color: activeSection.id === s.id ? s.text : T2,
+                border: activeSection.id === s.id ? `1px solid ${s.color}` : BDR,
+                transition: 'all .15s',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+                {s.label}
+                {subLoading
+                  ? <RefreshCw size={10} className="spin" style={{ opacity: 0.5, marginLeft: 2 }} />
+                  : count > 0 && <span style={{ fontSize: 10, opacity: 0.7 }}>({count})</span>
+                }
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -594,6 +620,7 @@ export function SiteMediaPage() {
       {showAdd && (
         <AddMediaModal
           section={activeSection}
+          subsLoading={activeSectionSubsLoading}
           onClose={() => setShowAdd(false)}
           onSaved={load}
         />
