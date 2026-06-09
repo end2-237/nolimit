@@ -79,15 +79,16 @@ async function apiCall(method: string, path: string, body?: any) {
   return res.json();
 }
 
-const CHUNK_SIZE = 512 * 1024; // 512 Ko — sous la limite nginx par défaut (1 Mo) pour éviter les 413
-const CHUNK_DELAYS = [0, 3000, 8000, 15000, 30000]; // ms between retries per chunk
+const CHUNK_SIZE   = 512 * 1024; // 512 Ko — sous la limite nginx par défaut (1 Mo)
+const CHUNK_DELAYS = [0, 3000, 8000, 15000, 30000]; // ms entre tentatives par chunk
+const PARALLEL     = 4; // chunks envoyés simultanément
 
 function sendChunk(
-  base: string, token: string | null,
+  base: string, token: string,
   uploadId: string, chunkIndex: number, totalChunks: number,
   filename: string, folder: string, contentType: string,
   chunkData: Blob,
-  onChunkProgress: (loaded: number) => void,
+  onBytesLoaded: (n: number) => void,
   signal?: AbortSignal,
 ): Promise<{ done: boolean; url?: string }> {
   return new Promise((resolve, reject) => {
@@ -96,7 +97,7 @@ function sendChunk(
       if (signal.aborted) { reject(new DOMException('Annulé', 'AbortError')); return; }
       signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Annulé', 'AbortError')); });
     }
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onChunkProgress(e.loaded); };
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onBytesLoaded(e.loaded); };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try { resolve(JSON.parse(xhr.responseText)); } catch { reject(new Error('Réponse invalide')); }
@@ -108,7 +109,7 @@ function sendChunk(
     };
     xhr.onerror   = () => reject(new Error('Erreur réseau'));
     xhr.ontimeout = () => reject(new Error('Délai dépassé'));
-    xhr.timeout   = 180_000;
+    xhr.timeout   = 120_000;
     xhr.open('POST', `${base}/api/uploads/chunk`);
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('x-upload-id',    uploadId);
@@ -128,56 +129,66 @@ async function uploadFileWithRetry(
   onAttempt?: (att: number, max: number) => void,
   signal?: AbortSignal,
 ): Promise<string> {
-  const ext      = file.name.split('.').pop() || 'bin';
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const base     = getApiBase().replace(/\/api$/, '');
-  const token    = getToken();
-  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const ext         = file.name.split('.').pop() || 'bin';
+  const filename    = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const base        = getApiBase().replace(/\/api$/, '');
+  const token       = getToken();
+  const uploadId    = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
 
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  let bytesConfirmed = 0; // bytes from fully completed chunks
+  // Tableau de progression par chunk : bytes confirmés (envoi terminé) + en cours
+  const bytesConfirmed = new Array<number>(totalChunks).fill(0);
+  const bytesInFlight  = new Array<number>(totalChunks).fill(0);
+
+  const reportProgress = () => {
+    const sent = bytesConfirmed.reduce((a, b) => a + b, 0) + bytesInFlight.reduce((a, b) => a + b, 0);
+    onProgress?.(Math.min(99, Math.round((sent / (file.size || 1)) * 100)));
+  };
 
   let conn: { notifyUploadStart: () => void; notifyUploadEnd: () => void } | null = null;
   try { conn = await import('../services/connectivity') as any; conn!.notifyUploadStart(); } catch {}
 
-  const reportProgress = (bytesInFlight: number) => {
-    const total = file.size || 1;
-    const pct = Math.min(99, Math.round(((bytesConfirmed + bytesInFlight) / total) * 100));
-    onProgress?.(pct);
+  const uploadChunk = async (ci: number): Promise<{ done: boolean; url?: string }> => {
+    const chunkData = file.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE);
+    let lastErr: Error = new Error('Erreur inconnue');
+    for (let attempt = 0; attempt < CHUNK_DELAYS.length; attempt++) {
+      if (attempt > 0) {
+        bytesInFlight[ci] = 0; reportProgress();
+        await new Promise(r => setTimeout(r, CHUNK_DELAYS[attempt]));
+      }
+      onAttempt?.(ci + 1, totalChunks);
+      try {
+        const result = await sendChunk(
+          base, token, uploadId, ci, totalChunks,
+          filename, folder, file.type, chunkData,
+          (n) => { bytesInFlight[ci] = n; reportProgress(); },
+          signal,
+        );
+        bytesConfirmed[ci] = chunkData.size;
+        bytesInFlight[ci]  = 0;
+        reportProgress();
+        return result;
+      } catch (e: any) {
+        if (e?.name === 'AbortError') throw e;
+        lastErr = e;
+        const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
+        if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+        if (attempt === CHUNK_DELAYS.length - 1) throw lastErr;
+      }
+    }
+    throw lastErr;
   };
 
   try {
-    for (let ci = 0; ci < totalChunks; ci++) {
-      const chunkStart = ci * CHUNK_SIZE;
-      const chunkData  = file.slice(chunkStart, chunkStart + CHUNK_SIZE);
-      const MAX_RETRIES = CHUNK_DELAYS.length;
-      let lastErr: Error = new Error('Erreur inconnue');
-
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        if (attempt > 0) await new Promise(r => setTimeout(r, CHUNK_DELAYS[attempt]));
-        onAttempt?.(ci * MAX_RETRIES + attempt + 1, totalChunks * MAX_RETRIES);
-        try {
-          const result = await sendChunk(
-            base, token, uploadId, ci, totalChunks,
-            filename, folder, file.type,
-            chunkData,
-            (loaded) => reportProgress(loaded),
-            signal,
-          );
-          bytesConfirmed += chunkData.size;
-          reportProgress(0);
-          if (result.done && result.url) {
-            onProgress?.(100);
-            return result.url;
-          }
-          break; // chunk succeeded, move to next
-        } catch (e: any) {
-          if (e?.name === 'AbortError') throw e;
-          lastErr = e;
-          const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
-          if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
-          if (attempt === MAX_RETRIES - 1) throw lastErr;
-        }
+    // Envoi de PARALLEL chunks simultanément → ~4× plus rapide sur connexion lente
+    for (let i = 0; i < totalChunks; i += PARALLEL) {
+      const batch = Array.from(
+        { length: Math.min(PARALLEL, totalChunks - i) },
+        (_, j) => uploadChunk(i + j),
+      );
+      const results = await Promise.all(batch);
+      for (const r of results) {
+        if (r.done && r.url) { onProgress?.(100); return r.url; }
       }
     }
   } finally {
@@ -188,10 +199,9 @@ async function uploadFileWithRetry(
 
 /* ── AddMediaModal ──────────────────────────────────────────── */
 function AddMediaModal({
-  section, subsLoading, onClose, onSaved,
+  section, onClose, onSaved,
 }: {
   section: typeof SECTIONS_BASE[0];
-  subsLoading: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -278,17 +288,7 @@ function AddMediaModal({
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T3 }}><X size={18} /></button>
         </div>
 
-        {/* Attente des données de configuration de la section (ex : slugs maladies) */}
-        {subsLoading && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 8, background: '#F5F3FF', marginBottom: 14 }}>
-            <RefreshCw size={14} color="#7C3AED" className="spin" />
-            <span style={{ fontSize: 12, color: '#6D28D9', fontWeight: 600 }}>
-              Chargement des données de la section depuis la base de données…
-            </span>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, opacity: subsLoading ? 0.45 : 1, pointerEvents: subsLoading ? 'none' : 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Type */}
           <div>
             <label style={{ fontSize: 11.5, fontWeight: 600, color: T2, display: 'block', marginBottom: 5 }}>Type</label>
@@ -490,23 +490,16 @@ export function SiteMediaPage() {
   const [sections, setSections] = useState(SECTIONS_BASE);
   const [activeSection, setActiveSection] = useState(SECTIONS_BASE[0]);
   const [media, setMedia] = useState<SiteMedia[]>([]);
-  const [initialLoaded, setInitialLoaded] = useState(false);
-  // Sections dont les sous-données (slugs, etc.) sont encore en cours de chargement depuis la DB
-  const [subsLoading, setSubsLoading] = useState<Set<string>>(new Set(['maladies']));
 
   // Charger les maladies dynamiquement pour la section maladies
   useEffect(() => {
     apiCall('GET', '/maladies').then((maladies: { slug: string }[]) => {
       const slugs = maladies.map((m: { slug: string }) => m.slug);
-      setSections(prev => prev.map(s => s.id === 'maladies' ? { ...s, sub: slugs } : s));
-    }).catch(() => {}).finally(() => {
-      setSubsLoading(prev => { const n = new Set(prev); n.delete('maladies'); return n; });
-    });
+      setSections(SECTIONS_BASE.map(s => s.id === 'maladies' ? { ...s, sub: slugs } : s));
+    }).catch(() => {});
   }, []);
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-
-  const activeSectionSubsLoading = subsLoading.has(activeSection.id);
   const [winW, setWinW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
 
   useEffect(() => {
@@ -525,11 +518,10 @@ export function SiteMediaPage() {
       setMedia([]);
     } finally {
       setLoading(false);
-      setInitialLoaded(true);
     }
   }, [activeSection.id]);
 
-  useEffect(() => { setInitialLoaded(false); load(); }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Supprimer ce média ?')) return;
@@ -547,7 +539,7 @@ export function SiteMediaPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
-      {/* Header — toujours visible */}
+      {/* Header */}
       <div style={{ background: 'white', borderBottom: BDR, padding: isMobile ? '14px 16px' : '16px 24px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -563,72 +555,42 @@ export function SiteMediaPage() {
             <button onClick={load} style={{ width: 32, height: 32, borderRadius: 7, border: BDR, background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T3 }} title="Rafraîchir">
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
             </button>
-            <button onClick={() => !activeSectionSubsLoading && setShowAdd(true)} style={{
+            <button onClick={() => setShowAdd(true)} style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 7,
-              border: 'none', background: activeSectionSubsLoading ? '#C4B5FD' : '#7C3AED',
-              color: 'white', fontSize: 12, fontWeight: 700,
-              cursor: activeSectionSubsLoading ? 'not-allowed' : 'pointer',
+              border: 'none', background: '#7C3AED', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer',
               fontFamily: "'Plus Jakarta Sans', sans-serif",
-              opacity: activeSectionSubsLoading ? 0.7 : 1,
-            }} title={activeSectionSubsLoading ? 'Chargement des données de la section…' : undefined}>
-              {activeSectionSubsLoading
-                ? <><RefreshCw size={12} className="spin" /> Chargement…</>
-                : <><Plus size={12} /> Ajouter</>}
+            }}>
+              <Plus size={12} /> Ajouter
             </button>
           </div>
         </div>
 
-        {/* Section tabs — toujours visibles */}
+        {/* Section tabs */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {sections.map(s => {
-            const subLoading = subsLoading.has(s.id);
-            const count = media.filter(m => m.section === s.id).length;
-            return (
-              <button key={s.id} onClick={() => setActiveSection(s)} style={{
-                height: 30, padding: '0 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
-                background: activeSection.id === s.id ? s.color : '#F8FAFC',
-                color: activeSection.id === s.id ? s.text : T2,
-                border: activeSection.id === s.id ? `1px solid ${s.color}` : BDR,
-                transition: 'all .15s',
-                display: 'flex', alignItems: 'center', gap: 4,
-              }}>
-                {s.label}
-                {subLoading
-                  ? <RefreshCw size={10} className="spin" style={{ opacity: 0.5, marginLeft: 2 }} />
-                  : count > 0 && <span style={{ fontSize: 10, opacity: 0.7 }}>({count})</span>
-                }
-              </button>
-            );
-          })}
+          {sections.map(s => (
+            <button key={s.id} onClick={() => setActiveSection(s)} style={{
+              height: 30, padding: '0 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+              background: activeSection.id === s.id ? s.color : '#F8FAFC',
+              color: activeSection.id === s.id ? s.text : T2,
+              border: activeSection.id === s.id ? `1px solid ${s.color}` : BDR,
+              transition: 'all .15s',
+            }}>
+              {s.label}
+              {media.filter(m => m.section === s.id).length > 0 && (
+                <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.7 }}>
+                  ({media.filter(m => m.section === s.id).length})
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Bandeau de chargement discret sous le header */}
-      {loading && (
-        <div style={{ height: 3, background: '#EDE9FE', overflow: 'hidden', flexShrink: 0 }}>
-          <div style={{ height: '100%', background: '#7C3AED', borderRadius: 99, animation: 'progress-bar 1.2s ease-in-out infinite' }} />
-        </div>
-      )}
-
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '16px 24px', position: 'relative' }}>
-        {/* Skeleton placeholders pendant le premier chargement */}
-        {!initialLoaded && loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ height: 16, width: 120, borderRadius: 6, background: '#F1F5F9', animation: 'pulse 1.4s ease-in-out infinite' }} />
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
-              {Array.from({ length: cols * 2 }).map((_, i) => (
-                <div key={i} style={{ borderRadius: 10, overflow: 'hidden', border: BDR }}>
-                  <div style={{ height: 100, background: '#F1F5F9', animation: 'pulse 1.4s ease-in-out infinite', animationDelay: `${i * 80}ms` }} />
-                  <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ height: 10, width: '70%', borderRadius: 4, background: '#F1F5F9', animation: 'pulse 1.4s ease-in-out infinite' }} />
-                    <div style={{ height: 8, width: '45%', borderRadius: 4, background: '#F1F5F9', animation: 'pulse 1.4s ease-in-out infinite' }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : sectionMedia.length === 0 && !loading ? (
+      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '16px 24px' }}>
+        {loading ? (
+          <p style={{ fontSize: 13, color: T3, textAlign: 'center', paddingTop: 40 }}>Chargement…</p>
+        ) : sectionMedia.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 60 }}>
             <Image size={40} color="#CBD5E1" style={{ margin: '0 auto 12px' }} />
             <p style={{ fontSize: 14, color: T3, marginBottom: 16 }}>Aucun média pour cette section</p>
@@ -661,22 +623,12 @@ export function SiteMediaPage() {
       {showAdd && (
         <AddMediaModal
           section={activeSection}
-          subsLoading={activeSectionSubsLoading}
           onClose={() => setShowAdd(false)}
           onSaved={load}
         />
       )}
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg) } }
-        .spin { animation: spin .7s linear infinite; }
-        @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
-        @keyframes progress-bar {
-          0%   { transform: translateX(-100%) scaleX(0.3); }
-          50%  { transform: translateX(0%)    scaleX(0.7); }
-          100% { transform: translateX(100%)  scaleX(0.3); }
-        }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } } .spin { animation: spin .7s linear infinite; }`}</style>
     </div>
   );
 }
