@@ -438,6 +438,7 @@ export function SiteMediaPage() {
   const [sections, setSections] = useState(SECTIONS_BASE);
   const [activeSection, setActiveSection] = useState(SECTIONS_BASE[0]);
   const [media, setMedia] = useState<SiteMedia[]>([]);
+  const [initialLoaded, setInitialLoaded] = useState(false);
 
   // Charger les maladies dynamiquement pour la section maladies
   useEffect(() => {
@@ -466,10 +467,11 @@ export function SiteMediaPage() {
       setMedia([]);
     } finally {
       setLoading(false);
+      setInitialLoaded(true);
     }
   }, [activeSection.id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setInitialLoaded(false); load(); }, [load]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Supprimer ce média ?')) return;
@@ -487,7 +489,7 @@ export function SiteMediaPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
-      {/* Header */}
+      {/* Header — toujours visible */}
       <div style={{ background: 'white', borderBottom: BDR, padding: isMobile ? '14px 16px' : '16px 24px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -513,7 +515,7 @@ export function SiteMediaPage() {
           </div>
         </div>
 
-        {/* Section tabs */}
+        {/* Section tabs — toujours visibles */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {sections.map(s => (
             <button key={s.id} onClick={() => setActiveSection(s)} style={{
@@ -534,11 +536,32 @@ export function SiteMediaPage() {
         </div>
       </div>
 
+      {/* Bandeau de chargement discret sous le header */}
+      {loading && (
+        <div style={{ height: 3, background: '#EDE9FE', overflow: 'hidden', flexShrink: 0 }}>
+          <div style={{ height: '100%', background: '#7C3AED', borderRadius: 99, animation: 'progress-bar 1.2s ease-in-out infinite' }} />
+        </div>
+      )}
+
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '16px 24px' }}>
-        {loading ? (
-          <p style={{ fontSize: 13, color: T3, textAlign: 'center', paddingTop: 40 }}>Chargement…</p>
-        ) : sectionMedia.length === 0 ? (
+      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '16px 24px', position: 'relative' }}>
+        {/* Skeleton placeholders pendant le premier chargement */}
+        {!initialLoaded && loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ height: 16, width: 120, borderRadius: 6, background: '#F1F5F9', animation: 'pulse 1.4s ease-in-out infinite' }} />
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
+              {Array.from({ length: cols * 2 }).map((_, i) => (
+                <div key={i} style={{ borderRadius: 10, overflow: 'hidden', border: BDR }}>
+                  <div style={{ height: 100, background: '#F1F5F9', animation: 'pulse 1.4s ease-in-out infinite', animationDelay: `${i * 80}ms` }} />
+                  <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ height: 10, width: '70%', borderRadius: 4, background: '#F1F5F9', animation: 'pulse 1.4s ease-in-out infinite' }} />
+                    <div style={{ height: 8, width: '45%', borderRadius: 4, background: '#F1F5F9', animation: 'pulse 1.4s ease-in-out infinite' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : sectionMedia.length === 0 && !loading ? (
           <div style={{ textAlign: 'center', paddingTop: 60 }}>
             <Image size={40} color="#CBD5E1" style={{ margin: '0 auto 12px' }} />
             <p style={{ fontSize: 14, color: T3, marginBottom: 16 }}>Aucun média pour cette section</p>
@@ -576,7 +599,16 @@ export function SiteMediaPage() {
         />
       )}
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } } .spin { animation: spin .7s linear infinite; }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+        .spin { animation: spin .7s linear infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+        @keyframes progress-bar {
+          0%   { transform: translateX(-100%) scaleX(0.3); }
+          50%  { transform: translateX(0%)    scaleX(0.7); }
+          100% { transform: translateX(100%)  scaleX(0.3); }
+        }
+      `}</style>
     </div>
   );
 }
