@@ -7,7 +7,24 @@
 import { APP_CONFIG } from '../config/app.config';
 import { Users, Products, Stocks, Movements, Alerts, Reports, Stats, setAuthToken } from './api';
 import { persistCache, loadCache, saveAuthCache, loadAuthCache, addToOutbox } from './offlineStorage';
-import { isOnline } from './connectivity';
+import { isOnline, notifyUploadStart, notifyUploadEnd } from './connectivity';
+
+// Retry un appel API en cas d'erreur réseau transitoire (TypeError = fetch échoué)
+// Ne retente PAS les erreurs HTTP (4xx/5xx) — celles-ci sont légitimes.
+async function withNetworkRetry<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
+  const delays = [0, 2000, 5000, 10000];
+  let lastErr: unknown;
+  for (let i = 0; i <= maxRetries; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, delays[i - 1] ?? 10000));
+    try { return await fn(); }
+    catch (e: any) {
+      // Ne retente que les erreurs réseau (TypeError: Failed to fetch, AbortError, etc.)
+      if (e?.status !== undefined || (typeof e?.message === 'string' && !e.message.includes('fetch') && !e.message.includes('network') && !e.message.includes('NetworkError'))) throw e;
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
 
 // ─── Password Hash (simple, used for offline verification) ────────────────────
 function simpleHash(str: string): string {
@@ -768,6 +785,9 @@ class DatabaseService {
       onProgress?.(step, done, total);
     };
 
+    // Geler la détection offline pendant tout l'import (fluctuations réseau ≠ panne)
+    notifyUploadStart();
+
     // ── Restore custom sites config ──────────────────────────────────────────
     if (_custom_sites) {
       localStorage.setItem('snl_custom_sites', JSON.stringify(_custom_sites));
@@ -807,7 +827,7 @@ class DatabaseService {
       }
 
       try {
-        const created = await this.createProduct(productData);
+        const created = await withNetworkRetry(() => this.createProduct(productData));
         idMap[oldId] = created.id;
         existingSkus.add(productData.sku);
         result.products++;
@@ -827,7 +847,7 @@ class DatabaseService {
         continue;
       }
       try {
-        await this.updateStock(newProductId, stock.site_id, stock.quantity);
+        await withNetworkRetry(() => this.updateStock(newProductId, stock.site_id, stock.quantity));
         result.stocks++;
       } catch (e: any) {
         result.errors.push(`Stock produit #${stock.product_id} site ${stock.site_id}: ${e.message}`);
@@ -845,7 +865,7 @@ class DatabaseService {
         continue;
       }
       try {
-        const created = await Movements.create({ ...mvData, product_id: newProductId });
+        const created = await withNetworkRetry(() => Movements.create({ ...mvData, product_id: newProductId }));
         this.cache.movements.unshift(created);
         result.movements++;
       } catch (e: any) {
@@ -861,7 +881,7 @@ class DatabaseService {
         const stock = stocks[i];
         const newProductId = idMap[stock.product_id];
         if (newProductId !== undefined) {
-          try { await this.updateStock(newProductId, stock.site_id, stock.quantity); } catch {}
+          try { await withNetworkRetry(() => this.updateStock(newProductId, stock.site_id, stock.quantity)); } catch {}
         }
         progress('Correction des stocks', i + 1, stocks.length);
       }
@@ -874,10 +894,10 @@ class DatabaseService {
       const { id, product_name, created_at, ...alertData } = alertsToImport[i];
       const newProductId = alertData.product_id ? idMap[alertData.product_id] : undefined;
       try {
-        const created = await this.createAlert({
+        const created = await withNetworkRetry(() => this.createAlert({
           ...alertData,
           product_id: newProductId ?? alertData.product_id,
-        });
+        }));
         this.cache.alerts.unshift(created);
         result.alerts++;
       } catch (e: any) {
@@ -896,8 +916,7 @@ class DatabaseService {
         continue;
       }
       try {
-        const userToCreate = { ...userData, password: password_hash || 'ChangeMe123!' };
-        await this.createUser(userToCreate);
+        await withNetworkRetry(() => this.createUser({ ...userData, password: password_hash || 'ChangeMe123!' }));
         existingUsernames.add(userData.username);
         result.users++;
       } catch (e: any) {
@@ -911,7 +930,7 @@ class DatabaseService {
     for (let i = 0; i < reports.length; i++) {
       const { id, created_at, ...reportData } = reports[i];
       try {
-        await this.saveReport(reportData);
+        await withNetworkRetry(() => this.saveReport(reportData));
         result.reports++;
       } catch (e: any) {
         result.errors.push(`Rapport "${reportData.name}": ${e.message}`);
@@ -919,6 +938,7 @@ class DatabaseService {
       progress('Import des rapports', i + 1, reports.length);
     }
 
+    notifyUploadEnd();
     return result;
   }
 
@@ -945,6 +965,7 @@ class DatabaseService {
     const alertsArr: any[] = data.alerts || [];
     const progress = (step: string, done: number, total: number) => onProgress?.(step, done, total);
     if (_custom_sites) localStorage.setItem('snl_custom_sites', JSON.stringify(_custom_sites));
+    notifyUploadStart(); // Geler la détection offline pendant tout l'import
 
     // Mapping oldId → newId depuis les produits déjà en BD (via SKU)
     const idMap: Record<number, number> = {};
@@ -973,7 +994,7 @@ class DatabaseService {
         if (existing) { idMap[oldId] = existing.id; progress('Import des produits', i + 1, toImport.length); continue; }
         if (existingSkus.has(productData.sku)) { progress('Import des produits', i + 1, toImport.length); continue; }
         try {
-          const created = await this.createProduct(productData);
+          const created = await withNetworkRetry(() => this.createProduct(productData));
           idMap[oldId] = created.id;
           existingSkus.add(productData.sku);
           if (options.entities.products) result.products++;
@@ -996,9 +1017,9 @@ class DatabaseService {
           if (options.stockConflict === 'merge') {
             const existing = this.cache.stocks.find((s: any) => s.product_id === newProductId && s.site_id === stock.site_id);
             const currentQty = existing?.quantity ?? 0;
-            await this.updateStock(newProductId, stock.site_id, currentQty + stock.quantity);
+            await withNetworkRetry(() => this.updateStock(newProductId, stock.site_id, currentQty + stock.quantity));
           } else {
-            await this.updateStock(newProductId, stock.site_id, stock.quantity);
+            await withNetworkRetry(() => this.updateStock(newProductId, stock.site_id, stock.quantity));
           }
           result.stocks++;
         } catch (e: any) { result.errors.push(`Stock produit #${stock.product_id} site ${stock.site_id}: ${e.message}`); }
@@ -1017,7 +1038,7 @@ class DatabaseService {
           progress('Import des mouvements', i + 1, movements.length); continue;
         }
         try {
-          const created = await Movements.create({ ...mvData, product_id: newProductId });
+          const created = await withNetworkRetry(() => Movements.create({ ...mvData, product_id: newProductId }));
           this.cache.movements.unshift(created);
           result.movements++;
         } catch (e: any) { result.errors.push(`Mouvement #${id} (${mvData.type}): ${e.message}`); }
@@ -1032,7 +1053,7 @@ class DatabaseService {
         const { id, product_name, created_at, ...alertData } = alertsArr[i];
         const newProductId = alertData.product_id ? idMap[alertData.product_id] : undefined;
         try {
-          const created = await this.createAlert({ ...alertData, product_id: newProductId ?? alertData.product_id });
+          const created = await withNetworkRetry(() => this.createAlert({ ...alertData, product_id: newProductId ?? alertData.product_id }));
           this.cache.alerts.unshift(created);
           result.alerts++;
         } catch (e: any) { result.errors.push(`Alerte: ${e.message}`); }
@@ -1048,7 +1069,7 @@ class DatabaseService {
         const { id, created_at, updated_at, password_hash, ...userData } = users[i];
         if (existingUsernames.has(userData.username)) { progress('Import des utilisateurs', i + 1, users.length); continue; }
         try {
-          await this.createUser({ ...userData, password: password_hash || 'ChangeMe123!' });
+          await withNetworkRetry(() => this.createUser({ ...userData, password: password_hash || 'ChangeMe123!' }));
           existingUsernames.add(userData.username);
           result.users++;
         } catch (e: any) { result.errors.push(`Utilisateur "${userData.username}": ${e.message}`); }
@@ -1061,12 +1082,13 @@ class DatabaseService {
       progress('Import des rapports', 0, reports.length);
       for (let i = 0; i < reports.length; i++) {
         const { id, created_at, ...reportData } = reports[i];
-        try { await this.saveReport(reportData); result.reports++; }
+        try { await withNetworkRetry(() => this.saveReport(reportData)); result.reports++; }
         catch (e: any) { result.errors.push(`Rapport "${reportData.name}": ${e.message}`); }
         progress('Import des rapports', i + 1, reports.length);
       }
     }
 
+    notifyUploadEnd();
     return result;
   }
 
