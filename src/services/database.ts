@@ -837,23 +837,22 @@ class DatabaseService {
       progress('Import des produits', i + 1, products.length);
     }
 
-    // ── Restauration des quantités de stock ──────────────────────────────────
+    // ── Restauration des quantités de stock (1 seul appel bulk) ─────────────
     progress('Restauration des stocks', 0, stocks.length);
-    for (let i = 0; i < stocks.length; i++) {
-      const stock = stocks[i];
-      const newProductId = idMap[stock.product_id];
-      if (newProductId === undefined) {
-        progress('Restauration des stocks', i + 1, stocks.length);
-        continue;
-      }
+    const bulkStocks = stocks
+      .filter((s: any) => idMap[s.product_id] !== undefined)
+      .map((s: any) => ({ product_id: idMap[s.product_id], site_id: s.site_id, quantity: s.quantity }));
+    const skipped = stocks.length - bulkStocks.length;
+    if (skipped > 0) result.errors.push(`${skipped} stock(s) ignoré(s) : produit introuvable en BD`);
+    if (bulkStocks.length > 0) {
       try {
-        await withNetworkRetry(() => this.updateStock(newProductId, stock.site_id, stock.quantity));
-        result.stocks++;
+        await withNetworkRetry(() => Stocks.bulkUpsert(bulkStocks));
+        result.stocks = bulkStocks.length;
       } catch (e: any) {
-        result.errors.push(`Stock produit #${stock.product_id} site ${stock.site_id}: ${e.message}`);
+        result.errors.push(`Import stocks: ${e.message}`);
       }
-      progress('Restauration des stocks', i + 1, stocks.length);
     }
+    progress('Restauration des stocks', stocks.length, stocks.length);
 
     // ── Import mouvements (historique, remappage IDs produits) ───────────────
     progress('Import des mouvements', 0, movements.length);
@@ -874,17 +873,11 @@ class DatabaseService {
       progress('Import des mouvements', i + 1, movements.length);
     }
 
-    // ── Re-correction des stocks (les mouvements peuvent les avoir altérés) ──
-    if (movements.length > 0) {
-      progress('Correction des stocks', 0, stocks.length);
-      for (let i = 0; i < stocks.length; i++) {
-        const stock = stocks[i];
-        const newProductId = idMap[stock.product_id];
-        if (newProductId !== undefined) {
-          try { await withNetworkRetry(() => this.updateStock(newProductId, stock.site_id, stock.quantity)); } catch {}
-        }
-        progress('Correction des stocks', i + 1, stocks.length);
-      }
+    // ── Re-correction des stocks après mouvements (bulk) ─────────────────────
+    if (movements.length > 0 && bulkStocks.length > 0) {
+      progress('Correction des stocks', 0, 1);
+      try { await withNetworkRetry(() => Stocks.bulkUpsert(bulkStocks)); } catch {}
+      progress('Correction des stocks', 1, 1);
     }
 
     // ── Import alertes ───────────────────────────────────────────────────────
@@ -1003,28 +996,29 @@ class DatabaseService {
       }
     }
 
-    // ── Stocks ────────────────────────────────────────────────────────────────
+    // ── Stocks (1 seul appel bulk) ────────────────────────────────────────────
     if (options.entities.stocks) {
       progress('Restauration des stocks', 0, stocks.length);
-      for (let i = 0; i < stocks.length; i++) {
-        const stock = stocks[i];
-        const newProductId = idMap[stock.product_id];
-        if (newProductId === undefined) {
-          result.errors.push(`Stock ignoré : produit #${stock.product_id} introuvable en BD`);
-          progress('Restauration des stocks', i + 1, stocks.length); continue;
-        }
-        try {
+      const missing: number[] = [];
+      const bulkPartial = stocks
+        .map((s: any) => {
+          const newProductId = idMap[s.product_id];
+          if (newProductId === undefined) { missing.push(s.product_id); return null; }
           if (options.stockConflict === 'merge') {
-            const existing = this.cache.stocks.find((s: any) => s.product_id === newProductId && s.site_id === stock.site_id);
-            const currentQty = existing?.quantity ?? 0;
-            await withNetworkRetry(() => this.updateStock(newProductId, stock.site_id, currentQty + stock.quantity));
-          } else {
-            await withNetworkRetry(() => this.updateStock(newProductId, stock.site_id, stock.quantity));
+            const existing = this.cache.stocks.find((c: any) => c.product_id === newProductId && c.site_id === s.site_id);
+            return { product_id: newProductId, site_id: s.site_id, quantity: (existing?.quantity ?? 0) + s.quantity };
           }
-          result.stocks++;
-        } catch (e: any) { result.errors.push(`Stock produit #${stock.product_id} site ${stock.site_id}: ${e.message}`); }
-        progress('Restauration des stocks', i + 1, stocks.length);
+          return { product_id: newProductId, site_id: s.site_id, quantity: s.quantity };
+        })
+        .filter(Boolean) as { product_id: number; site_id: string; quantity: number }[];
+      if (missing.length > 0) result.errors.push(`${missing.length} stock(s) ignoré(s) : produit introuvable en BD`);
+      if (bulkPartial.length > 0) {
+        try {
+          await withNetworkRetry(() => Stocks.bulkUpsert(bulkPartial));
+          result.stocks = bulkPartial.length;
+        } catch (e: any) { result.errors.push(`Import stocks: ${e.message}`); }
       }
+      progress('Restauration des stocks', stocks.length, stocks.length);
     }
 
     // ── Mouvements ────────────────────────────────────────────────────────────

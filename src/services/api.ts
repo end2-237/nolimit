@@ -117,6 +117,12 @@ export const Stocks = {
       method: 'PATCH',
       body: JSON.stringify({ product_id: productId, site_id: siteId, quantity }),
     }),
+
+  bulkUpsert: (stocks: { product_id: number; site_id: string; quantity: number }[]) =>
+    request('/stocks/bulk-upsert', {
+      method: 'POST',
+      body: JSON.stringify({ stocks }),
+    }),
 };
 
 // ─── Movements ────────────────────────────────────────────────────────────────
