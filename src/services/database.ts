@@ -922,6 +922,154 @@ class DatabaseService {
     return result;
   }
 
+  // ── Import partiel avec sélection des entités et gestion des conflits ────────
+  async importPartial(
+    jsonStr: string,
+    options: {
+      entities: {
+        products?: boolean;
+        stocks?: boolean;
+        movements?: boolean;
+        alerts?: boolean;
+        users?: boolean;
+        reports?: boolean;
+      };
+      stockConflict: 'merge' | 'replace';
+      importMissingProducts: boolean;
+    },
+    onProgress?: (step: string, done: number, total: number) => void,
+  ): Promise<ImportResult> {
+    const result: ImportResult = { products: 0, stocks: 0, movements: 0, alerts: 0, users: 0, reports: 0, errors: [] };
+    const data = JSON.parse(jsonStr);
+    const { products = [], stocks = [], movements = [], users = [], reports = [], _custom_sites } = data;
+    const alertsArr: any[] = data.alerts || [];
+    const progress = (step: string, done: number, total: number) => onProgress?.(step, done, total);
+    if (_custom_sites) localStorage.setItem('snl_custom_sites', JSON.stringify(_custom_sites));
+
+    // Mapping oldId → newId depuis les produits déjà en BD (via SKU)
+    const idMap: Record<number, number> = {};
+    for (const prod of products) {
+      const existing = this.cache.products.find((p: any) => p.sku === prod.sku);
+      if (existing) idMap[prod.id] = existing.id;
+    }
+
+    // ── Produits ──────────────────────────────────────────────────────────────
+    if (options.entities.products || options.importMissingProducts) {
+      const existingSkus = new Set(this.cache.products.map((p: any) => p.sku));
+      const neededIds = new Set<number>();
+      if (!options.entities.products && options.importMissingProducts) {
+        if (options.entities.stocks) stocks.forEach((s: any) => neededIds.add(s.product_id));
+        if (options.entities.movements) movements.forEach((m: any) => neededIds.add(m.product_id));
+        if (options.entities.alerts) alertsArr.forEach((a: any) => a.product_id && neededIds.add(a.product_id));
+      }
+      const toImport = options.entities.products
+        ? products
+        : products.filter((p: any) => neededIds.has(p.id) && !existingSkus.has(p.sku));
+
+      progress('Import des produits', 0, toImport.length);
+      for (let i = 0; i < toImport.length; i++) {
+        const { id: oldId, created_at, updated_at, count, ...productData } = toImport[i];
+        const existing = this.cache.products.find((p: any) => p.sku === productData.sku);
+        if (existing) { idMap[oldId] = existing.id; progress('Import des produits', i + 1, toImport.length); continue; }
+        if (existingSkus.has(productData.sku)) { progress('Import des produits', i + 1, toImport.length); continue; }
+        try {
+          const created = await this.createProduct(productData);
+          idMap[oldId] = created.id;
+          existingSkus.add(productData.sku);
+          if (options.entities.products) result.products++;
+        } catch (e: any) { result.errors.push(`Produit "${productData.name}": ${e.message}`); }
+        progress('Import des produits', i + 1, toImport.length);
+      }
+    }
+
+    // ── Stocks ────────────────────────────────────────────────────────────────
+    if (options.entities.stocks) {
+      progress('Restauration des stocks', 0, stocks.length);
+      for (let i = 0; i < stocks.length; i++) {
+        const stock = stocks[i];
+        const newProductId = idMap[stock.product_id];
+        if (newProductId === undefined) {
+          result.errors.push(`Stock ignoré : produit #${stock.product_id} introuvable en BD`);
+          progress('Restauration des stocks', i + 1, stocks.length); continue;
+        }
+        try {
+          if (options.stockConflict === 'merge') {
+            const existing = this.cache.stocks.find((s: any) => s.product_id === newProductId && s.site_id === stock.site_id);
+            const currentQty = existing?.quantity ?? 0;
+            await this.updateStock(newProductId, stock.site_id, currentQty + stock.quantity);
+          } else {
+            await this.updateStock(newProductId, stock.site_id, stock.quantity);
+          }
+          result.stocks++;
+        } catch (e: any) { result.errors.push(`Stock produit #${stock.product_id} site ${stock.site_id}: ${e.message}`); }
+        progress('Restauration des stocks', i + 1, stocks.length);
+      }
+    }
+
+    // ── Mouvements ────────────────────────────────────────────────────────────
+    if (options.entities.movements) {
+      progress('Import des mouvements', 0, movements.length);
+      for (let i = 0; i < movements.length; i++) {
+        const { id, product_name, user_name, ...mvData } = movements[i];
+        const newProductId = idMap[mvData.product_id];
+        if (newProductId === undefined) {
+          result.errors.push(`Mouvement #${id} ignoré : produit #${mvData.product_id} introuvable`);
+          progress('Import des mouvements', i + 1, movements.length); continue;
+        }
+        try {
+          const created = await Movements.create({ ...mvData, product_id: newProductId });
+          this.cache.movements.unshift(created);
+          result.movements++;
+        } catch (e: any) { result.errors.push(`Mouvement #${id} (${mvData.type}): ${e.message}`); }
+        progress('Import des mouvements', i + 1, movements.length);
+      }
+    }
+
+    // ── Alertes ───────────────────────────────────────────────────────────────
+    if (options.entities.alerts) {
+      progress('Import des alertes', 0, alertsArr.length);
+      for (let i = 0; i < alertsArr.length; i++) {
+        const { id, product_name, created_at, ...alertData } = alertsArr[i];
+        const newProductId = alertData.product_id ? idMap[alertData.product_id] : undefined;
+        try {
+          const created = await this.createAlert({ ...alertData, product_id: newProductId ?? alertData.product_id });
+          this.cache.alerts.unshift(created);
+          result.alerts++;
+        } catch (e: any) { result.errors.push(`Alerte: ${e.message}`); }
+        progress('Import des alertes', i + 1, alertsArr.length);
+      }
+    }
+
+    // ── Utilisateurs ──────────────────────────────────────────────────────────
+    if (options.entities.users) {
+      const existingUsernames = new Set(this.cache.users.map((u: any) => u.username));
+      progress('Import des utilisateurs', 0, users.length);
+      for (let i = 0; i < users.length; i++) {
+        const { id, created_at, updated_at, password_hash, ...userData } = users[i];
+        if (existingUsernames.has(userData.username)) { progress('Import des utilisateurs', i + 1, users.length); continue; }
+        try {
+          await this.createUser({ ...userData, password: password_hash || 'ChangeMe123!' });
+          existingUsernames.add(userData.username);
+          result.users++;
+        } catch (e: any) { result.errors.push(`Utilisateur "${userData.username}": ${e.message}`); }
+        progress('Import des utilisateurs', i + 1, users.length);
+      }
+    }
+
+    // ── Rapports ──────────────────────────────────────────────────────────────
+    if (options.entities.reports) {
+      progress('Import des rapports', 0, reports.length);
+      for (let i = 0; i < reports.length; i++) {
+        const { id, created_at, ...reportData } = reports[i];
+        try { await this.saveReport(reportData); result.reports++; }
+        catch (e: any) { result.errors.push(`Rapport "${reportData.name}": ${e.message}`); }
+        progress('Import des rapports', i + 1, reports.length);
+      }
+    }
+
+    return result;
+  }
+
   getProductsForExport() { return this.getStocksGroupedByProduct(); }
 
   async loadDemoData(): Promise<void> {
