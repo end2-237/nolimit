@@ -211,9 +211,10 @@ async function uploadFileWithRetry(
 
 /* ── AddMediaModal ──────────────────────────────────────────── */
 function AddMediaModal({
-  section, onClose, onSaved,
+  section, subsLoading, onClose, onSaved,
 }: {
   section: typeof SECTIONS_BASE[0];
+  subsLoading?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -300,6 +301,13 @@ function AddMediaModal({
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T3 }}><X size={18} /></button>
         </div>
 
+        {subsLoading && (
+          <div style={{ background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 8, padding: '10px 14px', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <RefreshCw size={13} color="#7C3AED" className="spin" />
+            <span style={{ fontSize: 12, color: '#6D28D9', fontWeight: 600 }}>Chargement des données de la section…</span>
+          </div>
+        )}
+        <fieldset disabled={!!subsLoading} style={{ border: 'none', padding: 0, margin: 0 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Type */}
           <div>
@@ -415,10 +423,10 @@ function AddMediaModal({
           )}
 
           <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
-            <button onClick={handleSave} disabled={saving || uploading} style={{
+            <button onClick={handleSave} disabled={saving || uploading || !!subsLoading} style={{
               flex: 1, height: 38, borderRadius: 8, border: 'none',
               background: ACCENT, color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              opacity: saving || uploading ? 0.6 : 1,
+              opacity: saving || uploading || subsLoading ? 0.6 : 1,
               fontFamily: "'Plus Jakarta Sans',sans-serif",
             }}>
               {saving ? 'Enregistrement…' : 'Ajouter'}
@@ -431,6 +439,7 @@ function AddMediaModal({
             </button>
           </div>
         </div>
+        </fieldset>
       </div>
     </div>
   );
@@ -497,20 +506,40 @@ function MediaCard({ item, onDelete, onToggle }: { item: SiteMedia; onDelete: ()
   );
 }
 
+/* ── SkeletonCard ────────────────────────────────────────────── */
+function SkeletonCard() {
+  return (
+    <div style={{ border: BDR, borderRadius: 10, overflow: 'hidden', background: 'white' }}>
+      <div className="skeleton" style={{ height: 100, background: '#F1F5F9' }} />
+      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div className="skeleton" style={{ height: 10, borderRadius: 4, width: '60%' }} />
+        <div className="skeleton" style={{ height: 10, borderRadius: 4, width: '40%' }} />
+        <div className="skeleton" style={{ height: 26, borderRadius: 5, marginTop: 2 }} />
+      </div>
+    </div>
+  );
+}
+
 /* ── SiteMediaPage ──────────────────────────────────────────── */
 export function SiteMediaPage() {
   const [sections, setSections] = useState(SECTIONS_BASE);
   const [activeSection, setActiveSection] = useState(SECTIONS_BASE[0]);
   const [media, setMedia] = useState<SiteMedia[]>([]);
+  // subsLoading : sections dont les données de formulaire sont encore en train de charger
+  const [subsLoading, setSubsLoading] = useState<Set<string>>(new Set(['maladies']));
 
   // Charger les maladies dynamiquement pour la section maladies
   useEffect(() => {
     apiCall('GET', '/maladies').then((maladies: { slug: string }[]) => {
       const slugs = maladies.map((m: { slug: string }) => m.slug);
       setSections(SECTIONS_BASE.map(s => s.id === 'maladies' ? { ...s, sub: slugs } : s));
-    }).catch(() => {});
+      setSubsLoading(prev => { const n = new Set(prev); n.delete('maladies'); return n; });
+    }).catch(() => {
+      setSubsLoading(prev => { const n = new Set(prev); n.delete('maladies'); return n; });
+    });
   }, []);
   const [loading, setLoading] = useState(false);
+  const [firstLoad, setFirstLoad] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [winW, setWinW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
 
@@ -530,8 +559,12 @@ export function SiteMediaPage() {
       setMedia([]);
     } finally {
       setLoading(false);
+      setFirstLoad(false);
     }
   }, [activeSection.id]);
+
+  // Reset firstLoad quand on change de section
+  useEffect(() => { setFirstLoad(true); }, [activeSection.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -549,10 +582,12 @@ export function SiteMediaPage() {
   const sectionMedia = media.filter(m => m.section === activeSection.id);
   const cols = isMobile ? 2 : winW < 860 ? 3 : 4;
 
+  const activeSectionSubsLoading = subsLoading.has(activeSection.id);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
       {/* Header */}
-      <div style={{ background: 'white', borderBottom: BDR, padding: isMobile ? '14px 16px' : '16px 24px', flexShrink: 0 }}>
+      <div style={{ background: 'white', borderBottom: loading ? 'none' : BDR, padding: isMobile ? '14px 16px' : '16px 24px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -567,42 +602,82 @@ export function SiteMediaPage() {
             <button onClick={load} style={{ width: 32, height: 32, borderRadius: 7, border: BDR, background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T3 }} title="Rafraîchir">
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
             </button>
-            <button onClick={() => setShowAdd(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 7,
-              border: 'none', background: '#7C3AED', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
-            }}>
-              <Plus size={12} /> Ajouter
+            <button
+              onClick={() => !activeSectionSubsLoading && setShowAdd(true)}
+              disabled={activeSectionSubsLoading}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 7,
+                border: 'none', background: activeSectionSubsLoading ? '#A78BFA' : '#7C3AED',
+                color: 'white', fontSize: 12, fontWeight: 700,
+                cursor: activeSectionSubsLoading ? 'not-allowed' : 'pointer',
+                opacity: activeSectionSubsLoading ? 0.7 : 1,
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+              }}
+            >
+              {activeSectionSubsLoading
+                ? <><RefreshCw size={11} className="spin" /> Chargement…</>
+                : <><Plus size={12} /> Ajouter</>
+              }
             </button>
           </div>
         </div>
 
         {/* Section tabs */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {sections.map(s => (
-            <button key={s.id} onClick={() => setActiveSection(s)} style={{
-              height: 30, padding: '0 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
-              background: activeSection.id === s.id ? s.color : '#F8FAFC',
-              color: activeSection.id === s.id ? s.text : T2,
-              border: activeSection.id === s.id ? `1px solid ${s.color}` : BDR,
-              transition: 'all .15s',
-            }}>
-              {s.label}
-              {media.filter(m => m.section === s.id).length > 0 && (
-                <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.7 }}>
-                  ({media.filter(m => m.section === s.id).length})
-                </span>
-              )}
-            </button>
-          ))}
+          {sections.map(s => {
+            const tabSubsLoading = subsLoading.has(s.id);
+            return (
+              <button key={s.id} onClick={() => setActiveSection(s)} style={{
+                height: 30, padding: '0 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                background: activeSection.id === s.id ? s.color : '#F8FAFC',
+                color: activeSection.id === s.id ? s.text : T2,
+                border: activeSection.id === s.id ? `1px solid ${s.color}` : BDR,
+                transition: 'all .15s',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                {s.label}
+                {tabSubsLoading
+                  ? <RefreshCw size={10} className="spin" style={{ opacity: 0.6 }} />
+                  : media.filter(m => m.section === s.id).length > 0 && (
+                    <span style={{ fontSize: 10, opacity: 0.7 }}>
+                      ({media.filter(m => m.section === s.id).length})
+                    </span>
+                  )
+                }
+              </button>
+            );
+          })}
         </div>
+
+        {/* Barre de progression sous le header */}
+        {loading && (
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, background: '#EDE9FE', overflow: 'hidden' }}>
+            <div className="progress-bar" style={{ height: '100%', background: '#7C3AED', borderRadius: 99 }} />
+          </div>
+        )}
       </div>
 
+      {/* Bandeau chargement sous-données section active */}
+      {activeSectionSubsLoading && (
+        <div style={{ background: '#F5F3FF', borderBottom: '1px solid #DDD6FE', padding: '8px 24px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <RefreshCw size={12} color="#7C3AED" className="spin" />
+          <span style={{ fontSize: 12, color: '#6D28D9', fontWeight: 600 }}>
+            Chargement des données de la section depuis la base de données…
+          </span>
+        </div>
+      )}
+
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '16px 24px' }}>
-        {loading ? (
-          <p style={{ fontSize: 13, color: T3, textAlign: 'center', paddingTop: 40 }}>Chargement…</p>
-        ) : sectionMedia.length === 0 ? (
+      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '16px 24px', position: 'relative' }}>
+        {loading && firstLoad ? (
+          /* Skeleton au premier chargement */
+          <div>
+            <div className="skeleton" style={{ height: 10, borderRadius: 4, width: 120, marginBottom: 12 }} />
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
+              {Array.from({ length: cols * 2 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+          </div>
+        ) : !loading && sectionMedia.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 60 }}>
             <Image size={40} color="#CBD5E1" style={{ margin: '0 auto 12px' }} />
             <p style={{ fontSize: 14, color: T3, marginBottom: 16 }}>Aucun média pour cette section</p>
@@ -634,13 +709,21 @@ export function SiteMediaPage() {
 
       {showAdd && (
         <AddMediaModal
-          section={activeSection}
+          section={sections.find(s => s.id === activeSection.id) ?? activeSection}
+          subsLoading={activeSectionSubsLoading}
           onClose={() => setShowAdd(false)}
           onSaved={load}
         />
       )}
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } } .spin { animation: spin .7s linear infinite; }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+        .spin { animation: spin .7s linear infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .4 } }
+        .skeleton { background: #E2E8F0; animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes progress-slide { 0% { transform: translateX(-100%) scaleX(.3); } 50% { transform: translateX(0%) scaleX(.7); } 100% { transform: translateX(100%) scaleX(.3); } }
+        .progress-bar { animation: progress-slide 1.2s ease-in-out infinite; }
+      `}</style>
     </div>
   );
 }
