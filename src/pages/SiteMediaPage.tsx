@@ -79,19 +79,32 @@ async function apiCall(method: string, path: string, body?: any) {
   return res.json();
 }
 
-const CHUNK_SIZE   = 512 * 1024; // 512 Ko — sous la limite nginx par défaut (1 Mo)
-const CHUNK_DELAYS = [0, 3000, 8000, 15000, 30000]; // ms entre tentatives par chunk
-const PARALLEL     = 4; // chunks envoyés simultanément
+const CHUNK_SIZE   = 512 * 1024; // 512 KB — sous la limite nginx 1 MB
+const CHUNK_DELAYS = [0, 3000, 8000, 15000, 30000];
+const PARALLEL     = 4;
 
-function sendChunk(
-  base: string, token: string,
-  uploadId: string, chunkIndex: number, totalChunks: number,
-  filename: string, folder: string, contentType: string,
-  chunkData: Blob,
+async function sendChunk(
+  base: string,
+  token: string,
+  uploadId: string,
+  chunkIndex: number,
+  totalChunks: number,
+  filename: string,
+  folder: string,
+  contentType: string,
+  chunkData: ArrayBuffer,
   onBytesLoaded: (n: number) => void,
   signal?: AbortSignal,
 ): Promise<{ done: boolean; url?: string }> {
-  return new Promise((resolve, reject) => {
+  const url = `${base}/api/uploads/chunk` +
+    `?uploadId=${encodeURIComponent(uploadId)}` +
+    `&chunkIndex=${chunkIndex}` +
+    `&totalChunks=${totalChunks}` +
+    `&filename=${encodeURIComponent(filename)}` +
+    `&folder=${encodeURIComponent(folder)}` +
+    `&contentType=${encodeURIComponent(contentType)}`;
+
+  return new Promise<{ done: boolean; url?: string }>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     if (signal) {
       if (signal.aborted) { reject(new DOMException('Annulé', 'AbortError')); return; }
@@ -100,24 +113,22 @@ function sendChunk(
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) onBytesLoaded(e.loaded); };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try { resolve(JSON.parse(xhr.responseText)); } catch { reject(new Error('Réponse invalide')); }
+        try {
+          const j = JSON.parse(xhr.responseText);
+          resolve({ done: !!j.done, url: j.url });
+        } catch { reject(new Error('Réponse invalide')); }
       } else {
         let msg = xhr.statusText;
         try { const j = JSON.parse(xhr.responseText); msg = j.error || j.message || msg; } catch {}
-        reject(new Error(`Upload échoué (HTTP ${xhr.status}): ${msg}`));
+        reject(new Error(`Chunk ${chunkIndex} échoué (HTTP ${xhr.status}): ${msg}`));
       }
     };
     xhr.onerror   = () => reject(new Error('Erreur réseau'));
     xhr.ontimeout = () => reject(new Error('Délai dépassé'));
-    xhr.timeout   = 120_000;
-    xhr.open('POST', `${base}/api/uploads/chunk`);
+    xhr.timeout   = 60_000;
+    xhr.open('POST', url);
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.setRequestHeader('x-upload-id',    uploadId);
-    xhr.setRequestHeader('x-chunk-index',  String(chunkIndex));
-    xhr.setRequestHeader('x-total-chunks', String(totalChunks));
-    xhr.setRequestHeader('x-filename',     filename);
-    xhr.setRequestHeader('x-folder',       folder);
-    xhr.setRequestHeader('x-content-type', contentType);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
     xhr.send(chunkData);
   });
 }
@@ -129,17 +140,17 @@ async function uploadFileWithRetry(
   onAttempt?: (att: number, max: number) => void,
   signal?: AbortSignal,
 ): Promise<string> {
-  const ext         = file.name.split('.').pop() || 'bin';
-  const filename    = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const base        = getApiBase().replace(/\/api$/, '');
-  const token       = getToken();
-  const uploadId    = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
+  const ext      = file.name.split('.').pop() || 'bin';
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const base     = getApiBase().replace(/\/api$/, '');
+  const token    = getToken();
+  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  // Tableau de progression par chunk : bytes confirmés (envoi terminé) + en cours
+  const buffer      = await file.arrayBuffer();
+  const totalChunks = Math.max(1, Math.ceil(buffer.byteLength / CHUNK_SIZE));
+
   const bytesConfirmed = new Array<number>(totalChunks).fill(0);
   const bytesInFlight  = new Array<number>(totalChunks).fill(0);
-
   const reportProgress = () => {
     const sent = bytesConfirmed.reduce((a, b) => a + b, 0) + bytesInFlight.reduce((a, b) => a + b, 0);
     onProgress?.(Math.min(99, Math.round((sent / (file.size || 1)) * 100)));
@@ -148,53 +159,54 @@ async function uploadFileWithRetry(
   let conn: { notifyUploadStart: () => void; notifyUploadEnd: () => void } | null = null;
   try { conn = await import('../services/connectivity') as any; conn!.notifyUploadStart(); } catch {}
 
-  const uploadChunk = async (ci: number): Promise<{ done: boolean; url?: string }> => {
-    const chunkData = file.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE);
-    let lastErr: Error = new Error('Erreur inconnue');
-    for (let attempt = 0; attempt < CHUNK_DELAYS.length; attempt++) {
-      if (attempt > 0) {
-        bytesInFlight[ci] = 0; reportProgress();
-        await new Promise(r => setTimeout(r, CHUNK_DELAYS[attempt]));
-      }
-      onAttempt?.(ci + 1, totalChunks);
-      try {
-        const result = await sendChunk(
-          base, token, uploadId, ci, totalChunks,
-          filename, folder, file.type, chunkData,
-          (n) => { bytesInFlight[ci] = n; reportProgress(); },
-          signal,
-        );
-        bytesConfirmed[ci] = chunkData.size;
-        bytesInFlight[ci]  = 0;
-        reportProgress();
-        return result;
-      } catch (e: any) {
-        if (e?.name === 'AbortError') throw e;
-        lastErr = e;
-        const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
-        if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
-        if (attempt === CHUNK_DELAYS.length - 1) throw lastErr;
-      }
-    }
-    throw lastErr;
-  };
-
   try {
-    // Envoi de PARALLEL chunks simultanément → ~4× plus rapide sur connexion lente
+    onAttempt?.(1, PARALLEL);
+    onProgress?.(0);
+
+    const uploadChunk = async (i: number): Promise<{ done: boolean; url?: string }> => {
+      const start     = i * CHUNK_SIZE;
+      const chunkData = buffer.slice(start, start + CHUNK_SIZE);
+      let lastInFlight = 0;
+
+      for (let attempt = 0; attempt < CHUNK_DELAYS.length; attempt++) {
+        if (attempt > 0) await new Promise(r => setTimeout(r, CHUNK_DELAYS[attempt]));
+        bytesInFlight[i] = 0;
+        lastInFlight = 0;
+        try {
+          const result = await sendChunk(
+            base, token, uploadId, i, totalChunks,
+            filename, folder, file.type || 'application/octet-stream',
+            chunkData,
+            (n) => { bytesInFlight[i] = n; lastInFlight = n; reportProgress(); },
+            signal,
+          );
+          bytesConfirmed[i] = chunkData.byteLength;
+          bytesInFlight[i]  = 0;
+          reportProgress();
+          return result;
+        } catch (e: any) {
+          bytesInFlight[i] = 0;
+          reportProgress();
+          if (e?.name === 'AbortError') throw e;
+          const status = parseInt(e?.message?.match(/HTTP (\d+)/)?.[1] ?? '0');
+          if (status >= 400 && status < 500 && status !== 408 && status !== 429) throw e;
+          if (attempt === CHUNK_DELAYS.length - 1) throw e;
+        }
+      }
+      throw new Error(`Chunk ${i} échoué après ${CHUNK_DELAYS.length} tentatives`);
+    };
+
     for (let i = 0; i < totalChunks; i += PARALLEL) {
-      const batch = Array.from(
-        { length: Math.min(PARALLEL, totalChunks - i) },
-        (_, j) => uploadChunk(i + j),
-      );
+      const batch   = Array.from({ length: Math.min(PARALLEL, totalChunks - i) }, (_, j) => uploadChunk(i + j));
       const results = await Promise.all(batch);
       for (const r of results) {
         if (r.done && r.url) { onProgress?.(100); return r.url; }
       }
     }
+    throw new Error('Upload terminé sans URL de retour');
   } finally {
     conn?.notifyUploadEnd();
   }
-  throw new Error('Upload incomplet');
 }
 
 /* ── AddMediaModal ──────────────────────────────────────────── */
