@@ -96,13 +96,7 @@ async function sendChunk(
   onBytesLoaded: (n: number) => void,
   signal?: AbortSignal,
 ): Promise<{ done: boolean; url?: string }> {
-  const url = `${base}/api/uploads/chunk` +
-    `?uploadId=${encodeURIComponent(uploadId)}` +
-    `&chunkIndex=${chunkIndex}` +
-    `&totalChunks=${totalChunks}` +
-    `&filename=${encodeURIComponent(filename)}` +
-    `&folder=${encodeURIComponent(folder)}` +
-    `&contentType=${encodeURIComponent(contentType)}`;
+  const url = `${base}/api/uploads/chunk`;
 
   return new Promise<{ done: boolean; url?: string }>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -129,6 +123,12 @@ async function sendChunk(
     xhr.open('POST', url);
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.setRequestHeader('x-upload-id', uploadId);
+    xhr.setRequestHeader('x-chunk-index', String(chunkIndex));
+    xhr.setRequestHeader('x-total-chunks', String(totalChunks));
+    xhr.setRequestHeader('x-filename', filename);
+    xhr.setRequestHeader('x-folder', folder);
+    xhr.setRequestHeader('x-content-type', contentType);
     xhr.send(chunkData);
   });
 }
