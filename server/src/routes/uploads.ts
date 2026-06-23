@@ -14,6 +14,10 @@ const BUCKET      = process.env.STORAGE_BUCKET || 'nolimit_bucket';
 const TMP_DIR = join(tmpdir(), 'snl-uploads');
 if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
 
+// Verrou en mémoire : empêche deux finalisations concurrentes pour le même upload
+// (avec l'upload parallèle, les derniers morceaux peuvent arriver quasi simultanément)
+const finalizing = new Set<string>();
+
 // GET /api/uploads/proxy?url=...
 router.get('/proxy', async (req, res) => {
   const url = req.query.url as string;
@@ -93,29 +97,54 @@ router.post(
       return res.json({ received: chunkIndex, total: totalChunks, done: false });
     }
 
-    // Tous les morceaux reçus → assembler et envoyer au storage
+    // Tous les morceaux reçus. Verrou anti-concurrence : si une finalisation est
+    // déjà en cours pour cet upload (morceaux parallèles), on confirme sans rejouer.
+    if (finalizing.has(uploadId)) {
+      return res.json({ received: chunkIndex, total: totalChunks, done: false });
+    }
+    finalizing.add(uploadId);
+
+    // Tous les morceaux reçus → assembler (en streaming) et envoyer au storage
+    const assembledPath = join(uploadDir, '_assembled');
     try {
       const bucket   = BUCKET;
       const path     = folder ? `${folder}/${filename}` : filename;
       const endpoint = `${STORAGE_URL}/storage/v1/object/${bucket}/${path}`;
 
-      // Assembler en mémoire (fichiers <= ~100 Mo en pratique)
-      const assembled = Buffer.concat(
-        Array.from({ length: totalChunks }, (_, i) => {
-          const p = join(uploadDir, `chunk_${String(i).padStart(6, '0')}`);
-          return require('fs').readFileSync(p) as Buffer;
-        })
-      );
+      // Assembler sur disque, morceau par morceau, sans tout charger en RAM
+      // (indispensable pour les vidéos sur un container à mémoire limitée)
+      const ws = createWriteStream(assembledPath);
+      for (let i = 0; i < totalChunks; i++) {
+        const p = join(uploadDir, `chunk_${String(i).padStart(6, '0')}`);
+        await new Promise<void>((resolve, reject) => {
+          const rs = createReadStream(p);
+          rs.on('error', reject);
+          rs.on('end', resolve);
+          rs.pipe(ws, { end: false });
+        });
+      }
+      await new Promise<void>((resolve, reject) => {
+        ws.on('error', reject);
+        ws.end(() => resolve());
+      });
+
+      const size = statSync(assembledPath).size;
 
       const headers: Record<string, string> = {
-        apikey:         STORAGE_KEY,
-        Authorization:  `Bearer ${STORAGE_KEY}`,
-        'Content-Type': contentType,
-        'x-upsert':     'true',
+        apikey:          STORAGE_KEY,
+        Authorization:   `Bearer ${STORAGE_KEY}`,
+        'Content-Type':  contentType,
+        'Content-Length': String(size),
+        'x-upsert':      'true',
         'Cache-Control': '3600',
       };
 
-      const sRes = await fetch(endpoint, { method: 'PUT', headers, body: assembled });
+      // Envoyer le fichier en streaming (lecture disque → storage), mémoire bornée
+      const sRes = await fetch(endpoint, {
+        method: 'PUT', headers, body: createReadStream(assembledPath) as any,
+        // @ts-expect-error duplex non encore dans les types fetch de Node
+        duplex: 'half',
+      });
 
       if (!sRes.ok) {
         let msg = sRes.statusText;
@@ -132,6 +161,8 @@ router.post(
     } catch (e: any) {
       console.error('[Upload chunk/finalize]', e.message);
       return res.status(502).json({ error: e.message || 'Erreur storage' });
+    } finally {
+      finalizing.delete(uploadId);
     }
   }
 );

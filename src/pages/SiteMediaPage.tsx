@@ -119,7 +119,7 @@ async function sendChunk(
     };
     xhr.onerror   = () => reject(new Error('Erreur réseau'));
     xhr.ontimeout = () => reject(new Error('Délai dépassé'));
-    xhr.timeout   = 60_000;
+    xhr.timeout   = 120_000;
     xhr.open('POST', url);
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
