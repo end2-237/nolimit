@@ -538,7 +538,7 @@ export function SiteMediaPage() {
       setSubsLoading(prev => { const n = new Set(prev); n.delete('maladies'); return n; });
     });
   }, []);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [firstLoad, setFirstLoad] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [winW, setWinW] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
@@ -559,12 +559,16 @@ export function SiteMediaPage() {
       setMedia([]);
     } finally {
       setLoading(false);
-      setFirstLoad(false);
     }
   }, [activeSection.id]);
 
   // Reset firstLoad quand on change de section
   useEffect(() => { setFirstLoad(true); }, [activeSection.id]);
+
+  // firstLoad passe à false uniquement quand media ET sous-données sont prêts
+  useEffect(() => {
+    if (!loading && !subsLoading.has(activeSection.id)) setFirstLoad(false);
+  }, [loading, subsLoading, activeSection.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -669,15 +673,15 @@ export function SiteMediaPage() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 16px' : '16px 24px', position: 'relative' }}>
-        {loading && firstLoad ? (
-          /* Skeleton au premier chargement */
+        {(loading || activeSectionSubsLoading) && firstLoad ? (
+          /* Skeleton au premier chargement ou données section en cours */
           <div>
             <div className="skeleton" style={{ height: 10, borderRadius: 4, width: 120, marginBottom: 12 }} />
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
               {Array.from({ length: cols * 2 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           </div>
-        ) : !loading && sectionMedia.length === 0 ? (
+        ) : !loading && !activeSectionSubsLoading && sectionMedia.length === 0 ? (
           <div style={{ textAlign: 'center', paddingTop: 60 }}>
             <Image size={40} color="#CBD5E1" style={{ margin: '0 auto 12px' }} />
             <p style={{ fontSize: 14, color: T3, marginBottom: 16 }}>Aucun média pour cette section</p>
