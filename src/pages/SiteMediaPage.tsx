@@ -81,7 +81,7 @@ async function apiCall(method: string, path: string, body?: any) {
 
 const CHUNK_SIZE   = 512 * 1024; // 512 KB — sous la limite nginx 1 MB
 const CHUNK_DELAYS = [0, 3000, 8000, 15000, 30000];
-const PARALLEL     = 4;
+const PARALLEL     = 2;
 
 async function sendChunk(
   base: string,
@@ -197,6 +197,7 @@ async function uploadFileWithRetry(
     };
 
     for (let i = 0; i < totalChunks; i += PARALLEL) {
+      if (i > 0) await new Promise(r => setTimeout(r, 300));
       const batch   = Array.from({ length: Math.min(PARALLEL, totalChunks - i) }, (_, j) => uploadChunk(i + j));
       const results = await Promise.all(batch);
       for (const r of results) {
