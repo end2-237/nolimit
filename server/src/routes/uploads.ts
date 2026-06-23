@@ -139,9 +139,11 @@ router.post(
         'Cache-Control': '3600',
       };
 
-      // Envoyer le fichier en streaming (lecture disque → storage), mémoire bornée
+      // Envoyer le fichier en streaming (lecture disque → storage), mémoire bornée.
+      // POST + x-upsert = créer ou écraser (PUT échouerait : "Object not found"
+      // pour un nom de fichier qui n'existe pas encore).
       const sRes = await fetch(endpoint, {
-        method: 'PUT', headers, body: createReadStream(assembledPath) as any,
+        method: 'POST', headers, body: createReadStream(assembledPath) as any,
         // @ts-expect-error duplex non encore dans les types fetch de Node
         duplex: 'half',
       });
@@ -195,7 +197,7 @@ router.post(
 
     try {
       const sRes = await fetch(endpoint, {
-        method: 'PUT', headers, body: req as any,
+        method: 'POST', headers, body: req as any,
         // @ts-expect-error duplex non encore dans les types fetch de Node
         duplex: 'half',
       });
