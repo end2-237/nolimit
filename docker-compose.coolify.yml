@@ -16,8 +16,12 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - snl_logs:/app/logs
+    # Rattache le backend au reseau `coolify` pour joindre Postgres/Supabase
+    # (sinon il reste isole sur son propre reseau et ne peut pas atteindre la DB)
+    networks:
+      - coolify
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
       interval: 30s
       timeout: 10s
       start_period: 20s
@@ -25,3 +29,7 @@ services:
 
 volumes:
   snl_logs:
+
+networks:
+  coolify:
+    external: true
