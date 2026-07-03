@@ -40,6 +40,7 @@ COPY --from=builder /app/dist-web /usr/share/nginx/html
 # SPA config: all routes → index.html
 RUN printf 'server {\n\
     listen 80;\n\
+    listen [::]:80;\n\
     root /usr/share/nginx/html;\n\
     index index.html;\n\
     gzip on;\n\
