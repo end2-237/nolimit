@@ -186,11 +186,17 @@ function AppInner() {
 
     const alerts = db.getAlerts(false);
     if (alerts.length > 0) {
-      const critical = alerts.filter(a => a.type === 'critical_stock').length;
-      if (critical > 0) {
+      const criticalAlerts = alerts.filter(a => a.type === 'critical_stock');
+      if (criticalAlerts.length > 0) {
+        // Nommer explicitement les produits concernés dans la notification.
+        const names = criticalAlerts.map(a =>
+          a.product_name || db.getProductById(a.product_id)?.name || `Produit #${a.product_id}`
+        );
+        const shown = names.slice(0, 3).join(', ');
+        const extra = names.length > 3 ? ` +${names.length - 3} autre(s)` : '';
         notifService.send(
-          `⚠️ ${critical} alerte(s) critique(s)`,
-          `Des produits sont en stock critique. Vérifiez les alertes.`,
+          `⚠️ ${criticalAlerts.length} produit(s) en stock critique`,
+          `${shown}${extra}`,
           'warning',
           'system'
         );

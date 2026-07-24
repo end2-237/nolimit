@@ -39,7 +39,12 @@ export function AlertsPage() {
   const [statusFilter, setStatusFilter] = useState('unread');
 
   const load = () => {
-    const all = db.getAlerts();
+    // Résoudre le nom du produit depuis product_id quand il manque (sinon "—"),
+    // pour que l'alerte indique clairement DE QUEL produit il s'agit.
+    const all = db.getAlerts().map(a => ({
+      ...a,
+      product_name: a.product_name || db.getProductById(a.product_id)?.name || `Produit #${a.product_id}`,
+    }));
     setAlerts(all);
   };
 
