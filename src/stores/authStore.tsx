@@ -71,9 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string) => {
     const result = await db.authenticate(username, password);
     if (result) {
-      setUser(result.user as any);
       localStorage.setItem(SESSION_KEY,    result.user.id.toString());
       localStorage.setItem(SESSION_EXPIRY, (Date.now() + SESSION_TTL).toString());
+      // Charger les données avec le nouveau token AVANT d'afficher le dashboard,
+      // sinon toutes les pages affichent "0" le temps que le cache se remplisse.
+      // db.refresh() résout toujours (gère ses erreurs en interne).
+      await db.refresh();
+      setUser(result.user as any);
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
