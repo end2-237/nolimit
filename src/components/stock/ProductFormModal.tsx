@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { X, Package, CheckCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -80,6 +80,9 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
     : (APP_CONFIG as any).materialTypes || [];
   
   const isCustomSubType = form.sub_type === 'Autre' || (form.sub_type && !subTypeOptions.includes(form.sub_type));
+
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,7 +170,7 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
             {!isEdit && <p className="text-xs text-gray-400 mt-1">SKU attribué : <span className="font-mono font-bold">{form.sku}</span></p>}
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (submitLock.current) return; submitLock.current = true; setSubmitting(true); Promise.resolve(handleSubmit(e)).finally(() => { submitLock.current = false; setSubmitting(false); }); }} className="px-4 sm:px-6 py-5 space-y-4">
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">{error}</div>}
 
             {/* Bannière données en ligne — affichée seulement pour un nouveau produit avec hint */}
@@ -315,8 +318,8 @@ export function ProductFormModal({ product, initialSku, initialHint, onClose }: 
 
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              <Button type="submit" className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]">
-                {isEdit ? 'Enregistrer' : 'Créer le Produit'}
+              <Button type="submit" disabled={submitting} className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]">
+                {submitting ? 'Enregistrement…' : (isEdit ? 'Enregistrer' : 'Créer le Produit')}
               </Button>
             </div>
           </form>

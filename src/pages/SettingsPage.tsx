@@ -119,8 +119,10 @@ function SitesManager() {
     setEditingSite(null);
   };
 
+  const addLock = useRef(false);
   const handleAdd = async () => {
-    if (!newSite.id || !newSite.name) return;
+    if (!newSite.id || !newSite.name || addLock.current) return;
+    addLock.current = true;
     const newS: Site = {
       id: newSite.id.toUpperCase(),
       name: newSite.name,
@@ -129,9 +131,11 @@ function SitesManager() {
       address: newSite.address,
       manager: newSite.manager,
     };
-    await saveSites([...sites, newS]);
-    setNewSite({});
-    setShowAdd(false);
+    try {
+      await saveSites([...sites, newS]);
+      setNewSite({});
+      setShowAdd(false);
+    } finally { addLock.current = false; }
   };
 
   const handleDelete = async (id: string) => {

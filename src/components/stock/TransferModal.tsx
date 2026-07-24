@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { X, ArrowRight, RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
@@ -27,6 +27,9 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
   const siteOptions = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id));
   const selectedProduct = products.find(p => p.id.toString() === productId);
   const availableStock = selectedProduct?.stock?.[fromSite] || 0;
+
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,7 +102,7 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
             </div>
           )
         ) : (
-          <form onSubmit={handleSubmit} className="px-3 sm:px-6 py-4 space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (submitLock.current) return; submitLock.current = true; setSubmitting(true); Promise.resolve(handleSubmit(e)).finally(() => { submitLock.current = false; setSubmitting(false); }); }} className="px-3 sm:px-6 py-4 space-y-4">
             {error && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -194,7 +197,7 @@ export function TransferModal({ products, allowedSites, onClose }: TransferModal
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              <Button type="submit" className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]" disabled={fromSite === toSite}>
+              <Button type="submit" className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]" disabled={fromSite === toSite || submitting}>
                 Effectuer le Transfert
               </Button>
             </div>

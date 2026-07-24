@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { X, AlertCircle, CheckCircle, Truck, ArrowUpRight, ArrowDownLeft, ShoppingCart, Clock } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -30,6 +30,9 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
   const [reason, setReason] = useState('Livraison fournisseur');
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +123,7 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-3 sm:px-6 py-4 space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (submitLock.current) return; submitLock.current = true; setSubmitting(true); Promise.resolve(handleSubmit(e)).finally(() => { submitLock.current = false; setSubmitting(false); }); }} className="px-3 sm:px-6 py-4 space-y-4">
             {error && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -190,7 +193,7 @@ export function BulkInputModal({ product, allowedSites, onClose }: BulkInputModa
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              <Button type="submit" className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]">
+              <Button type="submit" disabled={submitting} className="flex-1 bg-[#0284C7] hover:bg-[#0369A1]">
                 <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Valider l'entrée
               </Button>
             </div>
@@ -221,6 +224,9 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
 
   const availableStock = product?.stock?.[site] || 0;
   const estimatedCA = product && parseInt(quantity) > 0 ? parseInt(quantity) * product.price : 0;
+
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,7 +312,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
           </div>
           )
         ) : (
-          <form onSubmit={handleSubmit} className="px-3 sm:px-6 py-4 space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (submitLock.current) return; submitLock.current = true; setSubmitting(true); Promise.resolve(handleSubmit(e)).finally(() => { submitLock.current = false; setSubmitting(false); }); }} className="px-3 sm:px-6 py-4 space-y-4">
             {error && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -374,7 +380,7 @@ export function StockOutModal({ product, allowedSites, onClose }: StockOutModalP
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              <Button type="submit" disabled={availableStock <= 0}
+              <Button type="submit" disabled={availableStock <= 0 || submitting}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
                 <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Enregistrer la sortie
               </Button>
@@ -407,6 +413,9 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
 
   const canConfirmDirectly = user?.role === 'admin' || user?.role === 'manager';
   const availableStock = product?.stock?.[site] || 0;
+
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -501,7 +510,7 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
             </div>
           )
         ) : (
-          <form onSubmit={handleSubmit} className="px-3 sm:px-6 py-4 space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (submitLock.current) return; submitLock.current = true; setSubmitting(true); Promise.resolve(handleSubmit(e)).finally(() => { submitLock.current = false; setSubmitting(false); }); }} className="px-3 sm:px-6 py-4 space-y-4">
             {error && (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -557,7 +566,7 @@ export function TransportDamageModal({ product, allowedSites, onClose }: Transpo
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-              <Button type="submit" className="flex-1 bg-orange-600 hover:bg-orange-700 text-white">
+              <Button type="submit" disabled={submitting} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white">
                 {canConfirmDirectly
                   ? <><Truck className="w-3.5 h-3.5 mr-1.5" /> Confirmer la perte</>
                   : <><Clock className="w-3.5 h-3.5 mr-1.5" /> Soumettre la déclaration</>

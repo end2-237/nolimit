@@ -331,6 +331,7 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
   const [pending, setPending] = useState<Movement[]>([]);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<number, string>>({});
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   const load = () => setPending(db.getPendingMovements());
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
@@ -338,17 +339,23 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
   if (pending.length === 0) return null;
 
   const handleApprove = async (id: number) => {
-    if (!user) return;
-    await db.approveMovement(id, user.id);
-    load(); onRefresh();
+    if (!user || busyId !== null) return;
+    setBusyId(id);
+    try {
+      await db.approveMovement(id, user.id);
+      load(); onRefresh();
+    } finally { setBusyId(null); }
   };
 
   const handleReject = async (id: number) => {
-    if (!user) return;
-    await db.rejectMovement(id, user.id, rejectReason[id] || 'Refusé');
-    setRejectingId(null);
-    setRejectReason(r => { const n = { ...r }; delete n[id]; return n; });
-    load(); onRefresh();
+    if (!user || busyId !== null) return;
+    setBusyId(id);
+    try {
+      await db.rejectMovement(id, user.id, rejectReason[id] || 'Refusé');
+      setRejectingId(null);
+      setRejectReason(r => { const n = { ...r }; delete n[id]; return n; });
+      load(); onRefresh();
+    } finally { setBusyId(null); }
   };
 
   const pendingIn = pending.filter(m => m.type === 'pending_in' || (m.type === 'in' && m.status === 'pending'));
@@ -433,7 +440,8 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
                       />
-                      <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', background: '#DC2626' }}
+                      <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', background: '#DC2626', opacity: busyId === m.id ? 0.5 : 1 }}
+                        disabled={busyId === m.id}
                         onClick={() => handleReject(m.id)}>Refuser</button>
                       <button className="snl-btn snl-btn-secondary" style={{ height: 30, fontSize: 12, padding: '0 10px' }}
                         onClick={() => setRejectingId(null)}>Annuler</button>
@@ -443,9 +451,10 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
 
                 {rejectingId !== m.id && (
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                    <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 4, opacity: busyId === m.id ? 0.5 : 1 }}
+                      disabled={busyId === m.id}
                       onClick={() => handleApprove(m.id)}>
-                      <CheckCircle style={{ width: 12, height: 12 }} /> Valider
+                      <CheckCircle style={{ width: 12, height: 12 }} /> {busyId === m.id ? '...' : 'Valider'}
                     </button>
                     <button className="snl-btn snl-btn-secondary" style={{ height: 30, fontSize: 12, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 4, color: '#DC2626', borderColor: '#FECACA' }}
                       onClick={() => setRejectingId(m.id)}>

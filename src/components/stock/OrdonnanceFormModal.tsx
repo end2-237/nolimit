@@ -210,6 +210,7 @@ export function OrdonnanceFormModal({ onClose, onSaved, initialOrdonnance }: Pro
 
   // ── Action : Payer maintenant
   async function handlePayNow() {
+    if (loading) return;
     if (!validate() || !user) return;
     setLoading(true); setErrors([]);
     try {
@@ -240,6 +241,7 @@ export function OrdonnanceFormModal({ onClose, onSaved, initialOrdonnance }: Pro
 
   // ── Action : Payer plus tard et imprimer
   async function handlePayLaterAndPrint() {
+    if (loading) return;
     if (!validate() || !user) return;
     setLoading(true); setErrors([]);
     try {

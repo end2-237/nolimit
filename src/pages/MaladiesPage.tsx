@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Edit3, Save, X, Eye, EyeOff } from 'lucide-react';
 
 function getApiBase(): string {
@@ -35,6 +35,14 @@ function slugify(s: string) {
 function MaladieForm({ initial, onSave, onCancel }: { initial: Omit<Maladie, 'id'> & { id?: number }; onSave: (d: any) => void; onCancel: () => void }) {
   const [form, setForm] = useState(initial);
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const doSave = () => {
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setSubmitting(true);
+    Promise.resolve(onSave(form)).finally(() => { submitLock.current = false; setSubmitting(false); });
+  };
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 24, marginBottom: 16 }}>
@@ -75,8 +83,8 @@ function MaladieForm({ initial, onSave, onCancel }: { initial: Omit<Maladie, 'id
         <button onClick={onCancel} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', fontSize: 14 }}>
           <X size={14} style={{ marginRight: 6 }} />Annuler
         </button>
-        <button onClick={() => onSave(form)} style={{ padding: '10px 20px', borderRadius: 8, background: '#16A34A', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Save size={14} />Enregistrer
+        <button onClick={doSave} disabled={submitting} style={{ padding: '10px 20px', borderRadius: 8, background: '#16A34A', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Save size={14} />{submitting ? 'Enregistrement…' : 'Enregistrer'}
         </button>
       </div>
     </div>

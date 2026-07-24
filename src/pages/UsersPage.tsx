@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Users, Plus, Edit2, Trash2, Shield, Eye, EyeOff, X, CheckCircle, AlertCircle, Check, Minus } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -239,6 +239,9 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
     try { return JSON.parse(form.site_ids); } catch { return []; }
   };
 
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.username || !form.full_name) { setError('Champs obligatoires manquants'); return; }
@@ -246,6 +249,10 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
 
     const existing = db.getUsers().find(u => u.username === form.username && u.id !== user?.id);
     if (existing) { setError('Ce nom d\'utilisateur existe déjà'); return; }
+
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setSubmitting(true);
 
     const userData = {
       ...form,
@@ -442,6 +449,7 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
               <button
                 type="submit"
+                disabled={submitting}
                 style={{
                   flex: 1,
                   background: '#1D4ED8',
@@ -451,13 +459,14 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
                   padding: '8px 16px',
                   fontSize: 14,
                   fontWeight: 600,
-                  cursor: 'pointer',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  opacity: submitting ? 0.6 : 1,
                   transition: 'background 0.15s',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#1E40AF')}
+                onMouseEnter={e => { if (!submitting) e.currentTarget.style.background = '#1E40AF'; }}
                 onMouseLeave={e => (e.currentTarget.style.background = '#1D4ED8')}
               >
-                {isEdit ? 'Enregistrer' : 'Créer l\'utilisateur'}
+                {submitting ? 'Enregistrement…' : (isEdit ? 'Enregistrer' : 'Créer l\'utilisateur')}
               </button>
             </div>
           </form>
