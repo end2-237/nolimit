@@ -144,7 +144,7 @@ export function AlertsPage() {
 
       {/* Stat tiles */}
       <div style={{ padding: '12px 24px', borderBottom: BDR, background: '#F8FAFC' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
           {Object.entries(counts).map(([type, count]) => {
             const cfg = alertTypeConfig[type];
             if (!cfg) return null;

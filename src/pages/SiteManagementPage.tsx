@@ -157,7 +157,7 @@ export function SiteManagementPage() {
         </div>
 
         {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           {[
             { label: 'Publiés',      value: publishedCount,                   bg: '#DCFCE7', color: ACCENT,   border: '#BBF7D0' },
             { label: 'Non publiés',  value: products.length - publishedCount, bg: '#F8FAFC', color: T2,       border: '#E2E8F0' },

@@ -46,7 +46,7 @@ function MaladieForm({ initial, onSave, onCancel }: { initial: Omit<Maladie, 'id
 
   return (
     <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 24, marginBottom: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 16 }}>
         <div>
           <label style={{ fontSize: 12, fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: 6 }}>Nom *</label>
           <input value={form.nom} onChange={e => { set('nom', e.target.value); if (!initial.id) set('slug', slugify(e.target.value)); }}

@@ -124,6 +124,10 @@
 
 html { font-size: var(--font-size); }
 
+/* Garde-fou global anti-débordement horizontal (mobile) : aucun enfant trop
+   large ne doit provoquer un scroll horizontal de toute la page. */
+html, body, #root { max-width: 100%; overflow-x: hidden; }
+
 /* ── Scrollbars ────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

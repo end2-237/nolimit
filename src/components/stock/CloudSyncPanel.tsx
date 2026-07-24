@@ -804,7 +804,7 @@ export function CloudSyncPanel() {
                 <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
                 <p className="font-bold text-green-800 text-sm mb-3">Synchronisation terminée</p>
                 {syncSummary.conflictsFound > 0 ? (
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
                       { label: 'Conflits', value: syncSummary.conflictsFound, color: 'bg-orange-100 text-orange-700' },
                       { label: 'Acceptés', value: syncSummary.conflictsAccepted, color: 'bg-green-100 text-green-700' },

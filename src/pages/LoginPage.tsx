@@ -64,7 +64,7 @@ export function LoginPage() {
     <>
       <style>{CSS}</style>
       <div style={{
-        minHeight: '100vh',
+        minHeight: '100dvh',
         display: 'flex',
         fontFamily: "'Plus Jakarta Sans', sans-serif",
       }}>

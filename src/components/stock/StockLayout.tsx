@@ -421,13 +421,17 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
         fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
       }}
     >
-      {/* QuickActionBar stays on top */}
-      <QuickActionBar
-        onNavigate={(page) => handleNavigate(page as PageId)}
-        alertCount={alertCount}
-        onNewProduct={() => handleNavigate('products')}
-        onNewMovement={() => handleNavigate('movements')}
-      />
+      {/* QuickActionBar (barre type titlebar Electron) — masquee en mobile :
+          elle deborde horizontalement et double l'OfflineIndicator. La barre
+          mobile ci-dessous (burger + offline + alertes) la remplace. */}
+      {!isMobile && (
+        <QuickActionBar
+          onNavigate={(page) => handleNavigate(page as PageId)}
+          alertCount={alertCount}
+          onNewProduct={() => handleNavigate('products')}
+          onNewMovement={() => handleNavigate('movements')}
+        />
+      )}
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
 
@@ -483,13 +487,14 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
             }}>
               <button
                 onClick={() => setIsMobileOpen(true)}
+                aria-label="Ouvrir le menu"
                 style={{
-                  width: 32, height: 32, borderRadius: 6,
+                  width: 44, height: 44, borderRadius: 8, marginLeft: -6,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: SB_HOVER, border: 'none', cursor: 'pointer',
                 }}
               >
-                <Menu size={15} style={{ color: 'rgba(255,255,255,0.6)' }} />
+                <Menu size={18} style={{ color: 'rgba(255,255,255,0.85)' }} />
               </button>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.02em' }}>
                 {APP_CONFIG.shortName}
@@ -500,10 +505,10 @@ export function StockLayout({ children, activePage, onNavigate, alertCount = 0 }
                   <button
                     onClick={() => handleNavigate('alerts')}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 4,
-                      padding: '3px 9px', borderRadius: 99,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                      minHeight: 44, padding: '0 12px', borderRadius: 99,
                       background: 'rgba(239,68,68,0.15)', color: '#FCA5A5',
-                      border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                      border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
                     }}
                   >
                     <Bell size={12} /> {alertCount}

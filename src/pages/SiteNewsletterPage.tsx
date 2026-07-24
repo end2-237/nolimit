@@ -65,7 +65,7 @@ export function SiteNewsletterPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Total abonnés', value: rows.length, color: T1, sub: 'tous statuts' },
           { label: 'Actifs',        value: activeCount, color: ACCENT, sub: 'reçoivent les emails' },
@@ -105,6 +105,7 @@ export function SiteNewsletterPage() {
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '56px 20px', color: T3, fontSize: 13 }}>Aucun abonné trouvé</div>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table className="snl-table">
             <thead>
               <tr><th>#</th><th>Email</th><th>Statut</th><th>Date inscription</th></tr>
@@ -130,6 +131,7 @@ export function SiteNewsletterPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
