@@ -547,7 +547,7 @@ export function CloudSyncPanel() {
                 <p>• "Sauvegarder" envoie vos données locales vers le cloud</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-[10px] font-bold text-slate-600 uppercase">Site local (push)</Label>
                   <select className="w-full h-9 border rounded-md px-2 text-sm mt-1"
@@ -611,7 +611,7 @@ export function CloudSyncPanel() {
 
               {/* Compact action buttons: 2x2 layout */}
               {syncPhase === 'idle' && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button onClick={handlePush}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 gap-1.5">
                     <Upload className="w-3.5 h-3.5" />
@@ -707,7 +707,7 @@ export function CloudSyncPanel() {
                             <span className="text-[9px] font-mono text-gray-400">{conflict.productSku}</span>
                           </div>
                           {/* Diff row */}
-                          <div className="grid grid-cols-2 gap-1.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                             <div className={`rounded-lg px-2 py-1.5 border ${isAccepted ? 'bg-gray-100/50 border-gray-200' : 'bg-white/70 border-gray-200'}`}>
                               <div className="text-[9px] text-gray-400 uppercase font-bold mb-0.5">📍 Local</div>
                               <div className="text-xs text-gray-700 font-mono font-medium break-all">{conflict.localLabel}</div>

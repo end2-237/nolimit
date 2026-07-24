@@ -155,7 +155,11 @@ export function ServerStatus() {
           <div>
             <label className="text-[11px] text-gray-500 font-medium">URL API <span className="text-gray-400">(ex: https://snl-api.vps.buyticle.com/api)</span></label>
             <input
-              type="text"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
               value={inputApiUrl}
               onChange={e => setInputApiUrl(e.target.value)}
               placeholder="https://snl-api.vps.buyticle.com/api"
@@ -165,7 +169,11 @@ export function ServerStatus() {
           <div>
             <label className="text-[11px] text-gray-500 font-medium">URL WebSocket <span className="text-gray-400">(sans /api)</span></label>
             <input
-              type="text"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
               value={inputUrl}
               onChange={e => setInputUrl(e.target.value)}
               placeholder="https://snl-api.vps.buyticle.com"

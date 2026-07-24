@@ -440,10 +440,10 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
                         value={rejectReason[m.id] || ''}
                         onChange={e => setRejectReason(r => ({ ...r, [m.id]: e.target.value }))}
                       />
-                      <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', background: '#DC2626', opacity: busyId === m.id ? 0.5 : 1 }}
+                      <button className="snl-btn snl-btn-primary" style={{ height: 38, fontSize: 12, padding: '0 14px', background: '#DC2626', opacity: busyId === m.id ? 0.5 : 1 }}
                         disabled={busyId === m.id}
                         onClick={() => handleReject(m.id)}>Refuser</button>
-                      <button className="snl-btn snl-btn-secondary" style={{ height: 30, fontSize: 12, padding: '0 10px' }}
+                      <button className="snl-btn snl-btn-secondary" style={{ height: 38, fontSize: 12, padding: '0 14px' }}
                         onClick={() => setRejectingId(null)}>Annuler</button>
                     </div>
                   )}
@@ -451,12 +451,12 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
 
                 {rejectingId !== m.id && (
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button className="snl-btn snl-btn-primary" style={{ height: 30, fontSize: 12, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 4, opacity: busyId === m.id ? 0.5 : 1 }}
+                    <button className="snl-btn snl-btn-primary" style={{ height: 38, fontSize: 12, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 4, opacity: busyId === m.id ? 0.5 : 1 }}
                       disabled={busyId === m.id}
                       onClick={() => handleApprove(m.id)}>
                       <CheckCircle style={{ width: 12, height: 12 }} /> {busyId === m.id ? '...' : 'Valider'}
                     </button>
-                    <button className="snl-btn snl-btn-secondary" style={{ height: 30, fontSize: 12, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 4, color: '#DC2626', borderColor: '#FECACA' }}
+                    <button className="snl-btn snl-btn-secondary" style={{ height: 38, fontSize: 12, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 4, color: '#DC2626', borderColor: '#FECACA' }}
                       onClick={() => setRejectingId(m.id)}>
                       <XCircle style={{ width: 12, height: 12 }} /> Refuser
                     </button>
