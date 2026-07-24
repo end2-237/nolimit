@@ -50,9 +50,10 @@ export function AlertsPage() {
 
   useEffect(() => {
     load();
-    // Refresh every 10 seconds
+    // Refresh every 10 seconds + à chaque fin de synchro (phase 2)
     const t = setInterval(load, 10000);
-    return () => clearInterval(t);
+    window.addEventListener('snl:data-refreshed', load);
+    return () => { clearInterval(t); window.removeEventListener('snl:data-refreshed', load); };
   }, []);
 
   const filtered = alerts.filter(a => {
@@ -192,7 +193,12 @@ export function AlertsPage() {
 
       {/* Alerts list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && !db.isFullyLoaded() ? (
+          <div style={{ textAlign: 'center', padding: '64px 0', color: T3 }}>
+            <Bell className="animate-spin" style={{ width: 30, height: 30, margin: '0 auto 12px', opacity: 0.6 }} />
+            <p style={{ fontSize: 13, color: T2 }}>Chargement des alertes…</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '64px 0', color: T3 }}>
             <Bell style={{ width: 36, height: 36, margin: '0 auto 12px', opacity: 0.2 }} />
             <p style={{ fontSize: 13, color: T2 }}>Aucune alerte trouvée</p>

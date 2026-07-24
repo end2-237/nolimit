@@ -200,15 +200,20 @@ interface DBCache {
   alerts: Alert[];
   reports: ReportRecord[];
   loaded: boolean;
+  /** true une fois la phase 2 (mouvements/alertes/rapports) chargee. */
+  fullyLoaded?: boolean;
 }
 
 // ─── Database Service ─────────────────────────────────────────────────────────
 
 class DatabaseService {
   private cache: DBCache = {
-    users: [], products: [], stocks: [], movements: [], alerts: [], reports: [], loaded: false,
+    users: [], products: [], stocks: [], movements: [], alerts: [], reports: [], loaded: false, fullyLoaded: false,
   };
   private _initPromise: Promise<void> | null = null;
+
+  /** true quand les mouvements/alertes/rapports (phase 2) sont charges. */
+  isFullyLoaded(): boolean { return this.cache.fullyLoaded !== false; }
 
   constructor() {
     // Restore token from storage on boot
@@ -225,60 +230,47 @@ class DatabaseService {
   private async _load(): Promise<void> {
     if (!localStorage.getItem('snl_token')) {
       this.cache.loaded = true;
+      this.cache.fullyLoaded = true;
       return;
     }
 
     // Snapshot de l'ancien cache pour pouvoir le restaurer si le fetch échoue
     const previousCache = this.cache.loaded ? { ...this.cache } : null;
 
-    // ── Online: fetch from API then persist to IndexedDB ─────────────────────
+    // ── Online: chargement PAR PRIORITE ──────────────────────────────────────
+    // Phase 1 (bloquante) : produits + stocks + utilisateurs -> le dashboard est
+    // utilisable tout de suite. Phase 2 (arriere-plan) : mouvements + alertes +
+    // rapports. Ainsi on n'attend pas les gros endpoints pour afficher l'app.
     if (isOnline()) {
       try {
-        const results = await Promise.all([
+        const [products, stocks, users] = await Promise.all([
           Products.getAll().catch(() => null),
           Stocks.getAll().catch(() => null),
           Users.getAll().catch(() => null),
-          Movements.getAll({ limit: 500 }).catch(() => null),
-          Alerts.getAll().catch(() => null),
-          Reports.getAll().catch(() => null),
         ]);
 
-        const [products, stocks, users, movements, alerts, reports] = results;
-
-        // Si les produits reviennent vides alors qu'on en avait, c'est sûrement
-        // une erreur réseau passagère — on garde l'ancien cache
+        // Produits vides alors qu'on en avait = erreur reseau passagere -> on garde
         const hadProducts = previousCache && previousCache.products.length > 0;
         const gotEmptyProducts = !products || products.length === 0;
         if (hadProducts && gotEmptyProducts) {
-          // Garder le cache existant, juste marquer loaded
-          this.cache = { ...previousCache!, loaded: true };
+          this.cache = { ...previousCache!, loaded: true, fullyLoaded: true };
           return;
         }
 
-        // Fusion : si un endpoint échoue (null), on garde l'ancienne valeur
-        const merged = {
-          products:  products  ?? previousCache?.products  ?? [],
-          stocks:    stocks    ?? previousCache?.stocks    ?? [],
-          users:     users     ?? previousCache?.users     ?? [],
-          movements: movements ?? previousCache?.movements ?? [],
-          alerts:    alerts    ?? previousCache?.alerts    ?? [],
-          reports:   reports   ?? previousCache?.reports   ?? [],
+        this.cache = {
+          products:  products ?? previousCache?.products ?? [],
+          stocks:    stocks   ?? previousCache?.stocks   ?? [],
+          users:     users    ?? previousCache?.users    ?? [],
+          movements: previousCache?.movements ?? [],
+          alerts:    previousCache?.alerts    ?? [],
+          reports:   previousCache?.reports   ?? [],
           loaded:    true,
+          fullyLoaded: false,
         };
-
-        this.cache = merged;
         this.ensureAllBarcodesAssigned();
 
-        // Persist uniquement si on a reçu des données réelles
-        if (merged.products.length > 0) {
-          persistCache({
-            products:  merged.products,
-            stocks:    merged.stocks,
-            users:     merged.users,
-            movements: merged.movements,
-            alerts:    merged.alerts,
-          }).catch(() => {});
-        }
+        // Phase 2 : ne pas attendre — se termine en arriere-plan.
+        void this._loadSecondary(previousCache);
         return;
       } catch {
         // API totalement inaccessible — tomber dans le cache IndexedDB
@@ -288,18 +280,52 @@ class DatabaseService {
     // ── Offline ou API morte: charger depuis IndexedDB ────────────────────────
     try {
       const cached = await loadCache();
-      // Préférer les données IndexedDB seulement si elles sont plus riches
       const useIndexed = !previousCache || cached.products.length >= previousCache.products.length;
       this.cache = useIndexed
-        ? { ...cached, reports: [], loaded: true }
-        : { ...previousCache!, loaded: true };
+        ? { ...cached, reports: [], loaded: true, fullyLoaded: true }
+        : { ...previousCache!, loaded: true, fullyLoaded: true };
       this.ensureAllBarcodesAssigned();
     } catch {
-      // Garder le cache mémoire si IndexedDB plante aussi
       if (previousCache) {
-        this.cache = { ...previousCache, loaded: true };
+        this.cache = { ...previousCache, loaded: true, fullyLoaded: true };
       } else {
         this.cache.loaded = true;
+        this.cache.fullyLoaded = true;
+      }
+    }
+  }
+
+  /** Phase 2 (arriere-plan) : mouvements + alertes + rapports. */
+  private async _loadSecondary(previousCache: DBCache | null): Promise<void> {
+    try {
+      const [movements, alerts, reports] = await Promise.all([
+        Movements.getAll({ limit: 500 }).catch(() => null),
+        Alerts.getAll().catch(() => null),
+        Reports.getAll().catch(() => null),
+      ]);
+      this.cache = {
+        ...this.cache,
+        movements: movements ?? previousCache?.movements ?? this.cache.movements,
+        alerts:    alerts    ?? previousCache?.alerts    ?? this.cache.alerts,
+        reports:   reports   ?? previousCache?.reports   ?? this.cache.reports,
+        loaded:    true,
+        fullyLoaded: true,
+      };
+      if (this.cache.products.length > 0) {
+        persistCache({
+          products:  this.cache.products,
+          stocks:    this.cache.stocks,
+          users:     this.cache.users,
+          movements: this.cache.movements,
+          alerts:    this.cache.alerts,
+        }).catch(() => {});
+      }
+    } catch {
+      // garder ce qu'on a
+    } finally {
+      this.cache.fullyLoaded = true;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
       }
     }
   }

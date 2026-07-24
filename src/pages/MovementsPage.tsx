@@ -334,7 +334,12 @@ function PendingApprovalsAdmin({ onRefresh }: { onRefresh: () => void }) {
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const load = () => setPending(db.getPendingMovements());
-  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    window.addEventListener('snl:data-refreshed', load);
+    return () => { clearInterval(t); window.removeEventListener('snl:data-refreshed', load); };
+  }, []);
 
   if (pending.length === 0) return null;
 
@@ -694,7 +699,12 @@ export function MovementsPage() {
         <>
           {isAdmin && <PendingApprovalsAdmin onRefresh={load} />}
 
-          {displayMovements.length === 0 ? (
+          {displayMovements.length === 0 && !db.isFullyLoaded() ? (
+            <div style={{ textAlign: 'center', padding: '64px 0', color: T3 }}>
+              <RefreshCw className="animate-spin" style={{ width: 32, height: 32, margin: '0 auto 12px', opacity: 0.6 }} />
+              <p style={{ fontSize: 13 }}>Chargement des mouvements…</p>
+            </div>
+          ) : displayMovements.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '64px 0', color: T3 }}>
               <RefreshCw style={{ width: 40, height: 40, margin: '0 auto 12px', opacity: 0.2 }} />
               <p style={{ fontSize: 13 }}>Aucun mouvement trouvé</p>
