@@ -39,12 +39,13 @@ export function AlertsPage() {
   const [statusFilter, setStatusFilter] = useState('unread');
 
   const load = () => {
-    // Résoudre le nom du produit depuis product_id quand il manque (sinon "—"),
-    // pour que l'alerte indique clairement DE QUEL produit il s'agit.
-    const all = db.getAlerts().map(a => ({
-      ...a,
-      product_name: a.product_name || db.getProductById(a.product_id)?.name || `Produit #${a.product_id}`,
-    }));
+    // Résoudre le nom du produit depuis product_id UNIQUEMENT s'il existe un vrai
+    // produit (certaines alertes système — sync/sauvegarde — n'ont pas de produit,
+    // il ne faut donc pas afficher "Produit #null").
+    const all = db.getAlerts().map(a => {
+      const prod = a.product_id ? db.getProductById(a.product_id) : null;
+      return { ...a, product_name: a.product_name || prod?.name || '' };
+    });
     setAlerts(all);
   };
 
@@ -264,7 +265,7 @@ export function AlertsPage() {
                     {/* Product name + unread dot */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: T1, margin: 0 }}>
-                        {alert.product_name || '—'}
+                        {alert.product_name || alertTypeConfig[alert.type]?.label || 'Notification'}
                       </p>
                       {!alert.is_read && (
                         <span style={{
