@@ -44,10 +44,10 @@ function getCategoryLabel(id: string) {
 
 /* ── KPI tile ───────────────────────────────────────────────────── */
 function StatTile({
-  label, value, sub, accent = false, warning = false, danger = false, pulse = false,
+  label, value, sub, accent = false, warning = false, danger = false, pulse = false, loading = false,
 }: {
   label: string; value: string | number; sub?: string;
-  accent?: boolean; warning?: boolean; danger?: boolean; pulse?: boolean;
+  accent?: boolean; warning?: boolean; danger?: boolean; pulse?: boolean; loading?: boolean;
 }) {
   const color = danger ? '#DC2626' : warning ? '#D97706' : accent ? ACCENT : T1;
   const dotBg = danger ? '#FEE2E2' : warning ? '#FEF3C7' : accent ? '#DCFCE7' : '#F1F5F9';
@@ -66,13 +66,20 @@ function StatTile({
         </span>
         <div style={{ width: 7, height: 7, borderRadius: 99, background: dotBg, border: `1.5px solid ${color}20` }} />
       </div>
-      <div style={{ fontSize: 26, fontWeight: 800, color, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-        {value}
-      </div>
-      {sub && (
+      {loading ? (
+        <div style={{ height: 26, width: '60%', borderRadius: 6, background: '#E2E8F0', animation: 'pulse 1.2s ease-in-out infinite' }} />
+      ) : (
+        <div style={{ fontSize: 26, fontWeight: 800, color, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          {value}
+        </div>
+      )}
+      {sub && !loading && (
         <div style={{ fontSize: 11, color: T3, marginTop: 5, fontWeight: 500 }}>
           {sub}
         </div>
+      )}
+      {loading && (
+        <div style={{ height: 11, width: '40%', borderRadius: 4, background: '#EEF2F6', marginTop: 8, animation: 'pulse 1.2s ease-in-out infinite' }} />
       )}
     </div>
   );
@@ -160,7 +167,13 @@ export function InventoryDashboard() {
   useEffect(() => {
     const h = () => load();
     window.addEventListener('snl:stock-updated', h);
-    return () => window.removeEventListener('snl:stock-updated', h);
+    // Se rafraîchir dès que la synchro (phase 2 / refresh périodique) se termine,
+    // sinon le dashboard reste bloqué sur les valeurs vides du montage.
+    window.addEventListener('snl:data-refreshed', h);
+    return () => {
+      window.removeEventListener('snl:stock-updated', h);
+      window.removeEventListener('snl:data-refreshed', h);
+    };
   }, [load]);
 
   const filteredSites = allowedSites.filter(sid => selectedSite === 'all' || sid === selectedSite);
@@ -202,6 +215,9 @@ export function InventoryDashboard() {
   );
 
   const siteSelectOptions = activeSites.filter(s => allowedSites.includes(s.id));
+
+  // Chargement en cours : on affiche des loaders au lieu de "0" / "Aucun produit".
+  const loading = !db.isFullyLoaded();
 
   return (
     <div style={{ minHeight: '100%', background: BG, display: 'flex', flexDirection: 'column' }}>
@@ -260,22 +276,26 @@ export function InventoryDashboard() {
         {/* ── KPI row ─────────────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : isNarrow ? 'repeat(3,1fr)' : 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
           <StatTile
+            loading={loading}
             label="Valeur stock"
             value={totalValue > 999999 ? `${(totalValue / 1000000).toFixed(1)}M` : totalValue.toLocaleString('fr-FR')}
             sub="XAF"
           />
           <StatTile
+            loading={loading}
             label="Produits"
             value={stats.totalProducts}
             sub="références"
           />
           <StatTile
+            loading={loading}
             label="Mouvements"
             value={stats.todayMovements}
             sub="aujourd'hui"
             accent
           />
           <StatTile
+            loading={loading}
             label="Alertes stock"
             value={stats.alertCount}
             sub={`${stats.criticalProducts} critique${stats.criticalProducts !== 1 ? 's' : ''}`}
@@ -283,6 +303,7 @@ export function InventoryDashboard() {
             danger={stats.criticalProducts > 0}
           />
           <StatTile
+            loading={loading}
             label="En attente"
             value={stats.pendingCount}
             sub="à valider"
@@ -324,7 +345,15 @@ export function InventoryDashboard() {
 
         {isAdmin && <PendingApprovalsPanel />}
 
-        {filteredProducts.length === 0 ? (
+        {filteredProducts.length === 0 && loading ? (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '72px 24px', background: SURFACE, borderRadius: 10, border: BDR, textAlign: 'center',
+          }}>
+            <RefreshCw className="animate-spin" size={30} style={{ color: ACCENT, opacity: 0.7, marginBottom: 14 }} />
+            <p style={{ fontSize: 14, fontWeight: 600, color: T2 }}>Chargement des produits…</p>
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             padding: '72px 24px', background: SURFACE, borderRadius: 10, border: BDR,
