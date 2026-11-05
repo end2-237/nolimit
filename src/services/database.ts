@@ -5,7 +5,7 @@
  */
 
 import { APP_CONFIG } from '../config/app.config';
-import { Users, Products, Stocks, Movements, Alerts, Reports, Stats, setAuthToken } from './api';
+import { Users, Products, Stocks, Movements, Alerts, Reports, Stats, setAuthToken, setCleRenouvellement, setProfilLocal } from './api';
 import { persistCache, loadCache, saveAuthCache, loadAuthCache, addToOutbox, getOutbox, proprietaire, verifierHorsLigne } from './offlineStorage';
 import { isOnline, notifyUploadStart, notifyUploadEnd } from './connectivity';
 
@@ -51,7 +51,7 @@ function erreurReseau(e: any): boolean {
 }
 
 /** Durée pendant laquelle on peut se reconnecter sans réseau après la dernière connexion en ligne. */
-const VALIDITE_HORS_LIGNE_MS = 30 * 24 * 3600 * 1000;
+const VALIDITE_HORS_LIGNE_MS = 60 * 24 * 3600 * 1000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -238,6 +238,29 @@ class DatabaseService {
     if (token) setAuthToken(token);
   }
 
+  /**
+   * Ouverture instantanée : on affiche d'abord ce qui est gardé sur l'appareil
+   * (aucun « 0 », aucune attente réseau), puis les données à jour arrivent en
+   * arrière-plan. Renvoie true si l'appareil avait déjà des données.
+   */
+  async demarrer(): Promise<boolean> {
+    if (this.cache.loaded && this.cache.products.length > 0) return true;
+    try {
+      const cached = await loadCache();
+      if (cached.products.length > 0) {
+        this.cache = { ...cached, reports: [], loaded: true, fullyLoaded: true };
+        this.ensureAllBarcodesAssigned();
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+        // Mise à jour en arrière-plan ; si le réseau n'est pas encore là, le
+        // retour en ligne (« snl:online ») relancera le chargement.
+        void this.refresh().catch(() => {});
+        return true;
+      }
+    } catch {}
+    await this.init();
+    return this.cache.products.length > 0;
+  }
+
   async init(): Promise<void> {
     if (this._initPromise) return this._initPromise;
     this._initPromise = this._load();
@@ -335,6 +358,9 @@ class DatabaseService {
           movements = [...parId.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
         }
         localStorage.setItem('snl_mv_depuis', debut);
+        // Dernière mise à jour réussie depuis le serveur (bandeau d'ancienneté).
+        localStorage.setItem('snl_maj_serveur', new Date().toISOString());
+        window.dispatchEvent(new CustomEvent('snl:maj-serveur'));
       }
       this.cache = {
         ...this.cache,
@@ -402,6 +428,9 @@ class DatabaseService {
           setAuthToken(result.token);
           localStorage.setItem('snl_token', result.token);
           const userObj = result.user || result;
+          // Session longue : la clé de l'appareil renouvellera le jeton pendant 60 jours.
+          if (result.refresh_token) setCleRenouvellement(result.refresh_token);
+          setProfilLocal(userObj);
           // Pour pouvoir se reconnecter plus tard sans réseau.
           await saveAuthCache(username, result.token, userObj, password);
           return { user: userObj, token: result.token };
@@ -419,11 +448,12 @@ class DatabaseService {
       return { error: "Pas de connexion internet. La première connexion sur cet appareil doit se faire en ligne." };
     }
     if (entree.savedAt && Date.now() - new Date(entree.savedAt).getTime() > VALIDITE_HORS_LIGNE_MS) {
-      return { error: "Pas de connexion internet, et votre dernière connexion en ligne date de plus de 30 jours. Connectez-vous en ligne une fois." };
+      return { error: "Pas de connexion internet, et votre dernière connexion en ligne date de plus de 60 jours. Connectez-vous en ligne une fois." };
     }
     if (!(await verifierHorsLigne(password, entree.verif))) return null;
     setAuthToken(entree.token);
     localStorage.setItem('snl_token', entree.token);
+    setProfilLocal(entree.user);
     return { user: entree.user, token: entree.token };
   }
 

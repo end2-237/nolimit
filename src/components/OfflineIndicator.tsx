@@ -14,6 +14,20 @@ export function OfflineIndicator() {
   const [panelOpen, setPanelOpen]       = useState(false);
   const [anchor, setAnchor]             = useState({ top: 0, right: 16 });
   const btnRef = useRef<HTMLButtonElement>(null);
+  // Depuis quand les données de l'appareil n'ont pas été mises à jour par le serveur.
+  const [majServeur, setMajServeur] = useState<string | null>(() => { try { return localStorage.getItem('snl_maj_serveur'); } catch { return null; } });
+  useEffect(() => {
+    const lire = () => { try { setMajServeur(localStorage.getItem('snl_maj_serveur')); } catch {} };
+    window.addEventListener('snl:maj-serveur', lire);
+    return () => window.removeEventListener('snl:maj-serveur', lire);
+  }, []);
+  const anciennete = (() => {
+    if (!majServeur) return '';
+    const ms = Date.now() - new Date(majServeur).getTime();
+    if (isNaN(ms)) return '';
+    const j = Math.floor(ms / 86_400_000), h = Math.floor(ms / 3_600_000);
+    return j >= 1 ? `données d'il y a ${j} jour${j > 1 ? 's' : ''}` : h >= 1 ? `données d'il y a ${h} h` : '';
+  })();
 
   useEffect(() => {
     const refresh = async () => {
@@ -80,7 +94,9 @@ export function OfflineIndicator() {
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-200 text-[11px] font-semibold hover:bg-orange-500/30 transition-colors"
         >
           <WifiOff className="w-3 h-3" />
-          <span>Hors ligne</span>
+          <span title={majServeur ? `Dernière mise à jour depuis le serveur : ${new Date(majServeur).toLocaleString('fr-FR')}` : undefined}>
+            Hors ligne{anciennete ? ` · ${anciennete}` : ''}
+          </span>
           {outboxCount > 0 && (
             <span className="flex items-center gap-0.5 bg-orange-500/30 px-1.5 py-0.5 rounded-full">
               <Clock className="w-2.5 h-2.5" />

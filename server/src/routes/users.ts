@@ -2,8 +2,43 @@ import { Router } from 'express';
 import { query } from '../db';
 import { hashPassword, verifyPassword, generateToken, authMiddleware, AuthRequest, requireRole } from '../auth';
 import type { Server as SocketIOServer } from 'socket.io';
+import { createHash, randomBytes } from 'crypto';
 
 const router = Router();
+
+// ─── Sessions longues par appareil ────────────────────────────────────────────
+
+/** Durée d'une session d'appareil sans aucun usage (prolongée à chaque usage). */
+export const DUREE_SESSION_JOURS = 60;
+const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+
+let sessions_dispo: boolean | null = null;
+async function sessionsDisponibles(): Promise<boolean> {
+  if (sessions_dispo !== null) return sessions_dispo;
+  try {
+    const r = await query(`SELECT to_regclass('device_sessions') IS NOT NULL AS ok`);
+    sessions_dispo = r.rows[0]?.ok === true;
+  } catch { sessions_dispo = false; }
+  if (!sessions_dispo) console.warn('[Users] table device_sessions absente : pas de sessions longues');
+  return sessions_dispo;
+}
+
+/** Crée la clé de renouvellement d'un appareil. Renvoie la clé (montrée une seule fois). */
+async function ouvrirSession(userId: number, passwordHash: string, appareil?: unknown): Promise<{ refresh_token: string; refresh_expires_at: string } | null> {
+  if (!(await sessionsDisponibles())) return null;
+  const cle = randomBytes(32).toString('base64url');
+  const expire = new Date(Date.now() + DUREE_SESSION_JOURS * 24 * 3600 * 1000);
+  await query(
+    `INSERT INTO device_sessions (user_id, token_hash, pw_fingerprint, device_label, expires_at) VALUES ($1, $2, $3, $4, $5)`,
+    [userId, sha256(cle), sha256(passwordHash), typeof appareil === 'string' ? appareil.slice(0, 160) : null, expire]
+  );
+  return { refresh_token: cle, refresh_expires_at: expire.toISOString() };
+}
+
+const profil = (u: any) => ({
+  id: u.id, username: u.username, full_name: u.full_name, email: u.email,
+  role: u.role, site_ids: u.site_ids, permissions: u.permissions, is_active: u.is_active,
+});
 
 // Login
 router.post('/login', async (req, res) => {
@@ -29,19 +64,16 @@ router.post('/login', async (req, res) => {
     }
     
     const token = generateToken(user.id, user.username, user.role);
-    
+    // Clé de renouvellement : l'appareil reste connecté 60 jours glissants.
+    let session = null;
+    try { session = await ouvrirSession(user.id, passwordResult.rows[0].password_hash, req.body.device); }
+    catch (e) { console.warn('[Users] session non créée :', (e as Error).message); }
+
     res.json({
       success: true,
       token,
-      user: {
-        id: user.id,
-        username: user.username,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
-        site_ids: user.site_ids,
-        permissions: user.permissions,
-      },
+      ...(session || {}),
+      user: profil(user),
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -50,6 +82,57 @@ router.post('/login', async (req, res) => {
 });
 
 // Get current user
+/**
+ * Renouvellement : l'appareil présente sa clé et reçoit un nouveau jeton, sans
+ * mot de passe. Refusé si la clé est inconnue, fermée ou expirée, si le compte
+ * est désactivé ou si le mot de passe a changé depuis la connexion.
+ */
+router.post('/refresh', async (req, res) => {
+  try {
+    const cle = req.body?.refresh_token;
+    if (typeof cle !== 'string' || cle.length < 20 || !(await sessionsDisponibles())) {
+      return res.status(401).json({ error: 'Session à renouveler', code: 'session_invalide' });
+    }
+    const r = await query(
+      `SELECT s.id AS sid, s.pw_fingerprint, u.id, u.username, u.full_name, u.email, u.role, u.site_ids,
+              u.is_active, u.permissions, u.password_hash
+         FROM device_sessions s JOIN users u ON u.id = s.user_id
+        WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > NOW()`,
+      [sha256(cle)]
+    );
+    const u = r.rows[0];
+    if (!u || !u.is_active || u.pw_fingerprint !== sha256(u.password_hash)) {
+      if (u) await query('UPDATE device_sessions SET revoked_at = NOW() WHERE id = $1', [u.sid]);
+      return res.status(401).json({ error: 'Session à renouveler', code: 'session_invalide' });
+    }
+    // 60 jours de plus à compter d'aujourd'hui.
+    const expire = new Date(Date.now() + DUREE_SESSION_JOURS * 24 * 3600 * 1000);
+    await query('UPDATE device_sessions SET last_used_at = NOW(), expires_at = $2 WHERE id = $1', [u.sid, expire]);
+    res.json({
+      success: true,
+      token: generateToken(u.id, u.username, u.role),
+      refresh_expires_at: expire.toISOString(),
+      user: profil(u),
+    });
+  } catch (error) {
+    console.error('Refresh error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/** Déconnexion volontaire : la clé de cet appareil ne vaut plus. */
+router.post('/logout', async (req, res) => {
+  try {
+    const cle = req.body?.refresh_token;
+    if (typeof cle === 'string' && (await sessionsDisponibles())) {
+      await query('UPDATE device_sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [sha256(cle)]);
+    }
+    res.json({ success: true });
+  } catch {
+    res.json({ success: true });
+  }
+});
+
 router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const result = await query('SELECT id, username, full_name, email, role, site_ids, is_active, permissions, created_at, updated_at FROM users WHERE id = $1', [req.user?.userId]);

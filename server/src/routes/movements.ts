@@ -29,14 +29,14 @@ export function clientIdValide(v: unknown): string | null {
 
 /**
  * La date réelle du mouvement (vente faite hors ligne lundi, envoyée mercredi).
- * Acceptée jusqu'à 30 jours en arrière ; une date future est ramenée à
+ * Acceptée jusqu'à 60 jours en arrière ; une date future est ramenée à
  * maintenant (horloge d'appareil en avance). Sinon : maintenant.
  */
 export function dateDuMouvement(v: unknown, maintenant = new Date()): Date {
   if (typeof v !== 'string' && typeof v !== 'number') return maintenant;
   const d = new Date(v);
   if (isNaN(d.getTime())) return maintenant;
-  const min = maintenant.getTime() - 30 * 24 * 3600 * 1000;
+  const min = maintenant.getTime() - 60 * 24 * 3600 * 1000; // la durée d'une session hors ligne
   if (d.getTime() < min) return maintenant;
   if (d.getTime() > maintenant.getTime()) return maintenant;
   return d;

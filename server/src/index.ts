@@ -91,7 +91,7 @@ app.use('/api/maladies',   maladiesRouter);
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 
 async function runMigrations() {
-  const migrations = ['002-add-missing-columns.sql', '003-site-tables.sql', '004-ordonnances.sql', '005-releases.sql', '006-site-media.sql', '007-hors-ligne.sql', '008-index-mouvements.sql'];
+  const migrations = ['002-add-missing-columns.sql', '003-site-tables.sql', '004-ordonnances.sql', '005-releases.sql', '006-site-media.sql', '007-hors-ligne.sql', '008-index-mouvements.sql', '009-sessions-appareils.sql'];
   for (const file of migrations) {
     try {
       const sql = readFileSync(join(__dirname, 'migrations', file), 'utf-8');

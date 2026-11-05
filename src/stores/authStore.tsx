@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, User } from '../services/database';
-import { Users as ApiUsers, clearAuthToken, getAuthToken } from '../services/api';
+import { Users as ApiUsers, clearAuthToken, getAuthToken, getProfilLocal, setProfilLocal, getCleRenouvellement, setCleRenouvellement, renouvelerSession } from '../services/api';
 import { APP_CONFIG } from '../config/app.config';
 import { setOutboxOwner, getOutboxCount, processOutbox } from '../services/outbox';
 import { isOnline } from '../services/connectivity';
@@ -18,7 +18,7 @@ const PROFILE_PERMISSIONS: Record<string, PermissionKey[]> = {
 // Clé de session — stockée dans localStorage pour persistance 30 jours
 const SESSION_KEY    = 'snl_user_id';
 const SESSION_EXPIRY = 'snl_session_expiry';
-const SESSION_TTL    = 30 * 24 * 60 * 60 * 1000; // 30 jours en ms
+const SESSION_TTL    = 60 * 24 * 60 * 60 * 1000; // 60 jours sans ouvrir l'application (glissant)
 
 interface AuthContextType {
   user: (User & { permissions?: string }) | null;
@@ -44,15 +44,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Session valide si l'ID existe ET que l'expiry n'est pas dépassé
       if (savedUserId && expiry && Date.now() < parseInt(expiry, 10)) {
-        await db.init();
-        const u = db.getUserById(parseInt(savedUserId, 10));
-        if (u && u.is_active) {
+        // Le profil est gardé sur l'appareil à la connexion. Avant, on cherchait
+        // l'utilisateur dans la liste des comptes, que seul un administrateur
+        // peut lire : un vendeur était renvoyé à l'écran de connexion à chaque
+        // redémarrage.
+        const id = parseInt(savedUserId, 10);
+        const profil = getProfilLocal();
+        // Ouverture instantanée sur les données de l'appareil.
+        await db.demarrer();
+        const u = (profil && profil.id === id ? profil : null) || db.getUserById(id);
+        if (u && u.is_active !== false) {
           setUser(u as any);
           setOutboxOwner(u.id);
           // Renouveler silencieusement l'expiry à chaque démarrage (sliding window)
           localStorage.setItem(SESSION_EXPIRY, (Date.now() + SESSION_TTL).toString());
+          // En arrière-plan : jeton neuf + profil à jour (rôle, sites) si le réseau est là.
+          if (getCleRenouvellement()) {
+            void renouvelerSession().then((issue) => {
+              if (issue === 'refuse') clearAuthToken();
+              if (issue === 'ok') void db.refresh().then(() => window.dispatchEvent(new CustomEvent('snl:data-refreshed')));
+            });
+          }
         } else {
-          // Utilisateur supprimé ou désactivé — nettoyer
+          // Utilisateur inconnu sur cet appareil — nettoyer
           localStorage.removeItem(SESSION_KEY);
           localStorage.removeItem(SESSION_EXPIRY);
         }
@@ -78,15 +92,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onAuthChanged = () => {
       if (!getAuthToken() && localStorage.getItem(SESSION_KEY)) {
-        try { sessionStorage.setItem('snl_logout_reason', 'Votre session a expiré. Reconnectez-vous pour voir les données à jour.'); } catch {}
+        try { sessionStorage.setItem('snl_logout_reason', "Votre session doit être renouvelée (compte modifié, mot de passe changé ou plus de 60 jours sans connexion). Reconnectez-vous : vos données et vos ventes en attente sont conservées."); } catch {}
         localStorage.removeItem(SESSION_KEY);
         localStorage.removeItem(SESSION_EXPIRY);
         setOutboxOwner(undefined); // ses mouvements en attente restent à son nom
         setUser(null);
       }
     };
+    // Jeton renouvelé : le profil (rôle, sites, droits) est remis à jour.
+    const onRenewed = (e: Event) => {
+      const u = (e as CustomEvent).detail?.user;
+      if (u && localStorage.getItem(SESSION_KEY) === String(u.id)) setUser(prev => (prev ? { ...prev, ...u } : prev));
+    };
     window.addEventListener('snl:auth-changed', onAuthChanged);
-    return () => window.removeEventListener('snl:auth-changed', onAuthChanged);
+    window.addEventListener('snl:session-renewed', onRenewed);
+    return () => {
+      window.removeEventListener('snl:auth-changed', onAuthChanged);
+      window.removeEventListener('snl:session-renewed', onRenewed);
+    };
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -122,6 +145,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       )) return;
     } catch {}
     setOutboxOwner(undefined);
+    // La clé de cet appareil ne doit plus servir (au serveur si possible).
+    const cle = getCleRenouvellement();
+    if (cle) ApiUsers.logout(cle).catch(() => {});
+    setCleRenouvellement(null);
+    setProfilLocal(null);
     // Nettoyer la session entièrement
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(SESSION_EXPIRY);

@@ -33,7 +33,64 @@ export function clearAuthToken() {
   window.dispatchEvent(new CustomEvent('snl:auth-changed'));
 }
 
-async function request(endpoint: string, options: RequestInit & { timeoutMs?: number } = {}) {
+// ─── Sessions longues : renouvellement automatique du jeton ───────────────────
+//
+// Le jeton (7 jours) sert à parler au serveur. La clé de renouvellement de
+// l'appareil (60 jours glissants) sert à en obtenir un nouveau sans mot de
+// passe. Un refus (401) déclenche UN renouvellement puis on rejoue la requête :
+// l'utilisateur ne voit rien. On ne lui redemande son mot de passe que si le
+// serveur refuse aussi la clé (compte désactivé, mot de passe changé, 60 jours
+// sans usage) — et même là, rien n'est effacé de l'appareil.
+
+const CLE_RENOUVELLEMENT = 'snl_refresh';
+export const getCleRenouvellement = () => { try { return localStorage.getItem(CLE_RENOUVELLEMENT); } catch { return null; } };
+export function setCleRenouvellement(cle: string | null) {
+  try { cle ? localStorage.setItem(CLE_RENOUVELLEMENT, cle) : localStorage.removeItem(CLE_RENOUVELLEMENT); } catch {}
+}
+
+/** Profil de l'utilisateur connecté, gardé sur l'appareil (rouvre la session sans réseau). */
+export function setProfilLocal(user: any | null) {
+  try { user ? localStorage.setItem('snl_user', JSON.stringify(user)) : localStorage.removeItem('snl_user'); } catch {}
+}
+export function getProfilLocal(): any | null {
+  try { const v = localStorage.getItem('snl_user'); return v ? JSON.parse(v) : null; } catch { return null; }
+}
+
+export type IssueRenouvellement = 'ok' | 'refuse' | 'reseau';
+let _renouvellement: Promise<IssueRenouvellement> | null = null;
+
+/** Renouvelle le jeton avec la clé de l'appareil. Un seul à la fois. */
+export function renouvelerSession(): Promise<IssueRenouvellement> {
+  if (_renouvellement) return _renouvellement;
+  _renouvellement = (async (): Promise<IssueRenouvellement> => {
+    const cle = getCleRenouvellement();
+    if (!cle) return 'refuse';
+    try {
+      const r = await fetch(`${API_URL}/users/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: cle }),
+        ...(typeof AbortSignal !== 'undefined' && (AbortSignal as any).timeout ? { signal: (AbortSignal as any).timeout(15_000) } : {}),
+      });
+      if (r.status === 401 || r.status === 403) return 'refuse';
+      if (!r.ok) return 'reseau'; // serveur en panne : on garde tout et on réessaiera
+      const j = await r.json();
+      if (!j?.token) return 'reseau';
+      setAuthToken(j.token); // reconnecte aussi le temps réel
+      localStorage.setItem('snl_token', j.token);
+      if (j.user) setProfilLocal(j.user);
+      window.dispatchEvent(new CustomEvent('snl:session-renewed', { detail: { user: j.user } }));
+      return 'ok';
+    } catch {
+      return 'reseau';
+    } finally {
+      setTimeout(() => { _renouvellement = null; }, 0);
+    }
+  })();
+  return _renouvellement;
+}
+
+async function request(endpoint: string, options: RequestInit & { timeoutMs?: number } = {}, dejaRenouvele = false): Promise<any> {
   const url = `${API_URL}${endpoint}`;
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -53,11 +110,19 @@ async function request(endpoint: string, options: RequestInit & { timeoutMs?: nu
     ...(timeoutMs && typeof AbortSignal !== 'undefined' && (AbortSignal as any).timeout ? { signal: (AbortSignal as any).timeout(timeoutMs) } : {}),
   });
 
-  if (response.status === 401) {
+  const publique = endpoint.startsWith('/users/login') || endpoint.startsWith('/users/refresh');
+  if (response.status === 401 && !publique && authToken) {
+    if (!dejaRenouvele) {
+      const issue = await renouvelerSession();
+      if (issue === 'ok') return request(endpoint, options, true);
+      if (issue === 'reseau') {
+        // Serveur injoignable pour renouveler : traité comme une coupure, rien n'est effacé.
+        throw new TypeError('Renouvellement de session impossible pour le moment (réseau)');
+      }
+    }
+    // Clé refusée : il faut retaper le mot de passe. Les données de l'appareil
+    // et les ventes en attente restent en place.
     clearAuthToken();
-    // Don't use window.location.href — the app is a SPA and clearAuthToken()
-    // dispatches snl:auth-changed which AuthProvider handles to show LoginPage.
-    // A file:// redirect crashes Electron.
   }
 
   if (!response.ok) {
@@ -74,9 +139,20 @@ async function request(endpoint: string, options: RequestInit & { timeoutMs?: nu
 
 export const Users = {
   login: (username: string, password: string) =>
-    request('/users/login', { method: 'POST', body: JSON.stringify({ username, password }), timeoutMs: 15_000 }),
+    request('/users/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        username, password,
+        // Nom de l'appareil, pour retrouver ses sessions ouvertes.
+        device: typeof navigator !== 'undefined' ? `${/Electron/i.test(navigator.userAgent) ? 'Application ordinateur' : 'Navigateur'} · ${(navigator as any).platform || ''}`.trim() : undefined,
+      }),
+      timeoutMs: 15_000,
+    }),
 
   me: () => request('/users/me'),
+
+  logout: (refresh_token: string) =>
+    request('/users/logout', { method: 'POST', body: JSON.stringify({ refresh_token }), timeoutMs: 8_000 }),
 
   getAll: () => request('/users'),
 
