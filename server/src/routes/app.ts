@@ -13,6 +13,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import type { Server as SocketIOServer } from 'socket.io';
 import { query } from '../db';
 import { authMiddleware, requireRole, verifyToken, AuthRequest } from '../auth';
+import { etatVersions } from './releases';
 
 const router = Router();
 
@@ -76,7 +77,7 @@ export async function garderMaintenance(req: Request, res: Response, next: NextF
 }
 
 router.get('/status', async (_req, res) => {
-  res.json({ maintenance: await lireMaintenance(), server_time: new Date().toISOString() });
+  res.json({ maintenance: await lireMaintenance(), versions: await etatVersions(), server_time: new Date().toISOString() });
 });
 
 router.put('/maintenance', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {

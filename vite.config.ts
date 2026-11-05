@@ -3,6 +3,10 @@ import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
+import { readFileSync } from 'fs'
+
+// Un seul numéro de version : celui de package.json (installeur et application).
+const VERSION = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')).version
 
 export default defineConfig({
   plugins: [
@@ -17,6 +21,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  define: { __APP_VERSION__: JSON.stringify(VERSION) },
   base: './',
   build: {
     outDir: 'dist',

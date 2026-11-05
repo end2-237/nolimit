@@ -3,6 +3,9 @@ import { AuthProvider, useAuth } from './stores/authStore';
 import { LoginPage } from './pages/LoginPage';
 import { MaintenancePage } from './pages/MaintenancePage';
 import { useMaintenance, ecouterTempsReel } from './services/maintenance';
+import { useMiseAJour } from './services/miseAJour';
+import { MiseAJourPage } from './pages/MiseAJourPage';
+import { MiseAJourFenetre } from './components/MiseAJourFenetre';
 import { StockLayout, PageId } from './components/stock/StockLayout';
 import { InventoryDashboard } from './components/stock/InventoryDashboard';
 import { MovementsPage } from './pages/MovementsPage';
@@ -46,6 +49,9 @@ function AppInner() {
   // Mode maintenance : seuls les administrateurs continuent ; les autres voient la page dédiée.
   const maintenance = useMaintenance();
   const [accesAdmin, setAccesAdmin] = useState(false);
+  // Mise à jour : obligatoire → page bloquante ; conseillée → fenêtre discrète.
+  const miseAJour = useMiseAJour();
+  const [ignorerMajAdmin, setIgnorerMajAdmin] = useState(false);
   useEffect(() => ecouterTempsReel(socket as any), [socket]);
   useEffect(() => { if (!maintenance.active) setAccesAdmin(false); }, [maintenance.active]);
   const [showSplash, setShowSplash] = useState(true);
@@ -328,6 +334,9 @@ function AppInner() {
       <div className="w-8 h-8 border-2 border-[#16a34a] border-t-transparent rounded-full animate-spin" />
     </div>
   );
+  if (miseAJour.statut === 'obligatoire' && !(ignorerMajAdmin && user?.role === 'admin')) {
+    return <MiseAJourPage etat={miseAJour} onContinuerAdmin={user?.role === 'admin' ? () => setIgnorerMajAdmin(true) : undefined} />;
+  }
   if (maintenance.active && user?.role !== 'admin' && !(accesAdmin && !user)) {
     return <MaintenancePage etat={maintenance} onAccesAdmin={!user ? () => setAccesAdmin(true) : undefined} />;
   }
@@ -362,6 +371,7 @@ function AppInner() {
       <StockLayout activePage={activePage} onNavigate={setActivePage} alertCount={alertCount}>
         {renderPage()}
       </StockLayout>
+      <MiseAJourFenetre etat={miseAJour} />
       {maintenance.active && user.role === 'admin' && (
         <div
           role="status"

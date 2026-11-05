@@ -9,6 +9,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose database API to renderer
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Mise à jour : ouvrir le lien de téléchargement dans le navigateur du système.
+  ouvrirLien: (url) => ipcRenderer.invoke('shell:open-external', { url }),
   // Product operations
   products: {
     getAll: () => ipcRenderer.invoke('db:products:getAll'),

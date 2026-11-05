@@ -10,3 +10,6 @@ import 'react-dom';
 
 declare module 'react';
 declare module 'react-dom/client';
+
+/** Version de l'application, injectée depuis package.json (vite define). */
+declare const __APP_VERSION__: string;

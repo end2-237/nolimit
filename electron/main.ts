@@ -120,6 +120,11 @@ ipcMain.handle('db:backup-path', async (_event, { data }) => {
 });
 
 ipcMain.handle('shell:open-path', (_event, { path: filePath }) => { shell.showItemInFolder(filePath); });
+// Ouvre un lien (téléchargement d'une mise à jour) dans le navigateur du système.
+// Seulement en https : on n'ouvre jamais un fichier local ou un autre protocole.
+ipcMain.handle('shell:open-external', (_event, { url }) => {
+  if (typeof url === 'string' && /^https:\/\//i.test(url)) return shell.openExternal(url);
+});
 ipcMain.handle('app:minimize', () => mainWindow?.minimize());
 ipcMain.handle('app:maximize', () => { if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize(); });
 ipcMain.handle('app:close', () => mainWindow?.close());

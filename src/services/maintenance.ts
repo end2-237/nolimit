@@ -35,6 +35,8 @@ export async function relireMaintenance(): Promise<EtatMaintenance> {
     if (r.ok) {
       const j = await r.json();
       if (j?.maintenance) publier(j.maintenance);
+      // Le même état porte la liste des versions publiées (mises à jour).
+      if (j?.versions) window.dispatchEvent(new CustomEvent('snl:versions', { detail: j.versions }));
     }
   } catch {}
   return etat;

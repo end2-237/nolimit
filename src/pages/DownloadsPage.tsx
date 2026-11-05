@@ -25,6 +25,10 @@ interface Release {
   created_at: string;
   published_at?: string;
   created_by_name?: string;
+  /** Les appareils plus anciens sont bloqués jusqu'à la mise à jour. */
+  obligatoire?: boolean;
+  /** Consignes de mise à jour affichées aux utilisateurs. */
+  consignes?: string | null;
 }
 
 interface ReleaseForm {
@@ -37,6 +41,9 @@ interface ReleaseForm {
   is_beta: boolean;
   is_latest: boolean;
   is_published: boolean;
+  platform: string;
+  obligatoire: boolean;
+  consignes: string;
 }
 
 /* ── Fallback static data (offline / no backend) ────────────────── */
@@ -236,6 +243,11 @@ function ReleaseCard({
               <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>
                 {release.title || `SNL v${release.version}`}
               </h2>
+              {release.obligatoire && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#B91C1C', background: '#FEE2E2', border: '1px solid #FECACA', padding: '2px 9px', borderRadius: 99, letterSpacing: '0.04em', marginRight: 6 }}>
+                  Obligatoire
+                </span>
+              )}
               {release.is_latest && (
                 <span style={{
                   fontSize: 10, fontWeight: 700, color: '#16A34A',
@@ -463,6 +475,7 @@ const EMPTY_FORM: ReleaseForm = {
   version: '', title: '', description: '',
   changelog: [''], download_url: '', file_size: null,
   is_beta: false, is_latest: false, is_published: false,
+  platform: 'windows', obligatoire: false, consignes: '',
 };
 
 function ReleaseModal({
@@ -485,6 +498,9 @@ function ReleaseModal({
           is_beta: initial.is_beta,
           is_latest: initial.is_latest,
           is_published: initial.is_published,
+          platform: initial.platform || 'windows',
+          obligatoire: initial.obligatoire === true,
+          consignes: initial.consignes || '',
         }
       : { ...EMPTY_FORM },
   );
@@ -624,6 +640,41 @@ function ReleaseModal({
               label="Publier immédiatement"
               color="#2563EB"
             />
+            <Toggle
+              checked={form.obligatoire}
+              onChange={v => set('obligatoire', v)}
+              label="Mise à jour obligatoire (bloque les anciennes versions)"
+              color="#DC2626"
+            />
+          </div>
+
+          {/* Plateforme + consignes de mise à jour */}
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div>
+              <Label>Plateforme</Label>
+              <select value={form.platform} onChange={e => set('platform', e.target.value)} style={inputStyle as any}>
+                <option value="windows">Application ordinateur (Windows)</option>
+                <option value="web">Version web (navigateur)</option>
+              </select>
+            </div>
+            <div>
+              <Label>Consignes de mise à jour (affichées aux utilisateurs)</Label>
+              <textarea
+                value={form.consignes}
+                onChange={e => set('consignes', e.target.value)}
+                rows={3}
+                placeholder={form.platform === 'web'
+                  ? "Ex. : Rechargez la page. Vos données et vos ventes en attente sont conservées."
+                  : "Ex. : 1. Téléchargez l'installateur. 2. Fermez Stock No Limit. 3. Lancez l'installateur. Vos données sont conservées."}
+                style={{ ...(inputStyle as any), resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </div>
+            {form.obligatoire && (
+              <div style={{ fontSize: 12.5, color: '#B91C1C', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '8px 10px' }}>
+                Publiée, cette version bloquera toutes les versions plus anciennes de cette plateforme jusqu'à leur mise à jour
+                (après l'envoi de leurs ventes en attente).
+              </div>
+            )}
           </div>
 
           {/* Changelog */}
@@ -928,6 +979,9 @@ export function DownloadsPage() {
         is_beta: form.is_beta,
         is_latest: form.is_latest,
         is_published: form.is_published,
+        platform: form.platform,
+        obligatoire: form.obligatoire,
+        consignes: form.consignes,
       };
 
       if (editingRelease) {

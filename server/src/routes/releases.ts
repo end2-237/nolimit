@@ -4,11 +4,48 @@ import { authMiddleware, requireRole, verifyToken, AuthRequest } from '../auth';
 
 const router = Router();
 
-const SELECT_RELEASES = `
-  SELECT r.*, u.full_name AS created_by_name
-  FROM releases r
-  LEFT JOIN users u ON r.created_by = u.id
-`;
+// ─── Politique de mise à jour (table release_policies, migration 011) ────────
+let politiques: boolean | null = null;
+export async function politiquesDisponibles(): Promise<boolean> {
+  if (politiques !== null) return politiques;
+  try {
+    const r = await query(`SELECT to_regclass('release_policies') IS NOT NULL AS ok`);
+    politiques = r.rows[0]?.ok === true;
+  } catch { politiques = false; }
+  return politiques;
+}
+
+async function selectReleases(): Promise<string> {
+  return (await politiquesDisponibles())
+    ? `SELECT r.*, u.full_name AS created_by_name, COALESCE(p.obligatoire, false) AS obligatoire, p.consignes
+         FROM releases r
+         LEFT JOIN users u ON r.created_by = u.id
+         LEFT JOIN release_policies p ON p.release_id = r.id`
+    : `SELECT r.*, u.full_name AS created_by_name, false AS obligatoire, NULL::text AS consignes
+         FROM releases r
+         LEFT JOIN users u ON r.created_by = u.id`;
+}
+
+/** Enregistre « obligatoire » et les consignes d'une version (si fournis). */
+async function enregistrerPolitique(releaseId: number, body: any) {
+  if (!(await politiquesDisponibles())) return;
+  if (typeof body?.obligatoire !== 'boolean' && typeof body?.consignes !== 'string') return;
+  await query(
+    `INSERT INTO release_policies (release_id, obligatoire, consignes, updated_at) VALUES ($1, COALESCE($2, false), $3, NOW())
+     ON CONFLICT (release_id) DO UPDATE SET
+       obligatoire = COALESCE($2, release_policies.obligatoire),
+       consignes   = CASE WHEN $4 THEN $3 ELSE release_policies.consignes END,
+       updated_at  = NOW()`,
+    [releaseId, typeof body.obligatoire === 'boolean' ? body.obligatoire : null,
+     typeof body.consignes === 'string' ? body.consignes.slice(0, 4000) : null, typeof body.consignes === 'string']
+  );
+}
+
+/** Une ligne enrichie de sa politique. */
+async function relire(id: number | string) {
+  const r = await query(`${await selectReleases()} WHERE r.id = $1`, [id]);
+  return r.rows[0];
+}
 
 // Helper — check if request carries an admin/manager token (no 401 if missing)
 function extractRole(req: any): string | null {
@@ -29,7 +66,7 @@ router.get('/', async (req, res) => {
     const isPrivileged = role === 'admin' || role === 'manager';
     const where = isPrivileged ? '' : 'WHERE r.is_published = true';
 
-    const result = await query(`${SELECT_RELEASES} ${where} ORDER BY r.created_at DESC`);
+    const result = await query(`${await selectReleases()} ${where} ORDER BY r.created_at DESC`);
     res.json(result.rows);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -74,10 +111,11 @@ router.post(
         is_published || false,
         platform || 'windows',
         publishedAt,
-        req.user!.id,
+        req.user!.userId, // (avant : req.user.id, toujours vide)
       ]);
 
-      res.status(201).json(result.rows[0]);
+      await enregistrerPolitique(result.rows[0].id, req.body);
+      res.status(201).json(await relire(result.rows[0].id));
     } catch (e: any) {
       if (e.code === '23505') {
         return res.status(409).json({ error: `La version ${req.body.version} existe déjà` });
@@ -134,7 +172,8 @@ router.put(
         id,
       ]);
 
-      res.json(result.rows[0]);
+      await enregistrerPolitique(Number(id), req.body);
+      res.json(await relire(id));
     } catch (e: any) {
       if (e.code === '23505') {
         return res.status(409).json({ error: `La version ${req.body.version} existe déjà` });
@@ -165,7 +204,7 @@ router.patch(
         RETURNING *
       `, [willPublish, willPublish ? new Date() : null, id]);
 
-      res.json(result.rows[0]);
+      res.json(await relire(id) ?? result.rows[0]);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -192,3 +231,48 @@ router.delete(
 );
 
 export default router;
+
+// ─── Ce que chaque appareil doit savoir : dernière version et version minimale ─
+
+/** Compare deux numéros « 2.10.1 » ; renvoie <0, 0 ou >0. */
+export function comparerVersions(a: string, b: string): number {
+  const pa = String(a).split(/[.+-]/).map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split(/[.+-]/).map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+export interface EtatVersions {
+  [plateforme: string]: {
+    derniere: { version: string; title: string; changelog: any; download_url: string | null; consignes: string | null; obligatoire: boolean; published_at: string | null } | null;
+    minimale: string | null;
+  };
+}
+
+/**
+ * Pour chaque plateforme : la dernière version publiée (hors bêta) et la
+ * version minimale acceptée = la plus haute version publiée marquée obligatoire.
+ */
+export async function etatVersions(): Promise<EtatVersions> {
+  const out: EtatVersions = {};
+  try {
+    const r = await query(`${await selectReleases()} WHERE r.is_published = true AND COALESCE(r.is_beta, false) = false`);
+    for (const rel of r.rows) {
+      const pf = rel.platform || 'windows';
+      const e = (out[pf] ||= { derniere: null, minimale: null });
+      if (!e.derniere || comparerVersions(rel.version, e.derniere.version) > 0) {
+        e.derniere = {
+          version: rel.version, title: rel.title, changelog: rel.changelog, download_url: rel.download_url,
+          consignes: rel.consignes, obligatoire: rel.obligatoire === true, published_at: rel.published_at,
+        };
+      }
+      if (rel.obligatoire === true && (!e.minimale || comparerVersions(rel.version, e.minimale) > 0)) e.minimale = rel.version;
+    }
+  } catch (e) {
+    console.warn('[Releases] état des versions indisponible :', (e as Error).message);
+  }
+  return out;
+}
