@@ -1,0 +1,70 @@
+# Construit l'installeur Windows (.exe) de Stock No Limit.
+#
+# Lancement : onglet « Actions » › « Installeur Windows » › « Run workflow »,
+# ou automatiquement en poussant un tag de version (ex. v2.1.0).
+# Résultat : l'artefact « installeur-windows » contient
+#   « Stock No Limit-Setup-<version>.exe », à téléverser puis à publier dans
+# la liste des versions (page Téléchargements de l'application).
+#
+# Le numéro de version vient de package.json : le changer avant de construire.
+name: Installeur Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installeur-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Dépendances
+        run: pnpm install --frozen-lockfile
+
+      - name: Version
+        id: version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Construction de l'application
+        run: pnpm exec vite build
+
+      - name: Installeur (NSIS, x64)
+        env:
+          # Pas de certificat de signature : on n'en cherche pas.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm exec electron-builder --win --x64 --config electron-builder.json --publish never
+
+      - name: Empreinte SHA-256
+        shell: bash
+        run: |
+          cd release
+          for f in *.exe; do sha256sum "$f" > "$f.sha256"; cat "$f.sha256"; done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installeur-windows-${{ steps.version.outputs.version }}
+          path: |
+            release/*.exe
+            release/*.exe.sha256
+          if-no-files-found: error
+          retention-days: 30

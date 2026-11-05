@@ -21,6 +21,13 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
+  // Un lien ouvert depuis l'application (téléchargement d'une mise à jour, site
+  // web…) part dans le navigateur du système au lieu d'une fenêtre Electron.
+  // Seulement les liens https ; le reste (fenêtre d'impression vide…) s'ouvre comme avant.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//i.test(url)) { void shell.openExternal(url); return { action: 'deny' }; }
+    return { action: 'allow' }; // ex. fenêtre vide pour imprimer les codes-barres
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -120,11 +127,6 @@ ipcMain.handle('db:backup-path', async (_event, { data }) => {
 });
 
 ipcMain.handle('shell:open-path', (_event, { path: filePath }) => { shell.showItemInFolder(filePath); });
-// Ouvre un lien (téléchargement d'une mise à jour) dans le navigateur du système.
-// Seulement en https : on n'ouvre jamais un fichier local ou un autre protocole.
-ipcMain.handle('shell:open-external', (_event, { url }) => {
-  if (typeof url === 'string' && /^https:\/\//i.test(url)) return shell.openExternal(url);
-});
 ipcMain.handle('app:minimize', () => mainWindow?.minimize());
 ipcMain.handle('app:maximize', () => { if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize(); });
 ipcMain.handle('app:close', () => mainWindow?.close());
