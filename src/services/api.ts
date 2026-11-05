@@ -5,6 +5,7 @@
 
 const DEFAULT_API = 'https://snl-api.vps.buyticle.com/api';
 
+export const getApiUrl = () => API_URL;
 const API_URL = (() => {
   try {
     const saved = localStorage.getItem('snl_api_url');
@@ -127,8 +128,13 @@ async function request(endpoint: string, options: RequestInit & { timeoutMs?: nu
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    const err = new Error(error.error || 'API request failed') as Error & { status: number };
+    const err = new Error(error.error || 'API request failed') as Error & { status: number; code?: string };
     err.status = response.status;
+    err.code = error.code;
+    // Maintenance en cours : l'application bascule sur la page de maintenance.
+    if (response.status === 503 && error.code === 'maintenance') {
+      window.dispatchEvent(new CustomEvent('snl:maintenance', { detail: error.maintenance }));
+    }
     throw err;
   }
 

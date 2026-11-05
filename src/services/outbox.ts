@@ -58,6 +58,8 @@ type Issue = 'envoye' | 'reseau' | 'session' | 'refuse' | 'panne';
 /** Ce qu'une erreur veut dire pour la file. */
 function nature(e: any): Exclude<Issue, 'envoye'> {
   if (e instanceof TypeError || e?.name === 'AbortError' || e?.name === 'TimeoutError') return 'reseau';
+  // Maintenance : comme une coupure, on garde tout et on renverra à la fin.
+  if (e?.code === 'maintenance') return 'reseau';
   const st = Number(e?.status);
   if (st === 401) return 'session';
   if (st === 408 || st === 429 || st >= 500 || !st) return 'panne';

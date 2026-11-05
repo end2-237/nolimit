@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { MaintenanceCard } from '../components/MaintenanceCard';
 import {
   Settings, Database, RefreshCw, AlertTriangle, CheckCircle,
   Download, Upload, Building2, Plus, Trash2, Edit2, X, Save,
@@ -949,6 +950,7 @@ export function SettingsPage() {
         {activeTab === 'general' && (
           <>
           <ServerStatus />
+          {isSuperAdmin && <MaintenanceCard />}
             <Card>
               <CardHeader><CardTitle className="text-base">Informations</CardTitle></CardHeader>
               <CardContent className="space-y-2.5">

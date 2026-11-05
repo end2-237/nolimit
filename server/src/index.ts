@@ -26,6 +26,7 @@ import ordonnancesRouter from './routes/ordonnances';
 import releasesRouter from './routes/releases';
 import siteMediaRouter from './routes/siteMedia';
 import maladiesRouter from './routes/maladies';
+import appRouter, { garderMaintenance } from './routes/app';
 
 dotenv.config();
 
@@ -72,6 +73,9 @@ app.get('/health', (req, res) => {
 
 // ─── Routes API ───────────────────────────────────────────────────────────────
 
+// Mode maintenance : seuls les administrateurs passent (voir routes/app.ts).
+app.use(garderMaintenance);
+app.use('/api/app',       appRouter);
 app.use('/api/users',     usersRouter);
 app.use('/api/movements', movementsRouter);
 app.use('/api/products',  productsRouter);
@@ -91,7 +95,7 @@ app.use('/api/maladies',   maladiesRouter);
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 
 async function runMigrations() {
-  const migrations = ['002-add-missing-columns.sql', '003-site-tables.sql', '004-ordonnances.sql', '005-releases.sql', '006-site-media.sql', '007-hors-ligne.sql', '008-index-mouvements.sql', '009-sessions-appareils.sql'];
+  const migrations = ['002-add-missing-columns.sql', '003-site-tables.sql', '004-ordonnances.sql', '005-releases.sql', '006-site-media.sql', '007-hors-ligne.sql', '008-index-mouvements.sql', '009-sessions-appareils.sql', '010-reglages.sql'];
   for (const file of migrations) {
     try {
       const sql = readFileSync(join(__dirname, 'migrations', file), 'utf-8');

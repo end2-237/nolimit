@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './stores/authStore';
 import { LoginPage } from './pages/LoginPage';
+import { MaintenancePage } from './pages/MaintenancePage';
+import { useMaintenance, ecouterTempsReel } from './services/maintenance';
 import { StockLayout, PageId } from './components/stock/StockLayout';
 import { InventoryDashboard } from './components/stock/InventoryDashboard';
 import { MovementsPage } from './pages/MovementsPage';
@@ -41,6 +43,11 @@ function showBrowserNotif(title: string, body: string) {
 function AppInner() {
   const { user, isLoading } = useAuth();
   const { socket } = useSync();
+  // Mode maintenance : seuls les administrateurs continuent ; les autres voient la page dédiée.
+  const maintenance = useMaintenance();
+  const [accesAdmin, setAccesAdmin] = useState(false);
+  useEffect(() => ecouterTempsReel(socket as any), [socket]);
+  useEffect(() => { if (!maintenance.active) setAccesAdmin(false); }, [maintenance.active]);
   const [showSplash, setShowSplash] = useState(true);
   // Toujours démarrer sur le dashboard — jamais de restauration de page
   const [activePage, setActivePage] = useState<PageId>('dashboard');
@@ -321,6 +328,9 @@ function AppInner() {
       <div className="w-8 h-8 border-2 border-[#16a34a] border-t-transparent rounded-full animate-spin" />
     </div>
   );
+  if (maintenance.active && user?.role !== 'admin' && !(accesAdmin && !user)) {
+    return <MaintenancePage etat={maintenance} onAccesAdmin={!user ? () => setAccesAdmin(true) : undefined} />;
+  }
   // Si pas d'utilisateur connecté → LoginPage (toujours)
   if (!user) return <LoginPage />;
 
@@ -348,9 +358,30 @@ function AppInner() {
   };
 
   return (
-    <StockLayout activePage={activePage} onNavigate={setActivePage} alertCount={alertCount}>
-      {renderPage()}
-    </StockLayout>
+    <>
+      <StockLayout activePage={activePage} onNavigate={setActivePage} alertCount={alertCount}>
+        {renderPage()}
+      </StockLayout>
+      {maintenance.active && user.role === 'admin' && (
+        <div
+          role="status"
+          style={{
+            position: 'fixed', left: '50%', bottom: 16, transform: 'translateX(-50%)', zIndex: 9999,
+            background: '#0F172A', color: '#fff', borderRadius: 999, padding: '9px 16px', fontSize: 13,
+            display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 10px 30px rgba(15,23,42,.3)',
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: 99, background: '#F59E0B' }} />
+          Maintenance active : seuls les administrateurs peuvent travailler.
+          <button
+            onClick={() => setActivePage('settings')}
+            style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 999, padding: '4px 10px', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}
+          >
+            Gérer
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
