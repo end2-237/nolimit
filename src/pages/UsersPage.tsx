@@ -242,10 +242,12 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     if (!form.username || !form.full_name) { setError('Champs obligatoires manquants'); return; }
     if (!isEdit && !form.password) { setError('Mot de passe requis'); return; }
+    if (form.password && form.password.length < 6) { setError('Mot de passe trop court (6 caractères minimum)'); return; }
 
     const existing = db.getUsers().find(u => u.username === form.username && u.id !== user?.id);
     if (existing) { setError('Ce nom d\'utilisateur existe déjà'); return; }
@@ -254,17 +256,30 @@ function UserForm({ user, onClose, onSaved }: UserFormProps) {
     submitLock.current = true;
     setSubmitting(true);
 
+    // Le mot de passe ne part QUE s'il a été saisi : un champ vide ne doit
+    // jamais remplacer le mot de passe existant.
+    const { password, ...rest } = form;
     const userData = {
-      ...form,
+      ...rest,
       permissions: encodePermissions(permissions),
+      ...(password ? { password } : {}),
     };
 
-    if (isEdit) {
-      db.updateUser(user!.id, { ...userData, ...(form.password ? { password: form.password } : {}) });
-    } else {
-      db.createUser({ ...userData, password: form.password });
+    try {
+      // On attend la réponse du serveur : le succès ne s'affiche que s'il a
+      // réellement enregistré (avant, une session expirée passait pour un succès).
+      const ok = isEdit ? await db.updateUser(user!.id, userData) : await db.createUser(userData);
+      if (!ok) throw new Error('Utilisateur introuvable');
+    } catch (err: any) {
+      submitLock.current = false;
+      setSubmitting(false);
+      setError(
+        err?.status === 401 ? 'Session expirée : reconnectez-vous puis recommencez.'
+        : err?.status === 403 ? 'Droits insuffisants pour modifier ce compte.'
+        : `Échec de l'enregistrement : ${err?.message || 'erreur inconnue'}`
+      );
+      return;
     }
-
     setSuccess(true);
     setTimeout(() => { onSaved(); onClose(); }, 1000);
   };
@@ -487,10 +502,11 @@ export function UsersPage() {
   const load = () => setUsers(db.getUsers() as any);
   useEffect(load, []);
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (id === currentUser?.id) { alert('Impossible de supprimer votre propre compte'); return; }
     if (!confirm('Supprimer cet utilisateur ?')) return;
-    db.deleteUser(id);
+    const ok = await db.deleteUser(id);
+    if (!ok) alert("La suppression a échoué (session expirée ou droits insuffisants). Rien n'a été supprimé.");
     load();
   };
 

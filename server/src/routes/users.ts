@@ -9,6 +9,9 @@ const router = Router();
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
+    if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     
     const result = await query('SELECT id, username, full_name, email, role, site_ids, is_active, permissions FROM users WHERE username = $1', [username]);
     
@@ -65,7 +68,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
 // Get all users (admin only)
 router.get('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, res) => {
   try {
-    const result = await query('SELECT id, username, full_name, email, role, site_ids, is_active, created_at FROM users ORDER BY full_name');
+    const result = await query('SELECT id, username, full_name, email, role, site_ids, is_active, permissions, created_at FROM users ORDER BY full_name');
     res.json(result.rows);
   } catch (error) {
     console.error('Get users error:', error);
@@ -111,7 +114,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
     
-    const { full_name, email, password, role, site_ids, permissions } = req.body;
+    const { full_name, email, password, role, site_ids, permissions, is_active } = req.body;
     
     let updateQuery = 'UPDATE users SET ';
     const params: any[] = [];
@@ -126,9 +129,19 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
       fields.push(`email = $${paramIndex++}`);
       params.push(email);
     }
-    if (password !== undefined) {
+    // Un mot de passe vide n'est PAS un nouveau mot de passe : le formulaire
+    // d'édition envoie « » quand on ne le change pas, et l'ancien code
+    // remplaçait alors le mot de passe par une chaîne vide.
+    if (typeof password === 'string' && password.length > 0) {
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Mot de passe trop court (6 caractères minimum)' });
+      }
       fields.push(`password_hash = $${paramIndex++}`);
       params.push(await hashPassword(password));
+    }
+    if (is_active !== undefined && isAdmin && !isSelf) {
+      fields.push(`is_active = $${paramIndex++}`);
+      params.push(Boolean(is_active));
     }
     if (role !== undefined && isAdmin) {
       fields.push(`role = $${paramIndex++}`);

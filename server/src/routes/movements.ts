@@ -6,6 +6,17 @@ import type { Server as SocketIOServer } from 'socket.io';
 
 const router = Router();
 
+/** « * » → tous les sites ; sinon la liste JSON enregistrée sur le compte. */
+export function sitesAutorises(siteIds?: string | null): '*' | string[] {
+  if (!siteIds || siteIds.trim() === '*') return siteIds?.trim() === '*' ? '*' : [];
+  try {
+    const v = JSON.parse(siteIds);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 // Get movements with filters (respects role-based filtering)
 router.get('/', authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -20,10 +31,13 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
       whereClause += ` AND user_id = $${paramIndex++}`;
       params.push(req.user.userId);
     } else if (req.user?.role === 'manager') {
-      // Manager can see their assigned sites — retrieve from user data
-      whereClause += ` AND (from_site_id = ANY($${paramIndex}::text[]) OR to_site_id = ANY($${paramIndex}::text[]))`;
-      paramIndex++;
-      params.push(['douala', 'bafoussam']); // This should come from user.site_ids
+      // Un responsable voit les mouvements de SES sites (« * » = tous).
+      const sites = sitesAutorises(req.user.site_ids);
+      if (sites !== '*') {
+        whereClause += ` AND (from_site_id = ANY($${paramIndex}::text[]) OR to_site_id = ANY($${paramIndex}::text[]))`;
+        paramIndex++;
+        params.push(sites);
+      }
     }
     
     if (type) {
