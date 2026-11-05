@@ -68,7 +68,7 @@ export function sitesAutorises(siteIds?: string | null): '*' | string[] {
 // Get movements with filters (respects role-based filtering)
 router.get('/', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { type, status, site_id, user_id, date_from, date_to, since, limit = 100 } = req.query;
+    const { type, status, site_id, user_id, date_from, date_to, since, after_id, limit = 100 } = req.query;
     
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
@@ -105,11 +105,21 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
       whereClause += ` AND m.user_id = $${paramIndex++}`;
       params.push(user_id);
     }
-    // Chargement par différence : ce qui a été créé OU validé/refusé depuis.
-    if (since && !isNaN(new Date(String(since)).getTime())) {
-      whereClause += ` AND (m.created_at > $${paramIndex} OR m.approved_at > $${paramIndex})`;
-      params.push(new Date(String(since)).toISOString());
-      paramIndex++;
+    // Chargement par différence : ce qui est arrivé au serveur depuis le dernier
+    // chargement. after_id = plus grand numéro de mouvement déjà connu : il
+    // attrape aussi les mouvements antidatés (vente faite hors ligne, inventaire),
+    // que la date seule faisait manquer. since sert aux validations et refus.
+    const apresId = Number.isInteger(Number(after_id)) && Number(after_id) > 0 ? Number(after_id) : null;
+    const depuisOk = since && !isNaN(new Date(String(since)).getTime());
+    if (apresId !== null || depuisOk) {
+      const conds: string[] = [];
+      if (apresId !== null) { conds.push(`m.id > $${paramIndex++}`); params.push(apresId); }
+      if (depuisOk) {
+        conds.push(`m.created_at > $${paramIndex} OR m.approved_at > $${paramIndex}`);
+        params.push(new Date(String(since)).toISOString());
+        paramIndex++;
+      }
+      whereClause += ` AND (${conds.join(' OR ')})`;
     }
     if (date_from) {
       whereClause += ` AND m.created_at >= $${paramIndex++}`;

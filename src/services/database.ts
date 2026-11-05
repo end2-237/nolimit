@@ -341,11 +341,15 @@ class DatabaseService {
       // Mouvements : la première fois (ou une fois par jour) tout l'historique ;
       // sinon seulement ce qui a été créé ou validé depuis le dernier chargement.
       const connus: Movement[] = (previousCache?.movements ?? this.cache.movements ?? []).filter(m => m.id > 0);
-      const depuis = localStorage.getItem('snl_mv_depuis');
-      const complet = !depuis || connus.length === 0 || Date.now() - new Date(depuis).getTime() > 24 * 3600 * 1000;
+      // Curseur : la date du dernier chargement ET le plus grand numéro de
+      // mouvement connu (les mouvements antidatés n'étaient pas rechargés).
+      // Nouvelle clé : le premier chargement après cette mise à jour est complet.
+      const depuis = localStorage.getItem('snl_mv_curseur');
+      const maxId = connus.reduce((m, x) => (x.id > m ? x.id : m), 0);
+      const complet = !depuis || connus.length === 0 || maxId === 0 || Date.now() - new Date(depuis).getTime() > 24 * 3600 * 1000;
       const debut = new Date(Date.now() - 2 * 60 * 1000).toISOString(); // marge pour les horloges
       const [recus, alerts, reports] = await Promise.all([
-        Movements.getAll(complet ? { limit: 100000 } : { since: depuis, limit: 100000 }).catch(() => null),
+        Movements.getAll(complet ? { limit: 100000 } : { since: depuis, after_id: maxId, limit: 100000 }).catch(() => null),
         Alerts.getAll().catch(() => null),
         Reports.getAll().catch(() => null),
       ]);
@@ -357,7 +361,7 @@ class DatabaseService {
           for (const m of recus as Movement[]) parId.set(m.id, m);
           movements = [...parId.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
         }
-        localStorage.setItem('snl_mv_depuis', debut);
+        localStorage.setItem('snl_mv_curseur', debut);
         // Dernière mise à jour réussie depuis le serveur (bandeau d'ancienneté).
         localStorage.setItem('snl_maj_serveur', new Date().toISOString());
         window.dispatchEvent(new CustomEvent('snl:maj-serveur'));
