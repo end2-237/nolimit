@@ -482,6 +482,10 @@ export function MovementsPage() {
   const { getAllowedSites, hasPermission, user } = useAuth();
   const allowedSites = getAllowedSites();
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+  // Le serveur trie déjà selon le rôle (opérateur : ses mouvements ; responsable
+  // et lecture seule : ceux de leurs sites). Le lecteur voit donc toute la liste
+  // reçue, sans pouvoir rien modifier.
+  const voitTout = isAdmin || user?.role === 'viewer';
 
   const [movements, setMovements] = useState<Movement[]>([]);
   const [allMovements, setAllMovements] = useState<Movement[]>([]);
@@ -500,7 +504,7 @@ export function MovementsPage() {
       date_from: dateFrom || undefined,
       date_to: dateTo || undefined,
     });
-    const filtered = isAdmin ? all : all.filter(m => m.user_id === user?.id);
+    const filtered = voitTout ? all : all.filter(m => m.user_id === user?.id);
     setAllMovements(all);
     setMovements(filtered);
   };

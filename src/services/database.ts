@@ -299,7 +299,7 @@ class DatabaseService {
   private async _loadSecondary(previousCache: DBCache | null): Promise<void> {
     try {
       const [movements, alerts, reports] = await Promise.all([
-        Movements.getAll({ limit: 500 }).catch(() => null),
+        Movements.getAll({ limit: 100000 }).catch(() => null),
         Alerts.getAll().catch(() => null),
         Reports.getAll().catch(() => null),
       ]);
@@ -530,6 +530,9 @@ class DatabaseService {
   }
 
   // ─── Stocks ────────────────────────────────────────────────────────────────
+
+  /** Les lignes de stock gardées sur l'appareil (repli hors ligne). */
+  getStocks(): any[] { return [...this.cache.stocks]; }
 
   getStocksGroupedByProduct(allowedSites?: string[]): any[] {
     const activeSites = this.getSites().map(s => s.id);

@@ -1321,3 +1321,95 @@ export async function exportDamageXLSX(
   addLegendSheet(wb);
   await downloadWorkbook(wb, `SNL_Degats_Transport_${opts.dateFrom ?? 'export'}_${opts.dateTo ?? new Date().toISOString().split('T')[0]}.xlsx`);
 }
+
+// ─── État du stock (bouton de la page Produits) ───────────────────────────────
+
+export interface LigneEtatStock {
+  sku: string; name: string; category: string; unit: string;
+  price: number; threshold: number;
+  /** Quantité exacte par site (id du site → quantité). */
+  stock: Record<string, number>;
+}
+
+/**
+ * Une ligne par produit : la quantité exacte de chaque site, le total, et
+ * l'état (en stock, sous le seuil, épuisé). Les quantités sont celles du
+ * serveur au moment du clic. Les colonnes « Total » et « Valeur » sont des
+ * formules, pour que le fichier reste juste si on corrige une quantité.
+ */
+export async function exportEtatStockXLSX(
+  lignes: LigneEtatStock[],
+  sites: { id: string; name: string }[],
+  opts: { generatedBy?: string; source?: string } = {},
+) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'SNL — No Limit Stock';
+  wb.created = new Date();
+  wb.calcProperties.fullCalcOnLoad = true;
+
+  const ws = wb.addWorksheet('État du stock', { views: [{ state: 'frozen', ySplit: 4 }] });
+  const quand = new Date().toLocaleString('fr-FR');
+  const nCols = 4 + sites.length + 4;
+
+  ws.mergeCells(1, 1, 1, nCols);
+  ws.getCell(1, 1).value = 'État du stock — No Limit';
+  ws.getCell(1, 1).font = font({ size: 14, bold: true, color: C.navy });
+  ws.mergeCells(2, 1, 2, nCols);
+  ws.getCell(2, 1).value =
+    `Exporté le ${quand}${opts.generatedBy ? ` par ${opts.generatedBy}` : ''} · ${lignes.length} produits · ${opts.source || 'quantités lues sur le serveur'}`;
+  ws.getCell(2, 1).font = font({ size: 9, italic: true, color: C.gray500 });
+
+  const entetes = ['SKU', 'Produit', 'Catégorie', 'Unité', ...sites.map(s => s.name), 'Total', 'Seuil', 'État', 'Valeur (XAF)'];
+  const h = ws.getRow(4);
+  entetes.forEach((t, i) => { h.getCell(i + 1).value = t; hdr(h.getCell(i + 1)); });
+  h.height = 22;
+
+  const colSite1 = 5, colTotal = colSite1 + sites.length, colSeuil = colTotal + 1, colEtat = colSeuil + 1, colValeur = colEtat + 1;
+  const L = (c: number) => ws.getColumn(c).letter;
+  const tries = [...lignes].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+
+  tries.forEach((p, i) => {
+    const r = ws.getRow(5 + i);
+    const n = 5 + i;
+    r.getCell(1).value = p.sku;
+    r.getCell(2).value = p.name;
+    r.getCell(3).value = p.category;
+    r.getCell(4).value = p.unit;
+    sites.forEach((s, k) => { r.getCell(colSite1 + k).value = p.stock[s.id] ?? 0; });
+    const total = sites.reduce((a, s) => a + (p.stock[s.id] ?? 0), 0);
+    r.getCell(colTotal).value = { formula: `SUM(${L(colSite1)}${n}:${L(colTotal - 1)}${n})`, result: total };
+    r.getCell(colSeuil).value = p.threshold;
+    const etat = total <= 0 ? 'Épuisé' : total < p.threshold ? 'Sous le seuil' : 'En stock';
+    r.getCell(colEtat).value = {
+      formula: `IF(${L(colTotal)}${n}<=0,"Épuisé",IF(${L(colTotal)}${n}<${L(colSeuil)}${n},"Sous le seuil","En stock"))`,
+      result: etat,
+    };
+    r.getCell(colValeur).value = { formula: `${L(colTotal)}${n}*${p.price || 0}`, result: total * (p.price || 0) };
+    r.getCell(colValeur).numFmt = '#,##0';
+    for (let c = 1; c <= nCols; c++) {
+      dataCell(r.getCell(c), { idx: i, h: c >= colSite1 && c !== colEtat ? 'right' : 'left', fmt: c === colValeur ? '#,##0' : undefined });
+    }
+    const couleur = etat === 'Épuisé' ? C.rose : etat === 'Sous le seuil' ? C.amber : C.emerald;
+    r.getCell(colEtat).font = font({ bold: true, color: couleur });
+  });
+
+  // Totaux
+  const fin = 4 + tries.length, rt = ws.getRow(fin + 2);
+  rt.getCell(2).value = 'TOTAL';
+  const somme = (f: (p: LigneEtatStock) => number) => tries.reduce((a, p) => a + f(p), 0);
+  const totalDe = (p: LigneEtatStock) => sites.reduce((a, s) => a + (p.stock[s.id] ?? 0), 0);
+  sites.forEach((s, k) => {
+    const c = colSite1 + k;
+    rt.getCell(c).value = { formula: `SUM(${L(c)}5:${L(c)}${fin})`, result: somme(p => p.stock[s.id] ?? 0) };
+  });
+  rt.getCell(colTotal).value = { formula: `SUM(${L(colTotal)}5:${L(colTotal)}${fin})`, result: somme(totalDe) };
+  rt.getCell(colValeur).value = { formula: `SUM(${L(colValeur)}5:${L(colValeur)}${fin})`, result: somme(p => totalDe(p) * (p.price || 0)) };
+  rt.getCell(colValeur).numFmt = '#,##0';
+  [2, ...Array.from({ length: colTotal - colSite1 + 1 }, (_, k) => colSite1 + k), colValeur].forEach(c => totalCell(rt.getCell(c)));
+
+  [16, 38, 20, 10, ...sites.map(() => 12), 10, 9, 15, 15].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: fin, column: nCols } };
+
+  const jour = new Date().toISOString().split('T')[0];
+  await downloadWorkbook(wb, `Etat-du-stock-${jour}.xlsx`);
+}

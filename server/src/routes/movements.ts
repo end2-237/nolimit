@@ -30,8 +30,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
     if (req.user?.role === 'operator') {
       whereClause += ` AND user_id = $${paramIndex++}`;
       params.push(req.user.userId);
-    } else if (req.user?.role === 'manager') {
-      // Un responsable voit les mouvements de SES sites (« * » = tous).
+    } else if (req.user?.role === 'manager' || req.user?.role === 'viewer') {
+      // Un responsable ou un lecteur voit les mouvements de SES sites (« * » = tous).
       const sites = sitesAutorises(req.user.site_ids);
       if (sites !== '*') {
         whereClause += ` AND (from_site_id = ANY($${paramIndex}::text[]) OR to_site_id = ANY($${paramIndex}::text[]))`;
@@ -77,7 +77,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
        ${whereClause}
        ORDER BY m.created_at DESC
        LIMIT $${paramIndex++}`,
-      [...params, limit]
+      [...params, Math.min(Math.max(parseInt(String(limit), 10) || 100, 1), 100000)]
     );
     
     res.json(result.rows);

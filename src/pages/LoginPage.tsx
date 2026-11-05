@@ -17,7 +17,14 @@ export function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd,  setShowPwd]  = useState(false);
-  const [error,    setError]    = useState('');
+  const [error,    setError]    = useState(() => {
+    // Message laissé par une déconnexion automatique (session expirée).
+    try {
+      const r = sessionStorage.getItem('snl_logout_reason') || '';
+      sessionStorage.removeItem('snl_logout_reason');
+      return r;
+    } catch { return ''; }
+  });
   const [loading,  setLoading]  = useState(false);
   const [step,     setStep]     = useState<'user' | 'pass'>('user');
 

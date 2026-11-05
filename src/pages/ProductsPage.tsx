@@ -10,12 +10,14 @@ function proxyImg(url: string | undefined): string | undefined {
 import {
   Search, Plus, Filter, Grid3X3, List, Package,
   Edit2, Trash2, ArrowUpRight, ArrowDownLeft, RefreshCw,
-  Image as ImageIcon, X, CheckCircle, AlertCircle, Scan, Barcode,
+  Image as ImageIcon, X, CheckCircle, AlertCircle, Scan, Barcode, Download,
 } from 'lucide-react';
 
 import { Button } from '../components/ui/button';
 import { db } from '../services/database';
 import { useAuth } from '../stores/authStore';
+import { Products as ApiProducts, Stocks as ApiStocks } from '../services/api';
+import { exportEtatStockXLSX, LigneEtatStock } from '../services/excelExport';
 import { APP_CONFIG } from '../config/app.config';
 import { ProductFormModal } from '../components/stock/ProductFormModal';
 import { BulkInputModal, StockOutModal } from '../components/stock/BulkInputModal';
@@ -120,8 +122,46 @@ function ImageModal({ product, onClose, onSaved }: { product: any; onClose: () =
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ProductsPage() {
-  const { getAllowedSites, hasPermission } = useAuth();
+  const { getAllowedSites, hasPermission, user } = useAuth();
   const allowedSites = getAllowedSites();
+  const [exportEnCours, setExportEnCours] = useState(false);
+
+  // Export de l'état du stock : les quantités sont relues sur le serveur au
+  // moment du clic, pour donner le chiffre exact et non une copie de l'appareil.
+  // Seuls les sites autorisés de l'utilisateur apparaissent.
+  const exporterEtatStock = async () => {
+    setExportEnCours(true);
+    try {
+      const sites = APP_CONFIG.sites.filter(s => allowedSites.includes(s.id)).map(s => ({ id: s.id, name: s.name }));
+      let source = 'quantités lues sur le serveur';
+      let produits: any[] = [];
+      let stocks: any[] = [];
+      try {
+        [produits, stocks] = await Promise.all([ApiProducts.getAll(), ApiStocks.getAll()]);
+      } catch {
+        // Hors ligne : on prend la copie de l'appareil, et on le dit dans le fichier.
+        produits = db.getProducts();
+        stocks = db.getStocks();
+        source = 'HORS LIGNE : copie gardée sur cet appareil, peut ne pas être à jour';
+      }
+      const parProduit = new Map<number, Record<string, number>>();
+      for (const st of stocks) {
+        const m = parProduit.get(st.product_id) || {};
+        m[st.site_id] = Number(st.quantity) || 0;
+        parProduit.set(st.product_id, m);
+      }
+      const lignes: LigneEtatStock[] = produits.map((p: any) => ({
+        sku: p.sku, name: p.name, category: p.category, unit: p.unit,
+        price: Number(p.price) || 0, threshold: Number(p.threshold) || 0,
+        stock: parProduit.get(p.id) || {},
+      }));
+      await exportEtatStockXLSX(lignes, sites, { generatedBy: user?.full_name || user?.username, source });
+    } catch (e: any) {
+      alert(`L'export a échoué : ${e?.message || 'erreur inconnue'}`);
+    } finally {
+      setExportEnCours(false);
+    }
+  };
 
   const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -260,6 +300,16 @@ export function ProductsPage() {
           <button onClick={() => setShowScanner(true)} className="snl-btn snl-btn-secondary">
             <Scan size={12} /> Scanner
           </button>
+          {hasPermission('export') && (
+            <button
+              onClick={exporterEtatStock}
+              disabled={exportEnCours}
+              className="snl-btn snl-btn-secondary"
+              title="Exporter la quantité exacte de chaque produit, par site (Excel)"
+            >
+              <Download size={12} /> {exportEnCours ? 'Export…' : 'État du stock'}
+            </button>
+          )}
           {hasPermission('create') && (
             <button
               onClick={() => { setScannedInitialSku(undefined); setEditingProduct(null); setShowProductForm(true); }}

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, User } from '../services/database';
-import { Users as ApiUsers, clearAuthToken } from '../services/api';
+import { Users as ApiUsers, clearAuthToken, getAuthToken } from '../services/api';
 import { APP_CONFIG } from '../config/app.config';
 
 const ALL_PERMISSIONS = ['view', 'create', 'edit', 'delete', 'export', 'manage_users'] as const;
@@ -66,6 +66,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
+  }, []);
+
+  // Le serveur a refusé le jeton (expiré au bout de 7 jours, compte désactivé…).
+  // Avant, l'utilisateur restait « connecté » 30 jours et voyait en silence les
+  // données gardées sur l'appareil, parfois celles d'un ancien rôle. On le
+  // renvoie à l'écran de connexion pour qu'il reçoive un jeton à jour.
+  useEffect(() => {
+    const onAuthChanged = () => {
+      if (!getAuthToken() && localStorage.getItem(SESSION_KEY)) {
+        try { sessionStorage.setItem('snl_logout_reason', 'Votre session a expiré. Reconnectez-vous pour voir les données à jour.'); } catch {}
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_EXPIRY);
+        setUser(null);
+      }
+    };
+    window.addEventListener('snl:auth-changed', onAuthChanged);
+    return () => window.removeEventListener('snl:auth-changed', onAuthChanged);
   }, []);
 
   const login = async (username: string, password: string) => {
