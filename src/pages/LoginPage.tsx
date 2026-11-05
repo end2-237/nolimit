@@ -14,7 +14,9 @@ const CSS = `
 
 export function LoginPage() {
   const { login } = useAuth();
-  const [username, setUsername] = useState('');
+  // Après « Session expirée » : le nom de la personne est déjà rempli.
+  const [nomConnu] = useState(() => { try { const n = sessionStorage.getItem('snl_login_username') || ''; sessionStorage.removeItem('snl_login_username'); return n; } catch { return ''; } });
+  const [username, setUsername] = useState(nomConnu);
   const [password, setPassword] = useState('');
   const [showPwd,  setShowPwd]  = useState(false);
   const [error,    setError]    = useState(() => {
@@ -26,7 +28,7 @@ export function LoginPage() {
     } catch { return ''; }
   });
   const [loading,  setLoading]  = useState(false);
-  const [step,     setStep]     = useState<'user' | 'pass'>('user');
+  const [step,     setStep]     = useState<'user' | 'pass'>(nomConnu ? 'pass' : 'user');
 
   const [stats, setStats] = useState({ totalProducts: 0, totalValue: 0, alertCount: 0 });
   const [winW,  setWinW]  = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);

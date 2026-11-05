@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './stores/authStore';
 import { LoginPage } from './pages/LoginPage';
 import { MaintenancePage } from './pages/MaintenancePage';
+import { SessionExpireePage } from './pages/SessionExpireePage';
 import { useMaintenance, ecouterTempsReel } from './services/maintenance';
 import { useMiseAJour } from './services/miseAJour';
 import { MiseAJourPage } from './pages/MiseAJourPage';
@@ -44,7 +45,7 @@ function showBrowserNotif(title: string, body: string) {
 }
 
 function AppInner() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, sessionExpiree, allerReconnexion } = useAuth();
   const { socket } = useSync();
   // Mode maintenance : seuls les administrateurs continuent ; les autres voient la page dédiée.
   const maintenance = useMaintenance();
@@ -340,6 +341,8 @@ function AppInner() {
   if (maintenance.active && user?.role !== 'admin' && !(accesAdmin && !user)) {
     return <MaintenancePage etat={maintenance} onAccesAdmin={!user ? () => setAccesAdmin(true) : undefined} />;
   }
+  // Session expirée : on le dit tout de suite, avec la page dédiée.
+  if (!user && sessionExpiree) return <SessionExpireePage qui={sessionExpiree} onReconnecter={allerReconnexion} />;
   // Si pas d'utilisateur connecté → LoginPage (toujours)
   if (!user) return <LoginPage />;
 

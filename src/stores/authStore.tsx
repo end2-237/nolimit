@@ -29,6 +29,10 @@ interface AuthContextType {
   getAllowedSites: () => string[];
   hasPermission: (action: PermissionKey) => boolean;
   getUserPermissions: () => PermissionKey[];
+  /** Session expirée détectée : on montre la page dédiée (qui était connecté). */
+  sessionExpiree: { id: number; username: string; full_name?: string } | null;
+  /** Depuis la page « Session expirée » : aller à l'écran de connexion. */
+  allerReconnexion: (autreCompte?: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -36,6 +40,46 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<(User & { permissions?: string }) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionExpiree, setSessionExpiree] = useState<AuthContextType['sessionExpiree']>(null);
+
+  /**
+   * La session ne peut plus être renouvelée : on le dit tout de suite avec la
+   * page « Session expirée », au lieu de laisser l'utilisateur sur des données
+   * anciennes. Rien n'est effacé de l'appareil.
+   */
+  const expirer = () => {
+    if (!localStorage.getItem(SESSION_KEY)) return;
+    const p = getProfilLocal();
+    const id = parseInt(localStorage.getItem(SESSION_KEY) || '0', 10);
+    setSessionExpiree(p && p.id === id ? { id, username: p.username, full_name: p.full_name } : { id, username: '' });
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_EXPIRY);
+    setOutboxOwner(undefined); // ses mouvements en attente restent à son nom
+    setUser(null);
+  };
+
+  /**
+   * Vérification de session, sans attendre qu'une action échoue : au
+   * démarrage, au retour du réseau, au retour sur la fenêtre, et toutes les
+   * 10 minutes. Un jeton refusé déclenche le renouvellement automatique ; si
+   * la clé de l'appareil est refusée aussi, la page « Session expirée » s'affiche.
+   * Sans réseau, on ne conclut rien.
+   */
+  const verifierSession = async () => {
+    if (!localStorage.getItem(SESSION_KEY)) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    if (!getAuthToken()) {
+      // Plus de jeton : seule la clé de l'appareil peut en obtenir un.
+      if (!getCleRenouvellement()) { expirer(); return; }
+      const issue = await renouvelerSession();
+      if (issue === 'refuse') expirer();
+      if (issue === 'ok') void db.refresh().then(() => window.dispatchEvent(new CustomEvent('snl:data-refreshed')));
+      return;
+    }
+    try {
+      await ApiUsers.me(); // un 401 passe par le renouvellement, puis expire si refusé
+    } catch { /* réseau, maintenance… : rien à conclure */ }
+  };
 
   useEffect(() => {
     const restore = async () => {
@@ -61,9 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // En arrière-plan : jeton neuf + profil à jour (rôle, sites) si le réseau est là.
           if (getCleRenouvellement()) {
             void renouvelerSession().then((issue) => {
-              if (issue === 'refuse') clearAuthToken();
+              if (issue === 'refuse') expirer();
               if (issue === 'ok') void db.refresh().then(() => window.dispatchEvent(new CustomEvent('snl:data-refreshed')));
             });
+          } else {
+            // Appareil connecté avant les sessions longues : on vérifie tout de suite
+            // que son jeton vaut encore, sinon la page « Session expirée » s'affiche.
+            void verifierSession();
           }
         } else {
           // Utilisateur inconnu sur cet appareil — nettoyer
@@ -91,24 +139,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // renvoie à l'écran de connexion pour qu'il reçoive un jeton à jour.
   useEffect(() => {
     const onAuthChanged = () => {
-      if (!getAuthToken() && localStorage.getItem(SESSION_KEY)) {
-        try { sessionStorage.setItem('snl_logout_reason', "Votre session doit être renouvelée (compte modifié, mot de passe changé ou plus de 60 jours sans connexion). Reconnectez-vous : vos données et vos ventes en attente sont conservées."); } catch {}
-        localStorage.removeItem(SESSION_KEY);
-        localStorage.removeItem(SESSION_EXPIRY);
-        setOutboxOwner(undefined); // ses mouvements en attente restent à son nom
-        setUser(null);
-      }
+      if (!getAuthToken() && localStorage.getItem(SESSION_KEY)) expirer();
     };
     // Jeton renouvelé : le profil (rôle, sites, droits) est remis à jour.
     const onRenewed = (e: Event) => {
       const u = (e as CustomEvent).detail?.user;
       if (u && localStorage.getItem(SESSION_KEY) === String(u.id)) setUser(prev => (prev ? { ...prev, ...u } : prev));
     };
+    // Vérifications de session régulières.
+    let derniere = 0;
+    const verifier = () => { if (Date.now() - derniere > 60_000) { derniere = Date.now(); void verifierSession(); } };
+    const surFocus = () => { if (document.visibilityState !== 'hidden') verifier(); };
+    const t = setInterval(() => void verifierSession(), 10 * 60_000);
     window.addEventListener('snl:auth-changed', onAuthChanged);
     window.addEventListener('snl:session-renewed', onRenewed);
+    window.addEventListener('snl:online', verifier);
+    window.addEventListener('focus', surFocus);
+    document.addEventListener('visibilitychange', surFocus);
     return () => {
+      clearInterval(t);
       window.removeEventListener('snl:auth-changed', onAuthChanged);
       window.removeEventListener('snl:session-renewed', onRenewed);
+      window.removeEventListener('snl:online', verifier);
+      window.removeEventListener('focus', surFocus);
+      document.removeEventListener('visibilitychange', surFocus);
     };
   }, []);
 
@@ -124,6 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await db.refresh();
       setUser(result.user as any);
       setOutboxOwner(result.user.id);
+      setSessionExpiree(null);
       // Ce que cet utilisateur avait fait hors ligne part maintenant.
       if (isOnline()) void processOutbox();
       if ('Notification' in window && Notification.permission === 'default') {
@@ -191,7 +246,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, canAccessSite, getAllowedSites, hasPermission, getUserPermissions }}>
+    <AuthContext.Provider value={{
+      user, login, logout, isLoading, canAccessSite, getAllowedSites, hasPermission, getUserPermissions,
+      sessionExpiree,
+      allerReconnexion: (autreCompte = false) => {
+        try {
+          if (!autreCompte && sessionExpiree?.username) sessionStorage.setItem('snl_login_username', sessionExpiree.username);
+          else sessionStorage.removeItem('snl_login_username');
+        } catch {}
+        setSessionExpiree(null);
+      },
+    }}>
       {children}
     </AuthContext.Provider>
   );
