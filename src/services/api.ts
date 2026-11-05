@@ -33,7 +33,7 @@ export function clearAuthToken() {
   window.dispatchEvent(new CustomEvent('snl:auth-changed'));
 }
 
-async function request(endpoint: string, options: RequestInit = {}) {
+async function request(endpoint: string, options: RequestInit & { timeoutMs?: number } = {}) {
   const url = `${API_URL}${endpoint}`;
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -44,7 +44,14 @@ async function request(endpoint: string, options: RequestInit = {}) {
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(url, { ...options, headers });
+  // Un délai maximal : sans lui, un réseau qui « pend » bloquait l'écran au
+  // lieu de basculer vers la file hors ligne.
+  const { timeoutMs, ...init } = options;
+  const response = await fetch(url, {
+    ...init,
+    headers,
+    ...(timeoutMs && typeof AbortSignal !== 'undefined' && (AbortSignal as any).timeout ? { signal: (AbortSignal as any).timeout(timeoutMs) } : {}),
+  });
 
   if (response.status === 401) {
     clearAuthToken();
@@ -67,7 +74,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
 
 export const Users = {
   login: (username: string, password: string) =>
-    request('/users/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+    request('/users/login', { method: 'POST', body: JSON.stringify({ username, password }), timeoutMs: 15_000 }),
 
   me: () => request('/users/me'),
 
@@ -139,7 +146,7 @@ export const Movements = {
   },
 
   create: (data: any) =>
-    request('/movements', { method: 'POST', body: JSON.stringify(data) }),
+    request('/movements', { method: 'POST', body: JSON.stringify(data), timeoutMs: 20_000 }),
 
   approve: (id: number, rejectionReason?: string) =>
     request(`/movements/${id}/approve`, {

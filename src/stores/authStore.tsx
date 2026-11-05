@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, User } from '../services/database';
 import { Users as ApiUsers, clearAuthToken, getAuthToken } from '../services/api';
 import { APP_CONFIG } from '../config/app.config';
+import { setOutboxOwner, getOutboxCount, processOutbox } from '../services/outbox';
+import { isOnline } from '../services/connectivity';
 
 const ALL_PERMISSIONS = ['view', 'create', 'edit', 'delete', 'export', 'manage_users'] as const;
 type PermissionKey = typeof ALL_PERMISSIONS[number];
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const u = db.getUserById(parseInt(savedUserId, 10));
         if (u && u.is_active) {
           setUser(u as any);
+          setOutboxOwner(u.id);
           // Renouveler silencieusement l'expiry à chaque démarrage (sliding window)
           localStorage.setItem(SESSION_EXPIRY, (Date.now() + SESSION_TTL).toString());
         } else {
@@ -78,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try { sessionStorage.setItem('snl_logout_reason', 'Votre session a expiré. Reconnectez-vous pour voir les données à jour.'); } catch {}
         localStorage.removeItem(SESSION_KEY);
         localStorage.removeItem(SESSION_EXPIRY);
+        setOutboxOwner(undefined); // ses mouvements en attente restent à son nom
         setUser(null);
       }
     };
@@ -87,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (username: string, password: string) => {
     const result = await db.authenticate(username, password);
+    if (result && 'error' in result) return { success: false, error: result.error };
     if (result) {
       localStorage.setItem(SESSION_KEY,    result.user.id.toString());
       localStorage.setItem(SESSION_EXPIRY, (Date.now() + SESSION_TTL).toString());
@@ -95,6 +100,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // db.refresh() résout toujours (gère ses erreurs en interne).
       await db.refresh();
       setUser(result.user as any);
+      setOutboxOwner(result.user.id);
+      // Ce que cet utilisateur avait fait hors ligne part maintenant.
+      if (isOnline()) void processOutbox();
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
@@ -103,7 +111,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { success: false, error: "Identifiants incorrects. Vérifiez votre nom d'utilisateur et mot de passe." };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Des mouvements pas encore envoyés ? Ils restent sur l'appareil, à son nom,
+    // et partiront à sa prochaine connexion. On le dit avant de partir.
+    try {
+      const n = await getOutboxCount();
+      if (n > 0 && !window.confirm(
+        `${n} mouvement${n > 1 ? 's' : ''} pas encore envoyé${n > 1 ? 's' : ''} au serveur.\n\n` +
+        `Ils restent sur cet appareil, à votre nom, et partiront automatiquement à votre prochaine connexion ici.\n\nSe déconnecter quand même ?`
+      )) return;
+    } catch {}
+    setOutboxOwner(undefined);
     // Nettoyer la session entièrement
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(SESSION_EXPIRY);

@@ -6,7 +6,7 @@
 
 import { APP_CONFIG } from '../config/app.config';
 import { Users, Products, Stocks, Movements, Alerts, Reports, Stats, setAuthToken } from './api';
-import { persistCache, loadCache, saveAuthCache, loadAuthCache, addToOutbox } from './offlineStorage';
+import { persistCache, loadCache, saveAuthCache, loadAuthCache, addToOutbox, getOutbox, proprietaire, verifierHorsLigne } from './offlineStorage';
 import { isOnline, notifyUploadStart, notifyUploadEnd } from './connectivity';
 
 // Retry un appel API en cas d'erreur réseau transitoire (TypeError = fetch échoué)
@@ -35,6 +35,23 @@ function simpleHash(str: string): string {
   }
   return Math.abs(hash).toString(36) + str.length.toString(36);
 }
+
+/** Identifiant unique d'un mouvement, créé sur l'appareil (anti-doublon côté serveur). */
+export function nouvelIdMouvement(): string {
+  try {
+    if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) return (crypto as any).randomUUID();
+  } catch {}
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+/** Une coupure réseau ou un délai dépassé, et non un refus du serveur. */
+function erreurReseau(e: any): boolean {
+  return e instanceof TypeError || e?.name === 'AbortError' || e?.name === 'TimeoutError';
+}
+
+/** Durée pendant laquelle on peut se reconnecter sans réseau après la dernière connexion en ligne. */
+const VALIDITE_HORS_LIGNE_MS = 30 * 24 * 3600 * 1000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -298,11 +315,27 @@ class DatabaseService {
   /** Phase 2 (arriere-plan) : mouvements + alertes + rapports. */
   private async _loadSecondary(previousCache: DBCache | null): Promise<void> {
     try {
-      const [movements, alerts, reports] = await Promise.all([
-        Movements.getAll({ limit: 100000 }).catch(() => null),
+      // Mouvements : la première fois (ou une fois par jour) tout l'historique ;
+      // sinon seulement ce qui a été créé ou validé depuis le dernier chargement.
+      const connus: Movement[] = (previousCache?.movements ?? this.cache.movements ?? []).filter(m => m.id > 0);
+      const depuis = localStorage.getItem('snl_mv_depuis');
+      const complet = !depuis || connus.length === 0 || Date.now() - new Date(depuis).getTime() > 24 * 3600 * 1000;
+      const debut = new Date(Date.now() - 2 * 60 * 1000).toISOString(); // marge pour les horloges
+      const [recus, alerts, reports] = await Promise.all([
+        Movements.getAll(complet ? { limit: 100000 } : { since: depuis, limit: 100000 }).catch(() => null),
         Alerts.getAll().catch(() => null),
         Reports.getAll().catch(() => null),
       ]);
+      let movements: Movement[] | null = null;
+      if (recus) {
+        if (complet) movements = recus;
+        else {
+          const parId = new Map(connus.map(m => [m.id, m]));
+          for (const m of recus as Movement[]) parId.set(m.id, m);
+          movements = [...parId.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+        }
+        localStorage.setItem('snl_mv_depuis', debut);
+      }
       this.cache = {
         ...this.cache,
         movements: movements ?? previousCache?.movements ?? this.cache.movements,
@@ -311,6 +344,9 @@ class DatabaseService {
         loaded:    true,
         fullyLoaded: true,
       };
+      // Ce qui attend encore dans la file n'est pas sur le serveur : on le remet
+      // dans la liste et dans le stock affiché.
+      await this.reappliquerFile();
       if (this.cache.products.length > 0) {
         persistCache({
           products:  this.cache.products,
@@ -354,56 +390,41 @@ class DatabaseService {
 
   // ─── Auth ──────────────────────────────────────────────────────────────────
 
-  async authenticate(username: string, password: string): Promise<{ user: User; token: string } | null> {
-    // ── Online login ──────────────────────────────────────────────────────────
-    if (isOnline()) {
+  async authenticate(username: string, password: string): Promise<{ user: User; token: string } | { error: string } | null> {
+    // ── En ligne : on essaie dès que l'appareil a du réseau, sans attendre le
+    // premier contrôle de connexion (avant, une connexion dans les premières
+    // secondes partait en « hors ligne » et échouait).
+    const reseau = typeof navigator === 'undefined' || navigator.onLine;
+    if (reseau) {
       try {
         const result = await Users.login(username, password);
         if (result?.token) {
           setAuthToken(result.token);
           localStorage.setItem('snl_token', result.token);
           const userObj = result.user || result;
-          // Always persist auth cache for future offline logins
-          saveAuthCache(username, result.token, userObj);
+          // Pour pouvoir se reconnecter plus tard sans réseau.
+          await saveAuthCache(username, result.token, userObj, password);
           return { user: userObj, token: result.token };
         }
         return null;
-      } catch {
-        // Network failure during login → try offline cache
+      } catch (e: any) {
+        if (!erreurReseau(e)) return null; // identifiants refusés par le serveur
+        // sinon : pas de serveur joignable → connexion hors ligne
       }
     }
 
-    // ── Offline login: verify password against cached users + restore session ──
-    try {
-      // Load all cached users and verify password
-      const cached = await loadCache();
-      const user = cached.users.find(u => u.username === username);
-      
-      if (!user) {
-        console.log('[v0] Offline login: user not found in cache');
-        return null;
-      }
-
-      // Verify password using simple hash
-      if (!user.password_hash || simpleHash(password) !== user.password_hash) {
-        console.log('[v0] Offline login: password verification failed');
-        return null;
-      }
-
-      // Password is correct - restore cached session
-      const authEntry = await loadAuthCache(username);
-      if (!authEntry?.token) {
-        console.log('[v0] Offline login: no cached session found');
-        return null;
-      }
-
-      setAuthToken(authEntry.token);
-      localStorage.setItem('snl_token', authEntry.token);
-      return { user, token: authEntry.token };
-    } catch (e) {
-      console.log('[v0] Offline login error:', e);
+    // ── Hors ligne : empreinte gardée lors de la dernière connexion en ligne ──
+    const entree = await loadAuthCache(username);
+    if (!entree?.verif) {
+      return { error: "Pas de connexion internet. La première connexion sur cet appareil doit se faire en ligne." };
     }
-    return null;
+    if (entree.savedAt && Date.now() - new Date(entree.savedAt).getTime() > VALIDITE_HORS_LIGNE_MS) {
+      return { error: "Pas de connexion internet, et votre dernière connexion en ligne date de plus de 30 jours. Connectez-vous en ligne une fois." };
+    }
+    if (!(await verifierHorsLigne(password, entree.verif))) return null;
+    setAuthToken(entree.token);
+    localStorage.setItem('snl_token', entree.token);
+    return { user: entree.user, token: entree.token };
   }
 
   getUserById(id: number): User | null {
@@ -583,45 +604,68 @@ class DatabaseService {
   getPendingMovements(): Movement[] { return this.getMovements({ status: 'pending' }); }
 
   async createMovement(data: Omit<Movement, 'id' | 'created_at'>): Promise<Movement | { error: string; offline?: boolean; localId?: number }> {
-    // ── Online: send directly to API ──────────────────────────────────────────
+    // Chaque mouvement reçoit son identifiant et sa date dès sa création : s'il
+    // part plus tard (hors ligne) ou deux fois (réponse perdue), le serveur garde
+    // la vraie date et ne l'enregistre qu'une fois.
+    const donnees: any = {
+      ...data,
+      client_id: (data as any).client_id || nouvelIdMouvement(),
+      occurred_at: (data as any).occurred_at || new Date().toISOString(),
+    };
+
+    // ── En ligne : envoi direct ───────────────────────────────────────────────
     if (isOnline()) {
       try {
-        const result = await Movements.create(data);
+        const result = await Movements.create(donnees);
         const movement: Movement = result.movement || result;
         this.cache.movements.unshift(movement);
-        if (data.type === 'out' && data.from_site_id) {
+        const sortie = data.type === 'out' || (data.type === 'transport_damage' && movement.status === 'confirmed');
+        if (sortie && data.from_site_id) {
           const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
-          if (idx !== -1) this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - data.quantity);
+          if (idx !== -1) this.cache.stocks[idx].quantity = this.cache.stocks[idx].quantity - data.quantity;
+        }
+        if (result?.stock_negatif) {
+          window.dispatchEvent(new CustomEvent('snl:stock-negatif', { detail: { product_id: data.product_id, site_id: data.from_site_id } }));
         }
         return movement;
       } catch (e: any) {
-        // Network failure even though we thought we were online → outbox
-        const isNetworkError = e instanceof TypeError && e.message.includes('fetch');
-        if (!isNetworkError) return { error: e.message || 'Échec création mouvement' };
+        // Coupure ou délai dépassé alors qu'on se croyait en ligne : file d'attente.
+        // Un refus du serveur, lui, est montré tel quel.
+        if (!erreurReseau(e)) return { error: e.message || 'Échec création mouvement' };
       }
     }
 
-    // ── Offline: store in outbox + deduct stock locally ──────────────────────
-    const localId = await addToOutbox(data);
-    const tempMovement: Movement = {
-      id: -localId,
-      ...data,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-    } as Movement;
-    this.cache.movements.unshift(tempMovement);
-
-    // Deduct from local stock to prevent over-selling during offline session
-    const isOutType = data.type === 'out' || data.type === 'transport_damage' || data.type === 'pending_out';
-    if (isOutType && data.from_site_id) {
-      const idx = this.cache.stocks.findIndex(s => s.product_id === data.product_id && s.site_id === data.from_site_id);
-      if (idx !== -1) this.cache.stocks[idx].quantity = Math.max(0, this.cache.stocks[idx].quantity - data.quantity);
-    }
-    // Persist so deduction survives db.refresh() while still offline
+    // ── Hors ligne : file d'attente + stock déduit sur l'appareil ────────────
+    const localId = await addToOutbox(donnees);
+    this.appliquerEnAttente({ localId, data: donnees, createdAt: donnees.occurred_at, retryCount: 0 } as any);
     persistCache({ stocks: this.cache.stocks }).catch(() => {});
 
     window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
-    return { error: 'Hors ligne — demande mise en attente, envoi automatique à la reconnexion', offline: true, localId };
+    return { error: 'Hors ligne — enregistré sur cet appareil, envoi automatique au retour du réseau', offline: true, localId };
+  }
+
+  /**
+   * Remet dans l'affichage un mouvement encore en file : il apparaît dans la
+   * liste (en attente) et le stock du site est déduit, pour ne pas revendre ce
+   * qui est déjà parti.
+   */
+  private appliquerEnAttente(item: { localId?: number; data: any; createdAt: string }) {
+    const d = item.data;
+    if (this.cache.movements.some(m => m.id === -(item.localId || 0))) return;
+    this.cache.movements.unshift({ id: -(item.localId || 0), ...d, status: 'pending', created_at: d.occurred_at || item.createdAt } as Movement);
+    const sortie = d.type === 'out' || d.type === 'transport_damage' || d.type === 'pending_out';
+    if (sortie && d.from_site_id) {
+      const idx = this.cache.stocks.findIndex(s => s.product_id === d.product_id && s.site_id === d.from_site_id);
+      if (idx !== -1) this.cache.stocks[idx].quantity = this.cache.stocks[idx].quantity - d.quantity;
+    }
+  }
+
+  /** Après un rechargement depuis le serveur : réappliquer ce qui n'est pas encore parti. */
+  private async reappliquerFile(): Promise<void> {
+    try {
+      const items = await getOutbox();
+      for (const it of items) if ((it.etat ?? 'attente') !== 'rejete') this.appliquerEnAttente(it);
+    } catch {}
   }
 
   async approveMovement(movementId: number, approverId: number): Promise<boolean> {

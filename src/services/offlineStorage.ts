@@ -140,20 +140,52 @@ export async function loadCache(): Promise<{
 
 // ─── Auth cache ───────────────────────────────────────────────────────────────
 
-export async function saveAuthCache(username: string, token: string, user: object): Promise<void> {
+/**
+ * Empreinte du mot de passe pour la connexion sans réseau : PBKDF2-SHA-256,
+ * 150 000 tours, sel aléatoire par utilisateur. Le mot de passe lui-même n'est
+ * jamais gardé sur l'appareil.
+ */
+async function empreinte(password: string, sel: Uint8Array): Promise<string> {
+  const cle = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: sel, iterations: 150_000 }, cle, 256);
+  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const hex = (u: Uint8Array) => Array.from(u).map(b => b.toString(16).padStart(2, '0')).join('');
+const deHex = (h: string) => new Uint8Array((h.match(/.{2}/g) || []).map(x => parseInt(x, 16)));
+
+/** À chaque connexion EN LIGNE réussie : de quoi se reconnecter plus tard sans réseau. */
+export async function saveAuthCache(username: string, token: string, user: object, password?: string): Promise<void> {
   try {
+    let verif: { sel: string; empreinte: string } | undefined;
+    if (password && typeof crypto !== 'undefined' && crypto.subtle) {
+      const sel = crypto.getRandomValues(new Uint8Array(16));
+      verif = { sel: hex(sel), empreinte: await empreinte(password, sel) };
+    }
     const s = await tx('auth_cache', 'readwrite');
-    await promisify(s.put({ username, token, user, savedAt: new Date().toISOString() }));
+    await promisify(s.put({ username: username.toLowerCase(), token, user, savedAt: new Date().toISOString(), ...(verif ? { verif } : {}) }));
   } catch {}
 }
 
-export async function loadAuthCache(username: string): Promise<{ token: string; user: any } | null> {
+export async function loadAuthCache(username: string): Promise<{ token: string; user: any; savedAt?: string; verif?: { sel: string; empreinte: string } } | null> {
   try {
     const s = await tx('auth_cache');
-    const entry = await promisify<any>(s.get(username));
-    if (entry) return { token: entry.token, user: entry.user };
+    const entry = await promisify<any>(s.get(username.toLowerCase())) || await promisify<any>(s.get(username));
+    if (entry) return { token: entry.token, user: entry.user, savedAt: entry.savedAt, verif: entry.verif };
   } catch {}
   return null;
+}
+
+/** Le mot de passe saisi correspond-il à l'empreinte gardée ? (comparaison sur toute la longueur) */
+export async function verifierHorsLigne(password: string, verif: { sel: string; empreinte: string }): Promise<boolean> {
+  try {
+    const e = await empreinte(password, deHex(verif.sel));
+    if (e.length !== verif.empreinte.length) return false;
+    let diff = 0;
+    for (let i = 0; i < e.length; i++) diff |= e.charCodeAt(i) ^ verif.empreinte.charCodeAt(i);
+    return diff === 0;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Outbox ───────────────────────────────────────────────────────────────────
@@ -164,11 +196,24 @@ export interface OutboxItem {
   createdAt: string;
   retryCount: number;
   lastError?: string;
+  /** L'utilisateur qui a fait le mouvement : il ne part qu'avec SA session. */
+  ownerId?: number;
+  /**
+   * attente : sera envoyé automatiquement ;
+   * bloque  : le serveur a échoué plusieurs fois, nouvel essai à la main ;
+   * rejete  : le serveur a refusé (donnée invalide), à corriger ou supprimer.
+   */
+  etat?: 'attente' | 'bloque' | 'rejete';
+}
+
+/** Propriétaire d'un élément (anciens éléments : l'auteur indiqué dans le mouvement). */
+export function proprietaire(item: OutboxItem): number | undefined {
+  return item.ownerId ?? (typeof item.data?.user_id === 'number' ? item.data.user_id : undefined);
 }
 
 export async function addToOutbox(data: any): Promise<number> {
   const s = await tx('outbox', 'readwrite');
-  const item: OutboxItem = { data, createdAt: new Date().toISOString(), retryCount: 0 };
+  const item: OutboxItem = { data, createdAt: new Date().toISOString(), retryCount: 0, etat: 'attente', ownerId: typeof data?.user_id === 'number' ? data.user_id : undefined };
   const key = await promisify<number>(s.add(item));
   window.dispatchEvent(new CustomEvent('snl:outbox-changed'));
   return key;
@@ -199,22 +244,29 @@ export async function resetOutboxRetry(localId: number): Promise<void> {
   if (item) {
     item.retryCount = 0;
     item.lastError = undefined;
+    item.etat = 'attente';
     await promisify(s.put(item));
   }
 }
 
-export async function setOutboxError(localId: number, error: string): Promise<void> {
+export async function setOutboxError(localId: number, error: string, etat?: OutboxItem['etat']): Promise<void> {
   const s = await tx('outbox', 'readwrite');
   const item = await promisify<OutboxItem>(s.get(localId));
   if (item) {
     item.lastError = error;
+    if (etat) item.etat = etat;
     await promisify(s.put(item));
   }
+  window.dispatchEvent(new CustomEvent('snl:outbox-changed'));
 }
 
-export async function getOutboxCount(): Promise<number> {
-  const s = await tx('outbox');
-  return promisify(s.count());
+/** Éléments en file. Avec un utilisateur : seulement les siens. */
+export async function getOutboxCount(ownerId?: number): Promise<number> {
+  if (ownerId === undefined) {
+    const s = await tx('outbox');
+    return promisify(s.count());
+  }
+  return (await getOutbox()).filter(i => proprietaire(i) === ownerId).length;
 }
 
 // ─── Ordonnances cache ────────────────────────────────────────────────────────

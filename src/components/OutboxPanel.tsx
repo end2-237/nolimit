@@ -4,8 +4,8 @@ import {
   X, RefreshCw, Trash2, Clock, AlertCircle,
   ArrowDownLeft, ArrowUpRight, Repeat2, Truck,
 } from 'lucide-react';
-import { getOutbox, removeFromOutbox, OutboxItem } from '../services/offlineStorage';
-import { processOutbox, retryOutboxItem } from '../services/outbox';
+import { removeFromOutbox, OutboxItem } from '../services/offlineStorage';
+import { processOutbox, retryOutboxItem, getMyOutbox, relancerBloques } from '../services/outbox';
 import { db } from '../services/database';
 
 function typeInfo(type: string): { label: string; cls: string; Icon: React.ElementType } {
@@ -37,7 +37,8 @@ export function OutboxPanel({ onClose, anchorTop, anchorRight }: OutboxPanelProp
   const [globalBusy, setGlobalBusy] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const refresh = async () => setItems(await getOutbox());
+  // Seulement les mouvements de l'utilisateur connecté.
+  const refresh = async () => setItems(await getMyOutbox());
 
   useEffect(() => {
     refresh();
@@ -63,7 +64,9 @@ export function OutboxPanel({ onClose, anchorTop, anchorRight }: OutboxPanelProp
   }, [onClose]);
 
   const handleRemove = async (localId: number) => {
+    if (!window.confirm("Annuler ce mouvement ? Il ne sera jamais envoyé au serveur et le stock affiché sera recalculé.")) return;
     await removeFromOutbox(localId);
+    db.refresh().catch(() => {});
     refresh();
     window.dispatchEvent(new CustomEvent('snl:outbox-changed'));
   };
@@ -77,6 +80,7 @@ export function OutboxPanel({ onClose, anchorTop, anchorRight }: OutboxPanelProp
 
   const handleRetryAll = async () => {
     setGlobalBusy(true);
+    await relancerBloques();
     await processOutbox();
     await refresh();
     setGlobalBusy(false);
@@ -131,7 +135,7 @@ export function OutboxPanel({ onClose, anchorTop, anchorRight }: OutboxPanelProp
             const { label, cls, Icon } = typeInfo(item.data.type);
             const product    = db.getProductById(item.data.product_id);
             const isRetrying = retrying[item.localId!];
-            const hasFailed  = item.retryCount >= 5;
+            const etat       = item.etat ?? (item.retryCount >= 5 ? 'bloque' : 'attente');
 
             return (
               <div key={item.localId} className="px-4 py-3">
@@ -145,9 +149,19 @@ export function OutboxPanel({ onClose, anchorTop, anchorRight }: OutboxPanelProp
                       <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${cls}`}>
                         {label}
                       </span>
-                      {hasFailed && (
-                        <span className="text-[11px] text-red-500 flex items-center gap-0.5 font-medium">
-                          <AlertCircle className="w-3 h-3" /> Bloqué
+                      {etat === 'attente' && (
+                        <span className="text-[11px] text-gray-500 flex items-center gap-0.5">
+                          <Clock className="w-3 h-3" /> En attente d'envoi
+                        </span>
+                      )}
+                      {etat === 'bloque' && (
+                        <span className="text-[11px] text-amber-600 flex items-center gap-0.5 font-medium" title="Le serveur a échoué plusieurs fois. Touchez 🔄 pour réessayer.">
+                          <AlertCircle className="w-3 h-3" /> Serveur indisponible
+                        </span>
+                      )}
+                      {etat === 'rejete' && (
+                        <span className="text-[11px] text-red-600 flex items-center gap-0.5 font-medium" title="Le serveur a refusé ce mouvement. Vérifiez-le, puis supprimez-le ou réessayez.">
+                          <AlertCircle className="w-3 h-3" /> Refusé, à vérifier
                         </span>
                       )}
                     </div>
@@ -207,7 +221,7 @@ export function OutboxPanel({ onClose, anchorTop, anchorRight }: OutboxPanelProp
 
       {items.length > 0 && (
         <div className="px-4 py-2 bg-orange-50 border-t border-orange-100 text-[11px] text-orange-600">
-          Envoi automatique à la reconnexion · 🔄 pour forcer
+          Enregistré sur cet appareil à votre nom · envoi automatique au retour du réseau · 🔄 pour forcer
         </div>
       )}
     </div>,

@@ -180,6 +180,23 @@ function AppInner() {
     return () => window.removeEventListener('snl:online', onOnline);
   }, [user]);
 
+  // Une vente a fait passer un stock sous zéro (souvent : deux appareils hors
+  // ligne ont vendu le même dernier article). L'administrateur reçoit aussi une alerte.
+  useEffect(() => {
+    if (!user) return;
+    const onNegatif = () => showBrowserNotif('Stock négatif', 'Une vente a fait passer un stock sous zéro : recompter ce produit (voir Alertes).');
+    const onFlushed = (e: Event) => {
+      const n = (e as CustomEvent).detail?.negatifs || 0;
+      if (n > 0) showBrowserNotif('Stock négatif', `${n} vente${n > 1 ? 's' : ''} envoyée${n > 1 ? 's' : ''} après coupure ont fait passer un stock sous zéro (voir Alertes).`);
+    };
+    window.addEventListener('snl:stock-negatif', onNegatif);
+    window.addEventListener('snl:outbox-flushed', onFlushed);
+    return () => {
+      window.removeEventListener('snl:stock-negatif', onNegatif);
+      window.removeEventListener('snl:outbox-flushed', onFlushed);
+    };
+  }, [user]);
+
   useEffect(() => {
     if (!user || schedulerStarted.current) return;
     schedulerStarted.current = true;
