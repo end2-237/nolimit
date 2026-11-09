@@ -228,6 +228,13 @@ class DatabaseService {
     users: [], products: [], stocks: [], movements: [], alerts: [], reports: [], loaded: false, fullyLoaded: false,
   };
   private _initPromise: Promise<void> | null = null;
+  /**
+   * Numéro du dernier chargement lancé. Plusieurs chargements peuvent tourner en
+   * même temps (temps réel, retour du réseau, renouvellement de session) : seul
+   * le plus récent a le droit d'écrire, une réponse plus ancienne arrivée en
+   * retard est ignorée.
+   */
+  private _generation = 0;
 
   /** true quand les mouvements/alertes/rapports (phase 2) sont charges. */
   isFullyLoaded(): boolean { return this.cache.fullyLoaded !== false; }
@@ -274,6 +281,9 @@ class DatabaseService {
       return;
     }
 
+    const generation = ++this._generation;
+    const estLeDernier = () => generation === this._generation;
+
     // Snapshot de l'ancien cache pour pouvoir le restaurer si le fetch échoue
     const previousCache = this.cache.loaded ? { ...this.cache } : null;
 
@@ -281,49 +291,80 @@ class DatabaseService {
     // Phase 1 (bloquante) : produits + stocks + utilisateurs -> le dashboard est
     // utilisable tout de suite. Phase 2 (arriere-plan) : mouvements + alertes +
     // rapports. Ainsi on n'attend pas les gros endpoints pour afficher l'app.
-    if (isOnline()) {
+    // On tente toujours le serveur dès que l'appareil a du réseau, même si le
+    // contrôle de connexion ne l'a pas encore confirmé (au démarrage, il vaut
+    // « hors ligne » jusqu'au premier contrôle) : avant, l'application gardait
+    // alors les données de l'appareil, parfois vieilles de plusieurs jours.
+    const reseau = isOnline() || (typeof navigator !== 'undefined' && navigator.onLine);
+    if (reseau) {
       try {
         const [products, stocks, users] = await Promise.all([
           Products.getAll().catch(() => null),
           Stocks.getAll().catch(() => null),
           Users.getAll().catch(() => null),
         ]);
+        // Un chargement plus récent a été lancé entre-temps : c'est lui qui écrit,
+        // et l'appelant attend ses données à lui.
+        if (!estLeDernier()) return this.attendreDernier();
+        // Le serveur n'a rien répondu : on garde ce qui est affiché.
+        if (!products && !stocks && !users) throw new Error('serveur injoignable');
+        // Fallbacks pris sur ce qui est affiché MAINTENANT (pas sur l'instantané du
+        // début, qui peut être plus ancien qu'un chargement terminé entre-temps).
+        const actuel = this.cache.loaded ? this.cache : previousCache;
 
         // Produits vides alors qu'on en avait = erreur reseau passagere -> on garde
         const hadProducts = previousCache && previousCache.products.length > 0;
         const gotEmptyProducts = !products || products.length === 0;
         if (hadProducts && gotEmptyProducts) {
-          this.cache = { ...previousCache!, loaded: true, fullyLoaded: true };
+          this.cache = { ...this.cache, loaded: true, fullyLoaded: true };
           return;
         }
 
         this.cache = {
-          products:  products ?? previousCache?.products ?? [],
-          stocks:    stocks   ?? previousCache?.stocks   ?? [],
-          users:     users    ?? previousCache?.users    ?? [],
-          movements: previousCache?.movements ?? [],
-          alerts:    previousCache?.alerts    ?? [],
-          reports:   previousCache?.reports   ?? [],
+          products:  products ?? actuel?.products ?? [],
+          stocks:    stocks   ?? actuel?.stocks   ?? [],
+          users:     users    ?? actuel?.users    ?? [],
+          movements: actuel?.movements ?? [],
+          alerts:    actuel?.alerts    ?? [],
+          reports:   actuel?.reports   ?? [],
           loaded:    true,
           fullyLoaded: false,
         };
         this.ensureAllBarcodesAssigned();
 
+        // Le stock vient du serveur : on le garde tout de suite sur l'appareil
+        // (avant, seulement à la fin de la phase 2 : si elle échouait, la copie
+        // de l'appareil restait figée à une date ancienne) et on note l'heure de
+        // la dernière mise à jour réelle. Si le stock n'a PAS pu être lu, on ne
+        // touche à rien : le bandeau continue d'indiquer l'âge réel des données.
+        if (stocks && products && products.length > 0) {
+          persistCache({ products, stocks, users: users ?? undefined }).catch(() => {});
+          localStorage.setItem('snl_maj_serveur', new Date().toISOString());
+          window.dispatchEvent(new CustomEvent('snl:maj-serveur'));
+        }
+
         // Phase 2 : ne pas attendre — se termine en arriere-plan.
-        void this._loadSecondary(previousCache);
+        void this._loadSecondary(previousCache, estLeDernier);
         return;
       } catch {
         // API totalement inaccessible — tomber dans le cache IndexedDB
       }
     }
 
-    // ── Offline ou API morte: charger depuis IndexedDB ────────────────────────
+    // ── Offline ou API morte ────────────────────────────────────────────────
+    // Ce qui est affiché est toujours au moins aussi récent que la copie de
+    // l'appareil : on le garde. Avant, une simple coupure de quelques secondes
+    // remplaçait le stock du jour par la copie de l'appareil (parfois celle du
+    // 21 octobre). La copie ne sert que si l'écran est encore vide.
+    if (!estLeDernier()) return this.attendreDernier();
+    if (this.cache.loaded && this.cache.products.length > 0) {
+      this.cache = { ...this.cache, loaded: true, fullyLoaded: true };
+      return;
+    }
     try {
       const cached = await loadCache();
-      const useIndexed = !previousCache || cached.products.length >= previousCache.products.length;
-      this.cache = useIndexed
-        ? { ...cached, reports: [], loaded: true, fullyLoaded: true }
-        : { ...previousCache!, loaded: true, fullyLoaded: true };
+      if (!estLeDernier()) return this.attendreDernier();
+      this.cache = { ...cached, reports: [], loaded: true, fullyLoaded: true };
       this.ensureAllBarcodesAssigned();
     } catch {
       if (previousCache) {
@@ -336,7 +377,7 @@ class DatabaseService {
   }
 
   /** Phase 2 (arriere-plan) : mouvements + alertes + rapports. */
-  private async _loadSecondary(previousCache: DBCache | null): Promise<void> {
+  private async _loadSecondary(previousCache: DBCache | null, estLeDernier: () => boolean = () => true): Promise<void> {
     try {
       // Mouvements : la première fois (ou une fois par jour) tout l'historique ;
       // sinon seulement ce qui a été créé ou validé depuis le dernier chargement.
@@ -353,6 +394,8 @@ class DatabaseService {
         Alerts.getAll().catch(() => null),
         Reports.getAll().catch(() => null),
       ]);
+      // Un chargement plus récent a été lancé : il écrira ses propres données.
+      if (!estLeDernier()) return;
       let movements: Movement[] | null = null;
       if (recus) {
         if (complet) movements = recus;
@@ -362,15 +405,12 @@ class DatabaseService {
           movements = [...parId.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
         }
         localStorage.setItem('snl_mv_curseur', debut);
-        // Dernière mise à jour réussie depuis le serveur (bandeau d'ancienneté).
-        localStorage.setItem('snl_maj_serveur', new Date().toISOString());
-        window.dispatchEvent(new CustomEvent('snl:maj-serveur'));
       }
       this.cache = {
         ...this.cache,
-        movements: movements ?? previousCache?.movements ?? this.cache.movements,
-        alerts:    alerts    ?? previousCache?.alerts    ?? this.cache.alerts,
-        reports:   reports   ?? previousCache?.reports   ?? this.cache.reports,
+        movements: movements ?? this.cache.movements ?? previousCache?.movements,
+        alerts:    alerts    ?? this.cache.alerts    ?? previousCache?.alerts,
+        reports:   reports   ?? this.cache.reports   ?? previousCache?.reports,
         loaded:    true,
         fullyLoaded: true,
       };
@@ -389,11 +429,20 @@ class DatabaseService {
     } catch {
       // garder ce qu'on a
     } finally {
-      this.cache.fullyLoaded = true;
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+      // Un chargement plus récent est en cours : c'est lui qui annoncera la fin.
+      if (estLeDernier()) {
+        this.cache.fullyLoaded = true;
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('snl:data-refreshed'));
+        }
       }
     }
+  }
+
+  /** Attend la fin du chargement le plus récent (appelé par un chargement dépassé). */
+  private async attendreDernier(): Promise<void> {
+    const dernier = this._initPromise;
+    if (dernier) await dernier.catch(() => {});
   }
 
   async refresh(): Promise<void> {
