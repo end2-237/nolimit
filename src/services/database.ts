@@ -6,7 +6,7 @@
 
 import { APP_CONFIG } from '../config/app.config';
 import { Users, Products, Stocks, Movements, Alerts, Reports, Stats, setAuthToken, setCleRenouvellement, setProfilLocal } from './api';
-import { persistCache, loadCache, saveAuthCache, loadAuthCache, addToOutbox, getOutbox, proprietaire, verifierHorsLigne } from './offlineStorage';
+import { persistCache, loadCache, viderCopieDonnees, saveAuthCache, loadAuthCache, addToOutbox, getOutbox, proprietaire, verifierHorsLigne } from './offlineStorage';
 import { isOnline, notifyUploadStart, notifyUploadEnd } from './connectivity';
 
 // Retry un appel API en cas d'erreur réseau transitoire (TypeError = fetch échoué)
@@ -252,6 +252,7 @@ class DatabaseService {
    */
   async demarrer(): Promise<boolean> {
     if (this.cache.loaded && this.cache.products.length > 0) return true;
+    await this.nettoyerAncienneCopie();
     try {
       const cached = await loadCache();
       if (cached.products.length > 0) {
@@ -268,6 +269,28 @@ class DatabaseService {
     return this.cache.products.length > 0;
   }
 
+  /**
+   * Nettoyage unique : les appareils gardaient parfois une copie des données
+   * vieille de plusieurs semaines (stock et historique du 21 octobre). À la
+   * première ouverture de cette version, on la jette et tout est rechargé depuis
+   * le serveur. Les mouvements faits hors ligne (file d'envoi) sont gardés et
+   * réappliqués après le chargement.
+   */
+  private async nettoyerAncienneCopie(): Promise<void> {
+    const VERSION_COPIE = '2026-11-09';
+    try {
+      if (localStorage.getItem('snl_copie_version') === VERSION_COPIE) return;
+      // Sans réseau, on garde la copie (sinon l'écran resterait vide) : le
+      // nettoyage se fera à la prochaine ouverture avec du réseau.
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      await viderCopieDonnees();
+      localStorage.removeItem('snl_mv_curseur'); // prochain chargement des mouvements : complet
+      localStorage.setItem('snl_copie_version', VERSION_COPIE);
+    } catch {
+      // IndexedDB indisponible : rien à nettoyer
+    }
+  }
+
   async init(): Promise<void> {
     if (this._initPromise) return this._initPromise;
     this._initPromise = this._load();
@@ -275,6 +298,7 @@ class DatabaseService {
   }
 
   private async _load(): Promise<void> {
+    await this.nettoyerAncienneCopie();
     if (!localStorage.getItem('snl_token')) {
       this.cache.loaded = true;
       this.cache.fullyLoaded = true;

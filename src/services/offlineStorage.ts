@@ -86,6 +86,17 @@ async function clearStore(store: StoreName): Promise<void> {
   return promisify(s.clear());
 }
 
+/**
+ * Vide la copie des DONNÉES gardée sur l'appareil (produits, stocks, comptes,
+ * mouvements, alertes). Ne touche ni à la file d'envoi (mouvements faits hors
+ * ligne, pas encore partis), ni aux connexions hors ligne, ni aux ordonnances.
+ */
+export async function viderCopieDonnees(): Promise<void> {
+  for (const store of ['products', 'stocks', 'users', 'movements', 'alerts'] as StoreName[]) {
+    await clearStore(store);
+  }
+}
+
 // ─── Cache snapshot (called after each successful API fetch) ──────────────────
 
 // Écriture atomique par store : on ne clear qu'après avoir reçu les nouvelles données
